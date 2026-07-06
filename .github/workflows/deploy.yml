@@ -1,0 +1,23 @@
+name: Deploy WMS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Worker to Cloudflare
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Aplică și migrarea schemei la fiecare deploy (idempotent — folosește IF NOT EXISTS)
+          preCommands: |
+            wrangler d1 execute wms-db --remote --file=./schema.sql
+          command: deploy

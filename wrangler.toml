@@ -1,0 +1,18 @@
+name = "wms"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+# Baza de date D1 (SQLite pe edge).
+# După ce creezi baza cu `wrangler d1 create wms-db`, copiază database_id-ul aici.
+[[d1_databases]]
+binding = "DB"
+database_name = "wms-db"
+database_id = "PLACEHOLDER_DATABASE_ID"
+
+[observability]
+enabled = true
+
+# JWT_SECRET se setează ca secret, NU aici:
+#   wrangler secret put JWT_SECRET
+# Pentru dev local există un fallback în cod.
