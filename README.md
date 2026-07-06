@@ -3,8 +3,9 @@
 Sistem de gestiune a depozitului, construit pe **Cloudflare Workers + D1 (SQLite)**.
 Interfață web inclusă (SPA vanilla, fără dependențe externe) servită direct de Worker.
 
-## Funcționalități (Etapa 1)
+## Funcționalități
 
+### Etapa 1 — fundație
 - 🔐 **Autentificare** cu JWT și roluri: `admin` / `operator` / `viewer`
 - 📦 **Produse / SKU** — cod de bare, categorie, prag de reaprovizionare (reorder point)
 - 🏬 **Locații** de depozit (zonă / raft / nivel)
@@ -16,8 +17,18 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
 - 📤 **Export CSV** (produse, stoc)
 - 👤 **Administrare utilizatori** (doar admin)
 
-Roadmap (etape următoare): scanare coduri de bare/QR, comenzi clienți/furnizori
-cu picking, rapoarte avansate, dashboard cu mai multe grafice.
+### Etapa 2 — comenzi, coduri de bare, rapoarte
+- 🤝 **Parteneri** — furnizori & clienți (CRUD, filtrare)
+- 📋 **Comenzi** inbound/outbound cu linii de comandă și status workflow
+  (ciornă → confirmată → finalizată / anulată)
+- ✅ **Fulfillment** — finalizarea unei comenzi generează automat mișcările de stoc
+  (receiving pentru intrări, picking pentru ieșiri, cu verificare de stoc)
+- ⌗ **Coduri de bare** — generator Code128 printabil + câmp de **scanare** la recepție/expediere
+- 📊 **Rapoarte** — stoc pe categorie, produse sub prag (+ CSV), mișcări pe perioadă, top produse
+- 📈 **Dashboard extins** — comenzi deschise, grafic pe categorie, comenzi recente, listă sub-prag
+
+Roadmap (etape următoare): coduri QR, roluri granulare pe locație, integrare curieri,
+notificări automate la stoc minim.
 
 ## Arhitectură
 

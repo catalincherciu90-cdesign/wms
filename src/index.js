@@ -9,6 +9,9 @@ import * as locations from './routes/locations.js';
 import * as inventory from './routes/inventory.js';
 import * as dashboard from './routes/dashboard.js';
 import * as users from './routes/users.js';
+import * as partners from './routes/partners.js';
+import * as orders from './routes/orders.js';
+import * as reports from './routes/reports.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
@@ -40,6 +43,24 @@ const routes = [
   ['GET', '/api/users', users.list, 'admin'],
   ['POST', '/api/users', users.create, 'admin'],
   ['PUT', '/api/users/:id', users.update, 'admin'],
+
+  ['GET', '/api/partners', partners.list, 'viewer'],
+  ['POST', '/api/partners', partners.create, 'operator'],
+  ['PUT', '/api/partners/:id', partners.update, 'operator'],
+  ['DELETE', '/api/partners/:id', partners.remove, 'admin'],
+
+  ['GET', '/api/orders', orders.list, 'viewer'],
+  ['GET', '/api/orders/:id', orders.get, 'viewer'],
+  ['POST', '/api/orders', orders.create, 'operator'],
+  ['PUT', '/api/orders/:id/status', orders.setStatus, 'operator'],
+  ['POST', '/api/orders/:id/complete', orders.complete, 'operator'],
+  ['DELETE', '/api/orders/:id', orders.remove, 'operator'],
+
+  ['GET', '/api/reports/stock-by-category', reports.stockByCategory, 'viewer'],
+  ['GET', '/api/reports/low-stock', reports.lowStock, 'viewer'],
+  ['GET', '/api/reports/low-stock/export', reports.exportLowStockCsv, 'viewer'],
+  ['GET', '/api/reports/movements-by-period', reports.movementsByPeriod, 'viewer'],
+  ['GET', '/api/reports/top-products', reports.topProducts, 'viewer'],
 ];
 
 function match(routePath, actualPath) {

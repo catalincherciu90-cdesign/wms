@@ -2,7 +2,7 @@
 import { json } from '../lib/http.js';
 
 export async function stats(request, env) {
-  const [products, locations, totalUnits, lowStock, moves7] = await Promise.all([
+  const [products, locations, totalUnits, lowStock, openOrders, moves7, byCategory, recentOrders, lowList] = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1').first(),
     env.DB.prepare('SELECT COUNT(*) AS n FROM locations WHERE active = 1').first(),
     env.DB.prepare('SELECT COALESCE(SUM(quantity),0) AS n FROM inventory').first(),
@@ -13,6 +13,7 @@ export async function stats(request, env) {
         WHERE p.active = 1 GROUP BY p.id
         HAVING COALESCE(SUM(i.quantity),0) <= p.reorder_point
       )`).first(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE status IN ('draft','confirmed')").first(),
     env.DB.prepare(`
       SELECT date(created_at) AS day,
              SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END) AS inbound,
@@ -20,6 +21,21 @@ export async function stats(request, env) {
       FROM stock_movements
       WHERE created_at >= datetime('now', '-7 days')
       GROUP BY day ORDER BY day`).all(),
+    env.DB.prepare(`
+      SELECT COALESCE(p.category,'(fără categorie)') AS category, COALESCE(SUM(i.quantity),0) AS units
+      FROM products p LEFT JOIN inventory i ON i.product_id = p.id
+      WHERE p.active = 1 GROUP BY COALESCE(p.category,'(fără categorie)')
+      HAVING units > 0 ORDER BY units DESC LIMIT 8`).all(),
+    env.DB.prepare(`
+      SELECT o.code, o.type, o.status, o.created_at, p.name AS partner_name
+      FROM orders o LEFT JOIN partners p ON p.id = o.partner_id
+      ORDER BY o.created_at DESC, o.id DESC LIMIT 6`).all(),
+    env.DB.prepare(`
+      SELECT p.sku, p.name, p.reorder_point, COALESCE(SUM(i.quantity),0) AS total
+      FROM products p LEFT JOIN inventory i ON i.product_id = p.id
+      WHERE p.active = 1 GROUP BY p.id
+      HAVING COALESCE(SUM(i.quantity),0) <= p.reorder_point
+      ORDER BY total LIMIT 8`).all(),
   ]);
 
   return json({
@@ -28,7 +44,11 @@ export async function stats(request, env) {
       locations: locations.n,
       total_units: totalUnits.n,
       low_stock: lowStock.n,
+      open_orders: openOrders.n,
     },
     activity: moves7.results,
+    by_category: byCategory.results,
+    recent_orders: recentOrders.results,
+    low_stock_list: lowList.results,
   });
 }

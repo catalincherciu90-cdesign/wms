@@ -125,7 +125,8 @@ window.doLogin = function(e){
 var NAV = [
   ["dashboard","Dashboard","viewer"], ["stock","Stoc","viewer"], ["products","Produse","viewer"],
   ["locations","Locații","viewer"], ["receive","Recepție","operator"], ["ship","Expediere","operator"],
-  ["transfer","Transfer","operator"], ["movements","Mișcări","viewer"], ["users","Utilizatori","admin"]
+  ["transfer","Transfer","operator"], ["orders","Comenzi","viewer"], ["partners","Parteneri","viewer"],
+  ["movements","Mișcări","viewer"], ["reports","Rapoarte","viewer"], ["users","Utilizatori","admin"]
 ];
 
 function renderApp(){
@@ -154,20 +155,52 @@ VIEWS.dashboard = function(){
   setMain(topbar("Dashboard") + '<div id="dash">Se încarcă…</div>');
   api("GET","/api/dashboard").then(function(d){
     var k=d.kpis;
-    var kpis = '<div class="kpis">'
+    var kpis = '<div class="kpis" style="grid-template-columns:repeat(5,1fr)">'
       + kpi(k.products,"Produse active")
       + kpi(k.locations,"Locații")
       + kpi(k.total_units,"Unități în stoc")
+      + kpi(k.open_orders||0,"Comenzi deschise")
       + kpi(k.low_stock,"Sub prag stoc", k.low_stock>0?"bad":"good")
       + '</div>';
     var chart = '<div class="card" style="padding:18px"><h2>Activitate ultimele 7 zile</h2>'
       + '<canvas id="chart" height="220"></canvas>'
       + '<div class="row" style="gap:18px;margin-top:10px;font-size:12.5px">'
       + '<span><span class="pill good">■</span> Intrări</span><span><span class="pill bad">■</span> Ieșiri</span></div></div>';
-    el("dash").innerHTML = kpis + chart;
+    var cat = '<div class="card" style="padding:18px"><h2>Stoc pe categorie</h2>'+catBars(d.by_category||[])+'</div>';
+    var top = '<div class="grid" style="grid-template-columns:1fr 1fr">'+chart+cat+'</div>';
+
+    var orders = '<div class="card" style="padding:18px"><h2>Comenzi recente</h2>'
+      + ((d.recent_orders&&d.recent_orders.length)
+        ? '<table><tbody>'+d.recent_orders.map(function(o){
+            return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
+              +'<td>'+esc(o.partner_name||"—")+'</td><td>'+orderStatusPill(o.status)+'</td></tr>';
+          }).join("")+'</tbody></table>'
+        : '<div class="muted">Nicio comandă încă</div>')+'</div>';
+    var low = '<div class="card" style="padding:18px"><h2>Produse sub prag</h2>'
+      + ((d.low_stock_list&&d.low_stock_list.length)
+        ? '<table><tbody>'+d.low_stock_list.map(function(p){
+            return '<tr><td><b>'+esc(p.sku)+'</b> '+esc(p.name)+'</td><td class="right"><span class="pill bad">'+esc(p.total)+' / '+esc(p.reorder_point)+'</span></td></tr>';
+          }).join("")+'</tbody></table>'
+        : '<div class="muted">Totul peste prag ✔</div>')+'</div>';
+    var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
+
+    el("dash").innerHTML = kpis + top + bottom;
     drawChart(d.activity||[]);
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
 };
+function catBars(rows){
+  if(!rows.length) return '<div class="muted">Fără stoc</div>';
+  var max=1; rows.forEach(function(r){ max=Math.max(max,r.units); });
+  return rows.map(function(r){
+    var pct=Math.round((r.units/max)*100);
+    return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>'+esc(r.category)+'</span><span class="muted">'+esc(r.units)+'</span></div>'
+      +'<div style="height:8px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pct+'%;background:var(--brand);border-radius:6px"></div></div></div>';
+  }).join("");
+}
+function orderStatusPill(s){
+  var m={draft:["mut","ciornă"],confirmed:["warn","confirmată"],completed:["good","finalizată"],cancelled:["bad","anulată"]};
+  var x=m[s]||["mut",s]; return '<span class="pill '+x[0]+'">'+x[1]+'</span>';
+}
 function kpi(n,l,kind){ return '<div class="card kpi"><div class="n'+(kind?' ':'')+'" '+(kind==="bad"?'style="color:var(--bad)"':'')+'>'+esc(n)+'</div><div class="l">'+esc(l)+'</div></div>'; }
 
 function drawChart(data){
@@ -202,7 +235,8 @@ window.loadProducts = function(){
       return '<tr><td><b>'+esc(p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
-        + '<td class="right">'+(can("operator")?'<button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')+'</td></tr>';
+        + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.sku)+'\\')">⌗ Cod</button>'
+        + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')+'</td></tr>';
     }).join("");
     el("ptbl").innerHTML = '<table><thead><tr><th>SKU</th><th>Nume</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
   });
@@ -267,6 +301,7 @@ VIEWS.stock = function(){
 function opForm(title, type){
   setMain(topbar(title) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
+    + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><input id="op_scan" placeholder="Scanează sau tastează, apoi Enter" autofocus onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"></div>'
     + '<div class="field"><label>Produs</label><select id="op_prod"></select></div>'
     + (type==="transfer"
         ? '<div class="row"><div style="flex:1"><label>Din locația</label><select id="op_from"></select></div><div style="flex:1"><label>În locația</label><select id="op_to"></select></div></div>'
@@ -277,12 +312,21 @@ function opForm(title, type){
     + '</div>');
   Promise.all([api("GET","/api/products"),api("GET","/api/locations")]).then(function(r){
     var prods=r[0].products.filter(function(p){return p.active;}), locs=r[1].locations.filter(function(l){return l.active;});
+    cache.opProducts=prods;
     el("op_prod").innerHTML = prods.map(function(p){return '<option value="'+p.id+'">'+esc(p.sku+" — "+p.name)+'</option>';}).join("");
     var locOpts = locs.map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join("");
     if(type==="transfer"){ el("op_from").innerHTML=locOpts; el("op_to").innerHTML=locOpts; }
     else el("op_loc").innerHTML=locOpts;
   });
 }
+window.opScan = function(){
+  var inp=el("op_scan"); if(!inp) return;
+  var q=String(inp.value||"").trim().toLowerCase(); if(!q) return;
+  var prods=cache.opProducts||[];
+  var found=prods.find(function(p){ return String(p.barcode||"").toLowerCase()===q || String(p.sku||"").toLowerCase()===q; });
+  if(found){ el("op_prod").value=found.id; toast("Găsit: "+found.sku); inp.value=""; var qt=el("op_qty"); if(qt) qt.focus(); }
+  else { toast("Cod negăsit: "+q,"bad"); inp.select(); }
+};
 VIEWS.receive = function(){ opForm("Recepție marfă","receive"); };
 VIEWS.ship = function(){ opForm("Expediere","ship"); };
 VIEWS.transfer = function(){ opForm("Transfer între locații","transfer"); };
@@ -335,8 +379,198 @@ window.userForm = function(id){
     });
 };
 
+/* ---------------- Parteneri ---------------- */
+var partnerFilter = "";
+VIEWS.partners = function(){
+  var addBtn = can("operator") ? '<button onclick="partnerForm()">+ Partener</button>' : '';
+  var tabs = '<div class="toolbar">'+filterTab("partnerFilter","","Toți","loadPartners")
+    + filterTab("partnerFilter","supplier","Furnizori","loadPartners")
+    + filterTab("partnerFilter","customer","Clienți","loadPartners")+'</div>';
+  setMain(topbar("Parteneri", addBtn) + tabs + '<div class="card" id="ptn">…</div>');
+  loadPartners();
+};
+window.loadPartners = function(){
+  api("GET","/api/partners"+(partnerFilter?("?type="+partnerFilter):"")).then(function(d){
+    cache.partners=d.partners;
+    var rows=d.partners.map(function(p){
+      return '<tr><td><b>'+esc(p.name)+'</b></td><td><span class="pill mut">'+(p.type==="supplier"?"furnizor":"client")+'</span></td>'
+        +'<td>'+esc(p.email||"—")+'</td><td>'+esc(p.phone||"—")+'</td>'
+        +'<td class="right">'+(can("operator")?'<button class="ghost sm" onclick="partnerForm('+p.id+')">Edit</button>':'')+'</td></tr>';
+    }).join("");
+    el("ptn").innerHTML='<table><thead><tr><th>Nume</th><th>Tip</th><th>Email</th><th>Telefon</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Niciun partener</td></tr>')+'</tbody></table>';
+  });
+};
+window.partnerForm = function(id){
+  var p = id ? cache.partners.find(function(x){return x.id===id;}) : {type:"supplier"};
+  var typeSel='<div class="field"><label>Tip</label><select id="pt_type">'
+    +'<option value="supplier"'+(p.type==="supplier"?' selected':'')+'>Furnizor</option>'
+    +'<option value="customer"'+(p.type==="customer"?' selected':'')+'>Client</option></select></div>';
+  modal((id?"Editează":"Adaugă")+" partener",
+    typeSel + field("Nume","pt_name",p.name||"") + field("Email","pt_email",p.email||"","","email")
+    + field("Telefon","pt_phone",p.phone||"") + field("Adresă","pt_addr",p.address||""),
+    function(){
+      var body={ type:el("pt_type").value, name:el("pt_name").value, email:el("pt_email").value, phone:el("pt_phone").value, address:el("pt_addr").value };
+      var pr = id ? api("PUT","/api/partners/"+id,body) : api("POST","/api/partners",body);
+      pr.then(function(){ closeModal(); toast("Salvat"); loadPartners(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+};
+
+/* ---------------- Comenzi ---------------- */
+var orderFilter = "";
+VIEWS.orders = function(){
+  var addBtn = can("operator") ? '<button onclick="orderForm()">+ Comandă</button>' : '';
+  var tabs = '<div class="toolbar">'+filterTab("orderFilter","","Toate","loadOrders")
+    + filterTab("orderFilter","inbound","Intrări","loadOrders")
+    + filterTab("orderFilter","outbound","Ieșiri","loadOrders")+'</div>';
+  setMain(topbar("Comenzi", addBtn) + tabs + '<div class="card" id="ord">…</div>');
+  loadOrders();
+};
+window.loadOrders = function(){
+  api("GET","/api/orders"+(orderFilter?("?type="+orderFilter):"")).then(function(d){
+    var rows=d.orders.map(function(o){
+      return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
+        +'<td>'+esc(o.partner_name||"—")+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
+        +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
+        +'<td class="right"><button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
+    }).join("");
+    el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
+  });
+};
+window.orderDetail = function(id){
+  api("GET","/api/orders/"+id).then(function(d){
+    var o=d.order;
+    var lines='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th><th class="right">Făcut</th></tr></thead><tbody>'
+      + d.lines.map(function(l){ return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td></tr>'; }).join("")
+      + '</tbody></table>';
+    var actions='';
+    if(can("operator") && o.status!=="completed" && o.status!=="cancelled"){
+      actions='<div class="field" style="margin-top:14px"><label>Finalizează în locația</label>'
+        + '<div class="row"><select id="od_loc" style="flex:1"></select>'
+        + '<button onclick="completeOrder('+o.id+')">'+(o.type==="inbound"?"Recepționează":"Expediază (picking)")+'</button></div></div>'
+        + '<div class="row" style="margin-top:8px">'
+        + (o.status==="draft"?'<button class="ghost sm" onclick="orderStatus('+o.id+',\\'confirmed\\')">Confirmă</button>':'')
+        + '<button class="ghost sm" onclick="orderStatus('+o.id+',\\'cancelled\\')">Anulează</button>'
+        + '<button class="danger sm" onclick="deleteOrder('+o.id+')">Șterge</button></div>';
+    }
+    modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
+      '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
+      + lines + actions, null);
+    // ascunde butonul default de salvare al modalului
+    var sv=el("modalSave"); if(sv) sv.style.display="none";
+    if(el("od_loc")){
+      api("GET","/api/locations").then(function(r){
+        el("od_loc").innerHTML=r.locations.filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join("");
+      });
+    }
+  });
+};
+window.completeOrder = function(id){
+  var loc=el("od_loc"); if(!loc) return;
+  api("POST","/api/orders/"+id+"/complete",{ location_id:Number(loc.value) })
+    .then(function(){ closeModal(); toast("Comandă finalizată — stoc actualizat"); loadOrders(); })
+    .catch(function(e){ toast(e.message,"bad"); });
+};
+window.orderStatus = function(id,status){
+  api("PUT","/api/orders/"+id+"/status",{status:status}).then(function(){ closeModal(); toast("Actualizat"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.deleteOrder = function(id){
+  api("DELETE","/api/orders/"+id).then(function(){ closeModal(); toast("Ștearsă"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+};
+var orderLines=[];
+window.orderForm = function(){
+  orderLines=[{product_id:"",quantity:1}];
+  setMain(topbar("Comandă nouă")
+    + '<div class="card" style="padding:20px;max-width:640px"><div id="ofmsg"></div>'
+    + '<div class="row"><div style="flex:1"><label>Tip</label><select id="of_type" onchange="ofLoadPartners()"><option value="inbound">Intrare (de la furnizor)</option><option value="outbound">Ieșire (către client)</option></select></div>'
+    + '<div style="flex:1"><label>Partener</label><select id="of_partner"></select></div></div>'
+    + '<div class="field" style="margin-top:12px"><label>Notă</label><input id="of_note"></div>'
+    + '<h2 style="margin-top:8px">Linii comandă</h2><div id="of_lines"></div>'
+    + '<button class="ghost sm" onclick="ofAddLine()" style="margin-top:8px">+ Adaugă linie</button>'
+    + '<div style="margin-top:16px"><button onclick="ofSubmit()">Creează comanda</button></div></div>');
+  Promise.all([api("GET","/api/products"),ofLoadPartners()]).then(function(r){ cache.ofProducts=r[0].products.filter(function(p){return p.active;}); ofRenderLines(); });
+};
+window.ofLoadPartners = function(){
+  var type=el("of_type")?el("of_type").value:"inbound";
+  var want = type==="inbound"?"supplier":"customer";
+  return api("GET","/api/partners?type="+want).then(function(d){
+    if(el("of_partner")) el("of_partner").innerHTML='<option value="">— fără —</option>'+d.partners.map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join("");
+  });
+};
+window.ofAddLine = function(){ orderLines.push({product_id:"",quantity:1}); ofRenderLines(); };
+window.ofRemoveLine = function(i){ orderLines.splice(i,1); if(!orderLines.length) orderLines.push({product_id:"",quantity:1}); ofRenderLines(); };
+function ofRenderLines(){
+  var prods=cache.ofProducts||[];
+  el("of_lines").innerHTML=orderLines.map(function(l,i){
+    var opts=prods.map(function(p){return '<option value="'+p.id+'"'+(String(l.product_id)===String(p.id)?' selected':'')+'>'+esc(p.sku+" — "+p.name)+'</option>';}).join("");
+    return '<div class="row" style="margin-bottom:8px;align-items:flex-end">'
+      +'<div style="flex:3"><select onchange="orderLines['+i+'].product_id=this.value"><option value="">— produs —</option>'+opts+'</select></div>'
+      +'<div style="flex:1"><input type="number" min="1" value="'+esc(l.quantity)+'" onchange="orderLines['+i+'].quantity=Number(this.value)"></div>'
+      +'<button class="ghost sm" onclick="ofRemoveLine('+i+')">✕</button></div>';
+  }).join("");
+}
+window.ofSubmit = function(){
+  var type=el("of_type").value;
+  var lines=orderLines.filter(function(l){return l.product_id && Number(l.quantity)>0;}).map(function(l){return {product_id:Number(l.product_id),quantity:Number(l.quantity)};});
+  if(!lines.length){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">Adaugă cel puțin o linie validă</div>'; return; }
+  var body={ type:type, partner_id:el("of_partner").value?Number(el("of_partner").value):null, note:el("of_note").value, lines:lines };
+  api("POST","/api/orders",body).then(function(){ toast("Comandă creată"); go("orders"); }).catch(function(e){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
+};
+
+/* ---------------- Rapoarte ---------------- */
+VIEWS.reports = function(){
+  setMain(topbar("Rapoarte")
+    + '<div class="grid" style="grid-template-columns:1fr 1fr">'
+    + '<div class="card" style="padding:18px"><h2>Stoc pe categorie</h2><div id="r_cat">…</div></div>'
+    + '<div class="card" style="padding:18px"><h2>Top produse (rulaj 30 zile)</h2><div id="r_top">…</div></div>'
+    + '</div>'
+    + '<div class="card" style="padding:18px;margin-top:16px"><div class="toolbar"><h2 style="margin:0;flex:1">Produse sub prag</h2><button class="ghost sm" onclick="downloadCsv(\\'/api/reports/low-stock/export\\',\\'sub-prag.csv\\')">Export CSV</button></div><div id="r_low">…</div></div>'
+    + '<div class="card" style="padding:18px;margin-top:16px"><h2>Mișcări pe zi (30 zile)</h2><div id="r_mov">…</div></div>');
+  api("GET","/api/reports/stock-by-category").then(function(d){ el("r_cat").innerHTML=catBars(d.rows.map(function(r){return {category:r.category,units:r.units};})); });
+  api("GET","/api/reports/top-products").then(function(d){
+    el("r_top").innerHTML = d.rows.length ? '<table><tbody>'+d.rows.map(function(r){return '<tr><td><b>'+esc(r.sku)+'</b> '+esc(r.name)+'</td><td class="right">'+esc(r.volume)+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Nicio mișcare</div>';
+  });
+  api("GET","/api/reports/low-stock").then(function(d){
+    el("r_low").innerHTML = d.rows.length ? '<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Stoc</th><th class="right">Prag</th></tr></thead><tbody>'+d.rows.map(function(r){return '<tr><td><b>'+esc(r.sku)+'</b></td><td>'+esc(r.name)+'</td><td class="right"><span class="pill bad">'+esc(r.total)+'</span></td><td class="right">'+esc(r.reorder_point)+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Totul peste prag ✔</div>';
+  });
+  api("GET","/api/reports/movements-by-period?days=30").then(function(d){
+    el("r_mov").innerHTML = d.rows.length ? '<table><thead><tr><th>Zi</th><th>Tip</th><th class="right">Intrări</th><th class="right">Ieșiri</th><th class="right">Mișcări</th></tr></thead><tbody>'+d.rows.map(function(r){return '<tr><td>'+esc(r.day)+'</td><td><span class="pill mut">'+esc(r.type)+'</span></td><td class="right">'+esc(r.qty_in)+'</td><td class="right">'+esc(r.qty_out)+'</td><td class="right">'+esc(r.moves)+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Nicio mișcare</div>';
+  });
+};
+
+/* ---------------- Coduri de bare (Code128B) ---------------- */
+var C128 = ["212222","222122","222221","121223","121322","131222","122213","122312","132212","221213","221312","231212","112232","122132","122231","113222","123122","123221","223211","221132","221231","213212","223112","312131","311222","321122","321221","312212","322112","322211","212123","212321","232121","111323","131123","131321","112313","132113","132311","211313","231113","231311","112133","112331","132131","113123","113321","133121","313121","211331","231131","213113","213311","213131","311123","311321","331121","312113","312311","332111","314111","221411","431111","111224","111422","121124","121421","141122","141221","112214","112412","122114","122411","142112","142211","241211","221114","413111","241112","134111","111242","121142","121241","114212","124112","124211","411212","421112","421211","212141","214121","412121","111143","111341","131141","114113","114311","411113","411311","113141","114131","311141","411131","211412","211214","211232","2331112"];
+function drawBarcode(canvas,text){
+  var codes=[104], sum=104;
+  for(var i=0;i<text.length;i++){ var v=text.charCodeAt(i)-32; if(v<0||v>94) v=0; codes.push(v); sum+=v*(i+1); }
+  codes.push(sum%103); codes.push(106);
+  var pat=""; codes.forEach(function(c){ pat+=C128[c]; });
+  var mod=2, quiet=10, H=70;
+  var W=quiet*2; for(var j=0;j<pat.length;j++) W+=parseInt(pat[j],10)*mod;
+  canvas.width=W; canvas.height=H+18;
+  var ctx=canvas.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H+18);
+  var x=quiet, bar=true;
+  for(var k=0;k<pat.length;k++){ var w=parseInt(pat[k],10)*mod; if(bar){ ctx.fillStyle="#000"; ctx.fillRect(x,0,w,H); } x+=w; bar=!bar; }
+  ctx.fillStyle="#000"; ctx.font="12px monospace"; ctx.textAlign="center"; ctx.fillText(text, W/2, H+14);
+}
+window.showBarcode = function(code,label){
+  modal("Cod de bare — "+esc(label||code),
+    '<div class="center" style="background:#fff;padding:12px;border-radius:8px"><canvas id="bc_canvas"></canvas></div>'
+    +'<div class="row" style="justify-content:center;margin-top:10px"><button class="ghost sm" onclick="printBarcode()">Printează</button></div>', null);
+  var sv=el("modalSave"); if(sv) sv.style.display="none";
+  setTimeout(function(){ var c=el("bc_canvas"); if(c) drawBarcode(c, String(code)); }, 30);
+};
+window.printBarcode = function(){
+  var c=el("bc_canvas"); if(!c) return;
+  var w=window.open("","_blank"); w.document.write('<img src="'+c.toDataURL()+'" onload="window.print();window.close()">'); w.document.close();
+};
+
 /* ---------------- UI helpers ---------------- */
 function field(label,id,val,attr,type){ return '<div class="field"><label>'+esc(label)+'</label><input id="'+id+'" type="'+(type||"text")+'" value="'+esc(val)+'" '+(attr||"")+'></div>'; }
+function filterTab(varName,value,label){
+  var active=(window[varName]||"")===value;
+  var viewName=varName.replace("Filter","")+"s";
+  return '<button class="sm'+(active?'':' ghost')+'" onclick="window.'+varName+'=\\''+value+'\\';go(\\''+viewName+'\\')">'+esc(label)+'</button>';
+}
 window.downloadCsv = function(path, filename){
   fetch(API+path,{ headers: token?{Authorization:"Bearer "+token}:{} }).then(function(r){
     if(!r.ok) throw new Error("Export eșuat"); return r.blob();
