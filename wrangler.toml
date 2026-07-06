@@ -8,7 +8,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "wms-db"
-database_id = "PLACEHOLDER_DATABASE_ID"
+database_id = "547695ef-25a7-410e-b256-354650edd00f"
 
 [observability]
 enabled = true
