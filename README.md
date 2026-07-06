@@ -27,8 +27,16 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
 - 📊 **Rapoarte** — stoc pe categorie, produse sub prag (+ CSV), mișcări pe perioadă, top produse
 - 📈 **Dashboard extins** — comenzi deschise, grafic pe categorie, comenzi recente, listă sub-prag
 
-Roadmap (etape următoare): coduri QR, roluri granulare pe locație, integrare curieri,
-notificări automate la stoc minim.
+### Etapa 3 — coduri QR & scanare cu camera
+- ▦ **Coduri QR** generate pe server (SVG, printabile) pentru **locații** și **produse**
+- 🔗 **Deep-links** — QR-ul de locație (`#loc=A-01-01`) deschide direct stocul din raft;
+  QR-ul de produs (`#sku=...`) deschide fișa produsului. Orice telefon devine terminal de depozit.
+- 📷 **Scanare cu camera** direct în aplicație (prin `BarcodeDetector` nativ — QR + coduri de bare),
+  cu buton global și la recepție/expediere; fallback pe câmp text unde nu e suportat
+- 📍 **Vedere pe locație** (stocul din raft) și 🔎 **vedere pe produs** (stoc pe locații + mișcări)
+
+Roadmap (etape următoare): roluri granulare pe locație, integrare curieri,
+notificări automate la stoc minim, aplicație mobilă dedicată.
 
 ## Arhitectură
 

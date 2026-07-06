@@ -12,6 +12,7 @@ import * as users from './routes/users.js';
 import * as partners from './routes/partners.js';
 import * as orders from './routes/orders.js';
 import * as reports from './routes/reports.js';
+import * as qr from './routes/qr.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
@@ -61,6 +62,8 @@ const routes = [
   ['GET', '/api/reports/low-stock/export', reports.exportLowStockCsv, 'viewer'],
   ['GET', '/api/reports/movements-by-period', reports.movementsByPeriod, 'viewer'],
   ['GET', '/api/reports/top-products', reports.topProducts, 'viewer'],
+
+  ['GET', '/api/qr', qr.svg, 'viewer'],
 ];
 
 function match(routePath, actualPath) {

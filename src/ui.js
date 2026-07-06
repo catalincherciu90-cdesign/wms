@@ -116,7 +116,7 @@ function renderLogin(err){
 window.doLogin = function(e){
   e.preventDefault();
   api("POST","/api/auth/login",{ email: el("li_email").value, password: el("li_pass").value })
-    .then(function(d){ token=d.token; me=d.user; localStorage.setItem("wms_token",token); renderApp(); go("dashboard"); })
+    .then(function(d){ token=d.token; me=d.user; localStorage.setItem("wms_token",token); renderApp(); if(!handleHash()) go("dashboard"); })
     .catch(function(err){ renderLogin(err.message); });
   return false;
 };
@@ -137,6 +137,7 @@ function renderApp(){
     '<div id="app"><aside>'
     + '<div class="logo" style="padding:6px 12px 14px">W<b>MS</b></div>'
     + nav
+    + '<button class="ghost sm" style="margin:8px 6px 2px" onclick="scanCamera(handleScanResult)">📷 Scanează</button>'
     + '<div style="flex:1"></div>'
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
@@ -235,7 +236,8 @@ window.loadProducts = function(){
       return '<tr><td><b>'+esc(p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
-        + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.sku)+'\\')">⌗ Cod</button>'
+        + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.sku)+'\\')">⌗ Bare</button>'
+        + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.sku)+'\\')">▦ QR</button>'
         + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')+'</td></tr>';
     }).join("");
     el("ptbl").innerHTML = '<table><thead><tr><th>SKU</th><th>Nume</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
@@ -264,7 +266,9 @@ VIEWS.locations = function(){
     var rows = d.locations.map(function(l){
       return '<tr><td><b>'+esc(l.code)+'</b></td><td>'+esc(l.name||"—")+'</td><td>'+esc(l.zone||"—")+'</td>'
         + '<td>'+(l.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
-        + '<td class="right">'+(can("operator")?'<button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')+'</td></tr>';
+        + '<td class="right"><button class="ghost sm" onclick="showQR(appOrigin()+\\'/#loc=\\'+encodeURIComponent(\\''+esc(l.code)+'\\'),\\''+esc(l.code)+'\\')">▦ QR</button>'
+        + ' <button class="ghost sm" onclick="locationView(\\''+esc(l.code)+'\\')">Vezi</button>'
+        + (can("operator")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')+'</td></tr>';
     }).join("");
     el("ltbl").innerHTML='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio locație</td></tr>')+'</tbody></table>';
   });
@@ -301,7 +305,7 @@ VIEWS.stock = function(){
 function opForm(title, type){
   setMain(topbar(title) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
-    + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><input id="op_scan" placeholder="Scanează sau tastează, apoi Enter" autofocus onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"></div>'
+    + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><div class="row"><input id="op_scan" style="flex:1" placeholder="Scanează sau tastează, apoi Enter" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'op_scan\\').value=t;opScan();})">📷</button></div></div>'
     + '<div class="field"><label>Produs</label><select id="op_prod"></select></div>'
     + (type==="transfer"
         ? '<div class="row"><div style="flex:1"><label>Din locația</label><select id="op_from"></select></div><div style="flex:1"><label>În locația</label><select id="op_to"></select></div></div>'
@@ -316,12 +320,21 @@ function opForm(title, type){
     el("op_prod").innerHTML = prods.map(function(p){return '<option value="'+p.id+'">'+esc(p.sku+" — "+p.name)+'</option>';}).join("");
     var locOpts = locs.map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join("");
     if(type==="transfer"){ el("op_from").innerHTML=locOpts; el("op_to").innerHTML=locOpts; }
-    else el("op_loc").innerHTML=locOpts;
+    else {
+      el("op_loc").innerHTML=locOpts;
+      if(window._opPresetLoc){ var pl=locs.find(function(l){return l.code===window._opPresetLoc;}); if(pl) el("op_loc").value=pl.id; window._opPresetLoc=null; }
+    }
   });
 }
+window.opFrom = function(type, locCode){
+  window._opPresetLoc = locCode;
+  opForm(type==="receive"?"Recepție marfă":"Expediere", type);
+};
 window.opScan = function(){
   var inp=el("op_scan"); if(!inp) return;
-  var q=String(inp.value||"").trim().toLowerCase(); if(!q) return;
+  var raw=String(inp.value||"").trim();
+  var mm=raw.match(/[#&?]sku=([^&]+)/); if(mm){ raw=decodeURIComponent(mm[1]); }
+  var q=raw.toLowerCase(); if(!q) return;
   var prods=cache.opProducts||[];
   var found=prods.find(function(p){ return String(p.barcode||"").toLowerCase()===q || String(p.sku||"").toLowerCase()===q; });
   if(found){ el("op_prod").value=found.id; toast("Găsit: "+found.sku); inp.value=""; var qt=el("op_qty"); if(qt) qt.focus(); }
@@ -564,6 +577,107 @@ window.printBarcode = function(){
   var w=window.open("","_blank"); w.document.write('<img src="'+c.toDataURL()+'" onload="window.print();window.close()">'); w.document.close();
 };
 
+/* ---------------- Coduri QR + scanare cameră (Etapa 3) ---------------- */
+function appOrigin(){ return location.origin + location.pathname.replace(/\\/$/,""); }
+
+window.showQR = function(data, label){
+  modal("Cod QR — "+esc(label||""),
+    '<div class="center" id="qr_box" style="background:#fff;padding:14px;border-radius:8px;min-height:140px;display:flex;align-items:center;justify-content:center">Se generează…</div>'
+    + '<div class="muted center" style="margin-top:8px;font-size:11.5px;word-break:break-all">'+esc(data)+'</div>'
+    + '<div class="row" style="justify-content:center;margin-top:10px"><button class="ghost sm" onclick="printEl(\\'qr_box\\')">Printează</button></div>', null);
+  var sv=el("modalSave"); if(sv) sv.style.display="none";
+  fetch(API+"/api/qr?data="+encodeURIComponent(data), { headers: token?{Authorization:"Bearer "+token}:{} })
+    .then(function(r){ if(!r.ok) throw new Error("qr"); return r.text(); })
+    .then(function(svg){ var b=el("qr_box"); if(b){ b.innerHTML=svg; var s=b.querySelector("svg"); if(s){ s.style.width="220px"; s.style.height="220px"; s.removeAttribute("width"); s.removeAttribute("height"); } } })
+    .catch(function(){ var b=el("qr_box"); if(b) b.textContent="Eroare la generarea codului QR"; });
+};
+window.printEl = function(id){
+  var e=el(id); if(!e) return;
+  var w=window.open("","_blank"); if(!w) return;
+  w.document.write('<div style="text-align:center;margin-top:40px">'+e.innerHTML+'</div>');
+  w.document.write('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();window.close();},150)}</scr'+'ipt>');
+  w.document.close();
+};
+
+// Scanare cu camera (BarcodeDetector nativ)
+window.scanCamera = function(onResult){
+  if(!("BarcodeDetector" in window)){
+    toast("Scanarea cu camera nu e suportată de acest browser — folosește câmpul de text","bad"); return;
+  }
+  modal("📷 Scanează cod",
+    '<video id="scanvid" style="width:100%;border-radius:8px;background:#000;max-height:60vh" muted autoplay playsinline></video>'
+    + '<div class="muted center" style="margin-top:8px">Îndreaptă camera spre codul de bare sau QR</div>', null);
+  var sv=el("modalSave"); if(sv) sv.style.display="none";
+  var detector=new BarcodeDetector({ formats:["qr_code","code_128","ean_13","ean_8","code_39"] });
+  var stop=false;
+  navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" } }).then(function(s){
+    window._scanStream=s; var v=el("scanvid"); if(!v){ s.getTracks().forEach(function(t){t.stop();}); return; } v.srcObject=s;
+    var loop=function(){
+      if(stop || !el("scanvid")) return;
+      detector.detect(v).then(function(codes){
+        if(codes && codes.length){ stop=true; var val=codes[0].rawValue; closeModal(); if(onResult) onResult(val); }
+        else requestAnimationFrame(loop);
+      }).catch(function(){ if(!stop) requestAnimationFrame(loop); });
+    };
+    requestAnimationFrame(loop);
+  }).catch(function(){ closeModal(); toast("Nu am acces la cameră","bad"); });
+};
+
+// Interpretează un cod scanat: URL cu loc=/sku=, altfel caută produs
+function handleScanResult(text){
+  var t=String(text||"");
+  var m=t.match(/[#&?]loc=([^&]+)/); if(m){ locationView(decodeURIComponent(m[1])); return; }
+  m=t.match(/[#&?]sku=([^&]+)/); if(m){ productView(decodeURIComponent(m[1])); return; }
+  productView(t); // caută după SKU / cod de bare
+}
+
+// Deep-link din hash (#loc=... / #sku=...)
+function handleHash(){
+  var h=(location.hash||"").replace(/^#/,"");
+  var m=h.match(/(?:^|&)loc=([^&]+)/); if(m){ locationView(decodeURIComponent(m[1])); return true; }
+  m=h.match(/(?:^|&)sku=([^&]+)/); if(m){ productView(decodeURIComponent(m[1])); return true; }
+  return false;
+}
+
+/* ---------------- Vederi deep-link: locație & produs ---------------- */
+window.locationView = function(code){
+  view=""; renderApp();
+  var actions = can("operator")
+    ? '<button class="ghost" onclick="opFrom(\\'receive\\',\\''+esc(code)+'\\')">Recepție aici</button> <button class="ghost" onclick="opFrom(\\'ship\\',\\''+esc(code)+'\\')">Expediere aici</button>'
+    : '';
+  setMain(topbar("📍 Locație "+esc(code), actions + ' <button class="ghost" onclick="go(\\'stock\\')">Tot stocul</button>')
+    + '<div class="card" id="lv">…</div>');
+  api("GET","/api/inventory/stock").then(function(d){
+    var rows=d.stock.filter(function(s){ return s.location_code===code; });
+    var body=rows.map(function(s){
+      return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.product_name)+'</td><td class="right">'+esc(s.quantity)+' '+esc(s.unit||"")+'</td>'
+        +'<td class="right"><button class="ghost sm" onclick="productView(\\''+esc(s.sku)+'\\')">Vezi</button></td></tr>';
+    }).join("");
+    el("lv").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Stoc</th><th></th></tr></thead><tbody>'+(body||'<tr><td colspan=4 class="muted center">Nicio marfă în această locație</td></tr>')+'</tbody></table>';
+  });
+};
+window.productView = function(query){
+  view=""; renderApp();
+  setMain(topbar("🔎 Produs "+esc(query)) + '<div id="pv">…</div>');
+  api("GET","/api/products?q="+encodeURIComponent(query)).then(function(d){
+    var q=String(query).toLowerCase();
+    var p=(d.products||[]).find(function(x){ return String(x.sku).toLowerCase()===q || String(x.barcode||"").toLowerCase()===q; }) || d.products[0];
+    if(!p){ el("pv").innerHTML='<div class="card" style="padding:18px"><div class="pill bad">Produs negăsit: '+esc(query)+'</div></div>'; return; }
+    var head='<div class="card" style="padding:18px;margin-bottom:16px"><div class="row" style="justify-content:space-between;align-items:center">'
+      +'<div><div style="font-size:18px;font-weight:700">'+esc(p.name)+'</div><div class="muted">SKU '+esc(p.sku)+(p.category?(" · "+esc(p.category)):"")+'</div></div>'
+      +'<div class="row"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.sku)+'\\')">⌗ Bare</button>'
+      +'<button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.sku)+'\\')">▦ QR</button></div></div></div>';
+    el("pv").innerHTML=head+'<div class="grid" style="grid-template-columns:1fr 1fr"><div class="card" style="padding:18px"><h2>Stoc pe locație</h2><div id="pv_stock">…</div></div><div class="card" style="padding:18px"><h2>Ultimele mișcări</h2><div id="pv_mov">…</div></div></div>';
+    api("GET","/api/inventory/stock?product_id="+p.id).then(function(s){
+      el("pv_stock").innerHTML = s.stock.length ? '<table><tbody>'+s.stock.map(function(x){return '<tr><td><b>'+esc(x.location_code)+'</b></td><td class="right">'+esc(x.quantity)+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Fără stoc</div>';
+    });
+    api("GET","/api/inventory/movements?limit=200").then(function(mv){
+      var rows=mv.movements.filter(function(m){return m.sku===p.sku;}).slice(0,10);
+      el("pv_mov").innerHTML = rows.length ? '<table><tbody>'+rows.map(function(m){return '<tr><td class="muted">'+esc(String(m.created_at).slice(0,16))+'</td><td>'+esc(m.location_code)+'</td><td class="right">'+(m.quantity>0?'<span class="pill good">+'+m.quantity+'</span>':'<span class="pill bad">'+m.quantity+'</span>')+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Nicio mișcare</div>';
+    });
+  });
+};
+
 /* ---------------- UI helpers ---------------- */
 function field(label,id,val,attr,type){ return '<div class="field"><label>'+esc(label)+'</label><input id="'+id+'" type="'+(type||"text")+'" value="'+esc(val)+'" '+(attr||"")+'></div>'; }
 function filterTab(varName,value,label){
@@ -587,11 +701,15 @@ function modal(title, inner, onSave){
   document.getElementById("modalSave").onclick=onSave;
   bg.onclick=function(e){ if(e.target===bg) closeModal(); };
 }
-window.closeModal=function(){ var m=el("modalBg"); if(m) m.remove(); };
+window.closeModal=function(){
+  if(window._scanStream){ try{ window._scanStream.getTracks().forEach(function(t){t.stop();}); }catch(e){} window._scanStream=null; }
+  var m=el("modalBg"); if(m) m.remove();
+};
 
 /* ---------------- Boot ---------------- */
+window.onhashchange=function(){ if(me) handleHash(); };
 if(token){
-  api("GET","/api/auth/me").then(function(d){ me=d.user; renderApp(); go("dashboard"); })
+  api("GET","/api/auth/me").then(function(d){ me=d.user; renderApp(); if(!handleHash()) go("dashboard"); })
     .catch(function(){ logout(); });
 } else { renderLogin(); }
 </script>
