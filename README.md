@@ -34,30 +34,41 @@ schema.sql          Structura bazei D1
 seed.sql            Date demo + cont admin
 ```
 
-## Deploy pe Cloudflare (o singură configurare)
+## Deploy pe Cloudflare (Workers Builds)
 
-Aplicația se deployează **automat** la fiecare push pe `main`, prin GitHub Actions
-(`.github/workflows/deploy.yml`). Pași unici de configurare în contul tău Cloudflare:
+Repo-ul e conectat la Cloudflare prin **Workers Builds** (integrarea Git nativă),
+care rulează comanda de deploy la fiecare push. Pași unici de configurare:
 
-1. **Instalează dependențele** (local): `npm install`
-2. **Creează baza D1**:
+1. **Creează baza D1** (local, unde ești logat în Cloudflare):
    ```bash
    npx wrangler d1 create wms-db
    ```
    Copiază `database_id`-ul afișat în `wrangler.toml` (înlocuiește `PLACEHOLDER_DATABASE_ID`).
-3. **Setează secret-ul JWT**:
+2. **Setează secret-ul JWT** (în contul Cloudflare):
    ```bash
    npx wrangler secret put JWT_SECRET
    ```
-4. **Adaugă token-ul API în GitHub**: repo → Settings → Secrets and variables → Actions →
-   secret nou `CLOUDFLARE_API_TOKEN` (permisiuni: *Workers Scripts: Edit* + *D1: Edit*).
-5. **Inițializează schema + datele demo**:
-   ```bash
-   npm run db:init     # creează tabelele (remote)
-   npm run db:seed     # cont admin + date demo
+3. **Comanda de deploy în Workers Builds**: în dashboard-ul Cloudflare →
+   Workers & Pages → proiectul `wms` → Settings → Build → *Deploy command*, setează:
    ```
-6. **Push pe `main`** → deploy automat. Worker-ul rulează la
+   npm run deploy
+   ```
+   (rulează `predeploy` = migrarea schemei pe D1, apoi `wrangler deploy` — schema e
+   idempotentă, deci se poate rula la fiecare deploy fără efecte secundare).
+4. **Populează datele demo** o singură dată (local):
+   ```bash
+   npm run db:seed
+   ```
+5. **Push** → build-ul Workers Builds rulează automat. Worker-ul apare la
    `https://wms.<subdomeniul-tău>.workers.dev`.
+
+> Alternativ, dacă preferi să nu schimbi comanda de deploy (rămâne `npx wrangler deploy`),
+> rulează manual o singură dată `npm run db:init && npm run db:seed`, apoi push-ul doar
+> deployează codul.
+
+> Există și un workflow GitHub Actions (`.github/workflows/deploy.yml`) ca alternativă,
+> dacă preferi deploy prin Actions în loc de Workers Builds — necesită secret-ul
+> `CLOUDFLARE_API_TOKEN` în repo.
 
 ### Dezvoltare locală
 

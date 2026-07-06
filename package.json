@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "predeploy": "wrangler d1 execute wms-db --remote --file=./schema.sql",
     "deploy": "wrangler deploy",
     "db:init": "wrangler d1 execute wms-db --file=./schema.sql",
     "db:init:local": "wrangler d1 execute wms-db --local --file=./schema.sql",

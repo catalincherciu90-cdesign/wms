@@ -26,9 +26,12 @@ INSERT OR IGNORE INTO partners (type, name, email, phone) VALUES
 INSERT OR IGNORE INTO inventory (product_id, location_id, quantity) VALUES
   (1, 1, 120), (2, 1, 45), (3, 2, 60), (4, 3, 25), (5, 2, 18);
 
-INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, user_id) VALUES
+-- Mișcările se inserează o singură dată (idempotent prin marca STOC-INIT)
+INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, user_id)
+SELECT * FROM (VALUES
   (1, 1, 'inbound', 120, 'STOC-INIT', 1),
   (2, 1, 'inbound', 45,  'STOC-INIT', 1),
   (3, 2, 'inbound', 60,  'STOC-INIT', 1),
   (4, 3, 'inbound', 25,  'STOC-INIT', 1),
-  (5, 2, 'inbound', 18,  'STOC-INIT', 1);
+  (5, 2, 'inbound', 18,  'STOC-INIT', 1)
+) WHERE NOT EXISTS (SELECT 1 FROM stock_movements WHERE reference = 'STOC-INIT');
