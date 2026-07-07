@@ -599,28 +599,31 @@ window.printEl = function(id){
   w.document.close();
 };
 
-// Scanare cu camera (BarcodeDetector nativ)
+// Încarcă biblioteca ZXing (o singură dată, lazy)
+function ensureZXing(){
+  return new Promise(function(resolve,reject){
+    if(window.ZXing) return resolve();
+    var s=document.createElement("script"); s.src=API+"/vendor/zxing.js";
+    s.onload=function(){ window.ZXing ? resolve() : reject(new Error("zxing")); };
+    s.onerror=function(){ reject(new Error("zxing")); };
+    document.head.appendChild(s);
+  });
+}
+// Scanare cu camera — universal (ZXing: coduri de bare + QR, pe orice telefon/browser)
 window.scanCamera = function(onResult){
-  if(!("BarcodeDetector" in window)){
-    toast("Scanarea cu camera nu e suportată de acest browser — folosește câmpul de text","bad"); return;
-  }
   modal("📷 Scanează cod",
     '<video id="scanvid" style="width:100%;border-radius:8px;background:#000;max-height:60vh" muted autoplay playsinline></video>'
-    + '<div class="muted center" style="margin-top:8px">Îndreaptă camera spre codul de bare sau QR</div>', null);
+    + '<div class="muted center" id="scanmsg" style="margin-top:8px">Se încarcă scannerul…</div>', null);
   var sv=el("modalSave"); if(sv) sv.style.display="none";
-  var detector=new BarcodeDetector({ formats:["qr_code","code_128","ean_13","ean_8","code_39"] });
-  var stop=false;
-  navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" } }).then(function(s){
-    window._scanStream=s; var v=el("scanvid"); if(!v){ s.getTracks().forEach(function(t){t.stop();}); return; } v.srcObject=s;
-    var loop=function(){
-      if(stop || !el("scanvid")) return;
-      detector.detect(v).then(function(codes){
-        if(codes && codes.length){ stop=true; var val=codes[0].rawValue; closeModal(); if(onResult) onResult(val); }
-        else requestAnimationFrame(loop);
-      }).catch(function(){ if(!stop) requestAnimationFrame(loop); });
-    };
-    requestAnimationFrame(loop);
-  }).catch(function(){ closeModal(); toast("Nu am acces la cameră","bad"); });
+  ensureZXing().then(function(){
+    var v=el("scanvid"); if(!v) return;
+    var msg=el("scanmsg"); if(msg) msg.textContent="Îndreaptă camera spre codul de bare sau QR";
+    var reader=new ZXing.BrowserMultiFormatReader(); window._zxingReader=reader;
+    var done=false;
+    var cb=function(result){ if(done||!result) return; done=true; var val=result.getText(); try{reader.reset();}catch(e){} window._zxingReader=null; closeModal(); if(onResult) onResult(val); };
+    var p = reader.decodeFromConstraints({ video:{ facingMode:"environment" } }, v, cb);
+    if(p && p.catch) p.catch(function(){ closeModal(); toast("Nu am acces la cameră","bad"); });
+  }).catch(function(){ closeModal(); toast("Nu s-a putut încărca scannerul","bad"); });
 };
 
 // Interpretează un cod scanat: URL cu loc=/sku=, altfel caută produs
@@ -703,6 +706,7 @@ function modal(title, inner, onSave){
 }
 window.closeModal=function(){
   if(window._scanStream){ try{ window._scanStream.getTracks().forEach(function(t){t.stop();}); }catch(e){} window._scanStream=null; }
+  if(window._zxingReader){ try{ window._zxingReader.reset(); }catch(e){} window._zxingReader=null; }
   var m=el("modalBg"); if(m) m.remove();
 };
 

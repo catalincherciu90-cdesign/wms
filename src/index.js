@@ -13,6 +13,7 @@ import * as partners from './routes/partners.js';
 import * as orders from './routes/orders.js';
 import * as reports from './routes/reports.js';
 import * as qr from './routes/qr.js';
+import * as vendor from './routes/vendor.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
@@ -106,6 +107,9 @@ export default {
       }
       return error('Endpoint inexistent', 404);
     }
+
+    // Bibliotecă client (ZXing) servită de Worker
+    if (path === '/vendor/zxing.js') return vendor.zxing();
 
     // Health check
     if (path === '/health') return json({ ok: true, service: 'wms', ts: new Date().toISOString() });

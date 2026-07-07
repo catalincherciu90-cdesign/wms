@@ -13,6 +13,11 @@ database_id = "547695ef-25a7-410e-b256-354650edd00f"
 [observability]
 enabled = true
 
+# Permite importul fișierelor .txt din src/vendor ca string (ex: biblioteca ZXing)
+[[rules]]
+type = "Text"
+globs = ["**/vendor/*.txt"]
+
 # JWT_SECRET se setează ca secret, NU aici:
 #   wrangler secret put JWT_SECRET
 # Pentru dev local există un fallback în cod.

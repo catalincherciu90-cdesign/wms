@@ -31,8 +31,9 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
 - ▦ **Coduri QR** generate pe server (SVG, printabile) pentru **locații** și **produse**
 - 🔗 **Deep-links** — QR-ul de locație (`#loc=A-01-01`) deschide direct stocul din raft;
   QR-ul de produs (`#sku=...`) deschide fișa produsului. Orice telefon devine terminal de depozit.
-- 📷 **Scanare cu camera** direct în aplicație (prin `BarcodeDetector` nativ — QR + coduri de bare),
-  cu buton global și la recepție/expediere; fallback pe câmp text unde nu e suportat
+- 📷 **Scanare cu camera** direct în aplicație, **universal pe orice telefon/browser**
+  (Android, iPhone, desktop) — decodor ZXing împachetat în app (fără CDN), încărcat lazy;
+  scanează coduri de bare (Code128/EAN) + QR; buton global și la recepție/expediere
 - 📍 **Vedere pe locație** (stocul din raft) și 🔎 **vedere pe produs** (stoc pe locații + mișcări)
 
 Roadmap (etape următoare): roluri granulare pe locație, integrare curieri,
