@@ -37,6 +37,8 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
 - 📍 **Vedere pe locație** (stocul din raft) și 🔎 **vedere pe produs** (stoc pe locații + mișcări)
 - 🌐 **Identificare produs online** — la adăugarea unui produs, codul de bare (EAN/UPC) e căutat
   automat în baze publice (UPCitemdb + Open Food Facts) și completează numele + categoria
+- 🌍 **Decodare prefix GS1** — afișează instant (offline) țara unde e înregistrat codul de bare
+  (ex: `594` = România, `400-440` = Germania), imediat ce scanezi/tastezi
 
 Roadmap (etape următoare): roluri granulare pe locație, integrare curieri,
 notificări automate la stoc minim, aplicație mobilă dedicată.

@@ -247,7 +247,7 @@ window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",
     field("SKU","p_sku",p.sku||"",id?"disabled":"")
-    + '<div class="field"><label>Cod de bare</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div></div>'
+    + '<div class="field"><label>Cod de bare</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div><div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
     + field("Nume","p_name",p.name||"")
     + field("Categorie","p_category",p.category||"")
     + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number")+'</div></div>',
@@ -256,6 +256,7 @@ window.productForm = function(id){
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
+  setTimeout(function(){ if(el("p_barcode")) bcInfo(); }, 20);
 };
 
 VIEWS.locations = function(){
@@ -634,6 +635,31 @@ window.closeScan = function(){
   var o=el("scanOverlay"); if(o) o.remove();
 };
 
+// Decodare prefix GS1 -> țara unde e înregistrat codul (offline, primele 3 cifre)
+var GS1 = [
+  [0,19,"SUA / Canada"],[30,39,"SUA"],[50,59,"SUA (cupoane)"],[60,139,"SUA / Canada"],
+  [300,379,"Franța"],[380,380,"Bulgaria"],[383,383,"Slovenia"],[385,385,"Croația"],[387,387,"Bosnia și Herțegovina"],[389,389,"Muntenegru"],[390,390,"Kosovo"],
+  [400,440,"Germania"],[450,459,"Japonia"],[460,469,"Rusia"],[470,470,"Kârgâzstan"],[471,471,"Taiwan"],[474,474,"Estonia"],[475,475,"Letonia"],[476,476,"Azerbaidjan"],[477,477,"Lituania"],[478,478,"Uzbekistan"],[479,479,"Sri Lanka"],[480,480,"Filipine"],[481,481,"Belarus"],[482,482,"Ucraina"],[484,484,"Moldova"],[485,485,"Armenia"],[486,486,"Georgia"],[487,487,"Kazahstan"],[489,489,"Hong Kong"],[490,499,"Japonia"],
+  [500,509,"Regatul Unit"],[520,521,"Grecia"],[528,528,"Liban"],[529,529,"Cipru"],[530,530,"Albania"],[531,531,"Macedonia de Nord"],[535,535,"Malta"],[539,539,"Irlanda"],[540,549,"Belgia / Luxemburg"],[560,560,"Portugalia"],[569,569,"Islanda"],[570,579,"Danemarca"],[590,590,"Polonia"],[594,594,"România"],[599,599,"Ungaria"],
+  [600,601,"Africa de Sud"],[608,608,"Bahrain"],[609,609,"Mauritius"],[611,611,"Maroc"],[613,613,"Algeria"],[615,615,"Nigeria"],[616,616,"Kenya"],[619,619,"Tunisia"],[621,621,"Siria"],[622,622,"Egipt"],[625,625,"Iordania"],[626,626,"Iran"],[627,627,"Kuwait"],[628,628,"Arabia Saudită"],[629,629,"Emiratele Arabe Unite"],[640,649,"Finlanda"],[690,699,"China"],
+  [700,709,"Norvegia"],[729,729,"Israel"],[730,739,"Suedia"],[740,745,"America Centrală"],[746,746,"Rep. Dominicană"],[750,750,"Mexic"],[754,755,"Canada"],[759,759,"Venezuela"],[760,769,"Elveția"],[770,771,"Columbia"],[773,773,"Uruguay"],[775,775,"Peru"],[777,777,"Bolivia"],[778,779,"Argentina"],[780,780,"Chile"],[784,784,"Paraguay"],[786,786,"Ecuador"],[789,790,"Brazilia"],
+  [800,839,"Italia"],[840,849,"Spania"],[850,850,"Cuba"],[858,858,"Slovacia"],[859,859,"Cehia"],[860,860,"Serbia"],[865,865,"Mongolia"],[867,867,"Coreea de Nord"],[868,869,"Turcia"],[870,879,"Țările de Jos"],[880,880,"Coreea de Sud"],[884,884,"Cambodgia"],[885,885,"Thailanda"],[888,888,"Singapore"],[890,890,"India"],[893,893,"Vietnam"],[896,896,"Pakistan"],[899,899,"Indonezia"],
+  [900,919,"Austria"],[930,939,"Australia"],[940,949,"Noua Zeelandă"],[955,955,"Malaysia"],[958,958,"Macau"],[977,977,"presă (ISSN)"],[978,979,"carte (ISBN)"]
+];
+function gs1Country(code){
+  var digits=String(code||"").replace(/\\D/g,""); if(digits.length<8) return null;
+  var p=parseInt(digits.slice(0,3),10); if(isNaN(p)) return null;
+  for(var i=0;i<GS1.length;i++){ if(p>=GS1[i][0] && p<=GS1[i][1]) return GS1[i][2]; }
+  if(p>=200 && p<=299) return "cod intern (magazin)";
+  return null;
+}
+window.bcInfo = function(){
+  var box=el("p_bc_info"); if(!box) return;
+  var code=(el("p_barcode")&&el("p_barcode").value||"").trim();
+  var c=gs1Country(code);
+  box.innerHTML = c ? ('🌍 Cod înregistrat în: <b>'+esc(c)+'</b>') : '';
+};
+
 // Scanează un cod și îl pune într-un câmp (ex: cod de bare la adăugare produs)
 window.scanInto = function(fieldId, thenLookup){
   scanCamera(function(t){
@@ -641,6 +667,7 @@ window.scanInto = function(fieldId, thenLookup){
     var val=m?decodeURIComponent(m[1]):String(t);
     var e=el(fieldId); if(e){ e.value=val; }
     toast("Scanat: "+val);
+    if(fieldId==="p_barcode") bcInfo();
     if(thenLookup && fieldId==="p_barcode") barcodeLookup();
   });
 };
@@ -650,6 +677,7 @@ window.barcodeLookup = function(){
   var inp=el("p_barcode"); if(!inp) return;
   var code=(inp.value||"").trim();
   if(!code){ toast("Scanează sau tastează un cod de bare întâi","bad"); return; }
+  bcInfo();
   toast("Caut produsul online…");
   api("GET","/api/barcode-lookup?code="+encodeURIComponent(code)).then(function(d){
     if(d.found){
