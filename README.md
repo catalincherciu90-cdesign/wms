@@ -35,6 +35,8 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
   (Android, iPhone, desktop) — decodor ZXing împachetat în app (fără CDN), încărcat lazy;
   scanează coduri de bare (Code128/EAN) + QR; buton global și la recepție/expediere
 - 📍 **Vedere pe locație** (stocul din raft) și 🔎 **vedere pe produs** (stoc pe locații + mișcări)
+- 🌐 **Identificare produs online** — la adăugarea unui produs, codul de bare (EAN/UPC) e căutat
+  automat în baze publice (UPCitemdb + Open Food Facts) și completează numele + categoria
 
 Roadmap (etape următoare): roluri granulare pe locație, integrare curieri,
 notificări automate la stoc minim, aplicație mobilă dedicată.

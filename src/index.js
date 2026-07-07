@@ -14,6 +14,7 @@ import * as orders from './routes/orders.js';
 import * as reports from './routes/reports.js';
 import * as qr from './routes/qr.js';
 import * as vendor from './routes/vendor.js';
+import * as barcode from './routes/barcode.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
@@ -65,6 +66,8 @@ const routes = [
   ['GET', '/api/reports/top-products', reports.topProducts, 'viewer'],
 
   ['GET', '/api/qr', qr.svg, 'viewer'],
+
+  ['GET', '/api/barcode-lookup', barcode.lookup, 'operator'],
 ];
 
 function match(routePath, actualPath) {

@@ -247,7 +247,7 @@ window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",
     field("SKU","p_sku",p.sku||"",id?"disabled":"")
-    + '<div class="field"><label>Cod de bare</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează"><button type="button" class="ghost" onclick="scanInto(\\'p_barcode\\')">📷</button></div></div>'
+    + '<div class="field"><label>Cod de bare</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div></div>'
     + field("Nume","p_name",p.name||"")
     + field("Categorie","p_category",p.category||"")
     + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number")+'</div></div>',
@@ -635,13 +635,31 @@ window.closeScan = function(){
 };
 
 // Scanează un cod și îl pune într-un câmp (ex: cod de bare la adăugare produs)
-window.scanInto = function(fieldId){
+window.scanInto = function(fieldId, thenLookup){
   scanCamera(function(t){
     var m=String(t).match(/[#&?]sku=([^&]+)/);
     var val=m?decodeURIComponent(m[1]):String(t);
     var e=el(fieldId); if(e){ e.value=val; }
     toast("Scanat: "+val);
+    if(thenLookup && fieldId==="p_barcode") barcodeLookup();
   });
+};
+
+// Identifică produsul după codul de bare, din baze de date online
+window.barcodeLookup = function(){
+  var inp=el("p_barcode"); if(!inp) return;
+  var code=(inp.value||"").trim();
+  if(!code){ toast("Scanează sau tastează un cod de bare întâi","bad"); return; }
+  toast("Caut produsul online…");
+  api("GET","/api/barcode-lookup?code="+encodeURIComponent(code)).then(function(d){
+    if(d.found){
+      if(el("p_name")) el("p_name").value=d.name;
+      if(d.category && el("p_category") && !el("p_category").value) el("p_category").value=d.category;
+      toast("Identificat: "+d.name+(d.source?(" ("+d.source+")"):""));
+    } else {
+      toast("Produsul nu a fost găsit în bazele online","bad");
+    }
+  }).catch(function(e){ toast(e.message||"Eroare la căutare","bad"); });
 };
 
 // Interpretează un cod scanat: URL cu loc=/sku=, altfel caută produs
