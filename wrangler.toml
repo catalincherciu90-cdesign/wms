@@ -17,6 +17,7 @@ enabled = true
 [[rules]]
 type = "Text"
 globs = ["**/vendor/*.txt"]
+fallthrough = true
 
 # JWT_SECRET se setează ca secret, NU aici:
 #   wrangler secret put JWT_SECRET
