@@ -102,3 +102,14 @@ CREATE TABLE IF NOT EXISTS order_lines (
   qty_done    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_order_lines_order ON order_lines(order_id);
+
+-- ── Memorie proprie: cache identificări coduri de bare ──────────────────
+-- (se creează și automat la runtime dacă lipsește)
+CREATE TABLE IF NOT EXISTS barcode_cache (
+  code       TEXT PRIMARY KEY,
+  name       TEXT,
+  brand      TEXT,
+  category   TEXT,
+  source     TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

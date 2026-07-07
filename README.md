@@ -36,7 +36,12 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
   scanează coduri de bare (Code128/EAN) + QR; buton global și la recepție/expediere
 - 📍 **Vedere pe locație** (stocul din raft) și 🔎 **vedere pe produs** (stoc pe locații + mișcări)
 - 🌐 **Identificare produs online** — la adăugarea unui produs, codul de bare (EAN/UPC) e căutat
-  automat în baze publice (UPCitemdb + Open Food Facts) și completează numele + categoria
+  automat în mai multe surse și completează numele + categoria:
+  - 🧠 **memorie proprie** — cache intern + produsele deja existente (recunoaște instant ce ai mai adăugat)
+  - 📚 **cărți** — codurile ISBN (`978/979`) → Google Books / Open Library
+  - 🛒 **UPCitemdb** — retail general
+  - 🥫 **familia Open\*Facts** — alimente, cosmetice, produse generale, hrană animale
+  - *(cache-ul `barcode_cache` se creează automat la runtime — fără migrare manuală)*
 - 🌍 **Decodare prefix GS1** — afișează instant (offline) țara unde e înregistrat codul de bare
   (ex: `594` = România, `400-440` = Germania), imediat ce scanezi/tastezi
 
