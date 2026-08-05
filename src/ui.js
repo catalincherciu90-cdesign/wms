@@ -474,13 +474,13 @@ window.deleteProduct = function(id){
   var p=(cache.products||[]).find(function(x){return x.id===id;});
   var name=p?p.name:("#"+id);
   var code=p?(p.barcode||p.sku):"";
-  modal("Confirmă ștergerea",
-    '<p>Sigur vrei să ștergi produsul <b>'+esc(name)+'</b>'+(code?(' <span class="muted">('+esc(code)+')</span>'):'')+'?</p>'
-    +'<p class="muted" style="font-size:12.5px">Produsul devine inactiv și nu mai apare în catalog. Istoricul de mișcări se păstrează.</p>',
+  modal("Confirmă ștergerea definitivă",
+    '<p>Sigur vrei să ștergi <b>definitiv</b> produsul <b>'+esc(name)+'</b>'+(code?(' <span class="muted">('+esc(code)+')</span>'):'')+'?</p>'
+    +'<p class="pill bad" style="font-size:12.5px;display:block;padding:8px 10px">⚠️ Ștergere permanentă și ireversibilă. Se șterg și stocul, mișcările, liniile de comandă și prezența pe paleți ale acestui produs.</p>',
     function(){
-      api("DELETE","/api/products/"+id).then(function(){ closeModal(); toast("Produs șters"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
+      api("DELETE","/api/products/"+id).then(function(){ closeModal(); toast("Produs șters definitiv"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
-  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; }
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge definitiv"; sv.className="danger"; }
 };
 window.loadProducts = function(){
   var q = el("pq") ? el("pq").value : "";

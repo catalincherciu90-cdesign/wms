@@ -60,8 +60,16 @@ export async function update(request, env, ctx, user, params) {
 
 export async function remove(request, env, ctx, user, params) {
   const id = Number(params.id);
-  // soft-delete ca să nu stricăm istoricul de mișcări
-  await env.DB.prepare('UPDATE products SET active = 0 WHERE id = ?').bind(id).run();
+  const p = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first();
+  if (!p) return error('Produs inexistent', 404);
+  // Ștergere DEFINITIVĂ: curăță întâi referințele, apoi produsul (atomic).
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM stock_movements WHERE product_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM inventory WHERE product_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM pallet_items WHERE product_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM order_lines WHERE product_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id),
+  ]);
   return json({ ok: true });
 }
 
