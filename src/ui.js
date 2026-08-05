@@ -295,7 +295,7 @@ function renderApp(){
 var HELP = {
   dashboard: ["Ce vezi aici", "<p>Panoul general al depozitului.</p><ul><li><b>Cardurile de sus</b>: produse active, locații, unități în stoc, comenzi deschise și câte produse sunt sub prag.</li><li><b>Graficul</b>: intrările (verde) și ieșirile (roșu) din ultimele 7 zile.</li><li><b>Jos</b>: comenzi recente și produsele care trebuie reaprovizionate.</li></ul>"],
   stock: ["Ce vezi și cum modifici", "<p>Stocul curent.</p><ul><li><b>Sus</b>: total per produs, cu eticheta «sub prag» dacă e sub nivelul de reaprovizionare.</li><li><b>Jos</b>: detaliu pe fiecare locație.</li><li><b>Export CSV</b>: descarcă stocul.</li></ul><p>Stocul <b>nu</b> se editează direct aici — folosește <b>Recepție</b> (intrare), <b>Expediere</b> (ieșire) sau <b>Transfer</b>.</p>"],
-  products: ["Cum adaugi un produs", "<ol><li>Apeși <b>+ Produs</b>.</li><li>Completezi <b>SKU</b> (cod intern) și numele.</li><li>La codul de bare apeși <b>📷</b> și scanezi — apar automat <b>țara</b> (din prefix) și, dacă e găsit online, <b>numele + categoria</b>. Sau apeși <b>🔍</b> să cauți după un cod tastat.</li><li><b>Salvează</b>.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile pentru fiecare produs.</p>"],
+  products: ["Cum adaugi produse", "<ol><li><b>+ Produs</b> — completezi SKU + nume; la codul de bare apeși <b>📷</b> (scanezi → apar țara + numele/categoria) sau <b>🔍</b> (cauți online).</li><li><b>⬆ Import Excel</b> — încarci un fișier .xlsx/.csv cu multe produse deodată (coloane: sku, nume, cod_bare, categorie, um, prag). Poți descărca un șablon și atribui toate produsele unui client.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile.</p>"],
   locations: ["La ce folosesc locațiile", "<p>Rafturile/zonele din depozit (ex: <b>A-01-03</b> = zonă-raft-nivel).</p><ol><li><b>+ Locație</b> — pui un cod unic și <b>Capacitatea</b> (câte spații/paleți încap).</li><li><b>Ocupare</b> — bara arată câți paleți sunt față de capacitate (verde/portocaliu/roșu).</li><li><b>▦ QR</b> = etichetă de raft (o scanezi cu telefonul → vezi stocul din raft).</li></ol>"],
   pallets: ["Paleți: spații, produse și client", "<p>Fiecare palet ocupă un <b>spațiu</b> într-o locație, aparține unui <b>client</b> și conține <b>produse</b>.</p><ol><li><b>+ Palet</b> — pui codul paletului, alegi clientul (proprietar) și locația (spațiul). Adaugi produsele + cantitățile.</li><li>Dacă locația e plină (fără spații libere), plasarea e respinsă.</li><li><b>Vezi</b> — adaugi/scoți produse, muți paletul în altă locație sau îl ștergi.</li></ol><p>Clientul își vede paleții și conținutul lor în portalul lui.</p>"],
   receive: ["Recepție marfă (intrare)", "<p>Adaugă marfă în stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> unde pui marfa.</li><li>Pui <b>cantitatea</b> (opțional o referință, ex: nr. aviz).</li><li>Apeși <b>Recepție</b>.</li></ol><p>Stocul crește și se înregistrează în <b>Mișcări</b>.</p>"],
@@ -398,9 +398,77 @@ function drawChart(data){
 
 VIEWS.products = function(){
   var addBtn = can("operator") ? '<button onclick="productForm()">+ Produs</button>' : '';
+  var impBtn = can("operator") ? '<button class="ghost" onclick="importUI()">⬆ Import Excel</button>' : '';
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/products/export\\',\\'produse.csv\\')">Export CSV</button>';
-  setMain(topbar("Produse", addBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută SKU / nume / cod bare" oninput="loadProducts()" style="max-width:320px"></div><div class="card" id="ptbl">…</div>');
+  setMain(topbar("Produse", addBtn+impBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută SKU / nume / cod bare" oninput="loadProducts()" style="max-width:320px"></div><div class="card" id="ptbl">…</div>');
   loadProducts();
+};
+function ensureXLSX(){
+  return new Promise(function(res,rej){
+    if(window.XLSX) return res();
+    var s=document.createElement("script"); s.src=API+"/vendor/xlsx.js";
+    s.onload=function(){ window.XLSX?res():rej(new Error("xlsx")); }; s.onerror=function(){ rej(new Error("xlsx")); };
+    document.head.appendChild(s);
+  });
+}
+var _impRows=[];
+window.importUI = function(){
+  _impRows=[];
+  modal("Import produse din Excel / CSV",
+    '<div class="muted" style="margin-bottom:10px;font-size:12.5px">Coloane recunoscute (prima linie = antet): <b>sku</b>, <b>nume</b>, cod_bare, categorie, um, prag.</div>'
+    + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv"></div>'
+    + '<div class="field"><label>Atribuie toate unui client (opțional)</label><select id="imp_client"><option value="">— intern (al companiei) —</option></select></div>'
+    + '<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadTemplate()">⬇ Descarcă șablon</button></div>'
+    + '<div id="imp_preview" class="muted">Alege un fișier ca să vezi previzualizarea.</div>',
+    function(){ importDoImport(); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Importă"; sv.disabled=true; }
+  api("GET","/api/clients").then(function(d){ if(el("imp_client")) el("imp_client").innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
+  if(el("imp_file")) el("imp_file").onchange=importParseFile;
+};
+function impGet(row, keys){ for(var k in row){ if(keys.indexOf(String(k).toLowerCase().trim())>=0) return row[k]; } return ""; }
+function mapRow(r){
+  return {
+    sku: String(impGet(r,["sku","cod","cod produs","cod_produs"])).trim(),
+    name: String(impGet(r,["nume","name","denumire","produs","descriere"])).trim(),
+    barcode: String(impGet(r,["cod_bare","cod bare","cod de bare","barcode","ean"])).trim(),
+    category: String(impGet(r,["categorie","category"])).trim(),
+    unit: String(impGet(r,["um","unit","unitate","unitate de masura"])).trim() || "buc",
+    reorder_point: Number(impGet(r,["prag","reorder","reorder_point","stoc minim","prag reorder"]))||0
+  };
+}
+window.importParseFile = function(){
+  var f=el("imp_file").files[0]; if(!f) return;
+  el("imp_preview").textContent="Se citește fișierul…";
+  ensureXLSX().then(function(){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+        var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+        _impRows=rows.map(mapRow).filter(function(r){ return r.sku && r.name; });
+        var head=_impRows.slice(0,5).map(function(r){ return '<tr><td><b>'+esc(r.sku)+'</b></td><td>'+esc(r.name)+'</td><td>'+esc(r.barcode)+'</td><td>'+esc(r.category)+'</td></tr>'; }).join("");
+        if(!_impRows.length){ el("imp_preview").innerHTML='<div class="pill bad">Niciun rând valid — verifică să existe coloanele «sku» și «nume»</div>'; var s=el("modalSave"); if(s) s.disabled=true; return; }
+        el("imp_preview").innerHTML='<div style="margin-bottom:6px"><b>'+_impRows.length+'</b> produse valide (din '+rows.length+' rânduri)</div>'
+          +'<div style="max-height:200px;overflow:auto"><table><thead><tr><th>SKU</th><th>Nume</th><th>Cod bare</th><th>Categorie</th></tr></thead><tbody>'+head+'</tbody></table></div>'
+          +(_impRows.length>5?'<div class="muted" style="margin-top:4px">…și încă '+(_impRows.length-5)+'</div>':'');
+        var s2=el("modalSave"); if(s2) s2.disabled=false;
+      }catch(err){ el("imp_preview").innerHTML='<div class="pill bad">Nu am putut citi fișierul</div>'; }
+    };
+    reader.readAsArrayBuffer(f);
+  }).catch(function(){ el("imp_preview").innerHTML='<div class="pill bad">Nu s-a putut încărca cititorul Excel</div>'; });
+};
+window.importDoImport = function(){
+  if(!_impRows.length) return;
+  var sv=el("modalSave"); if(sv) sv.disabled=true;
+  toast("Se importă "+_impRows.length+" produse…");
+  api("POST","/api/products/import",{ products:_impRows, client_id: el("imp_client").value?Number(el("imp_client").value):null })
+    .then(function(d){ closeModal(); toast("Importat: "+d.created+" adăugate · "+d.skipped+" sărite"); loadProducts(); })
+    .catch(function(e){ var s=el("modalSave"); if(s) s.disabled=false; toast(e.message,"bad"); });
+};
+window.downloadTemplate = function(){
+  var csv="sku,nume,cod_bare,categorie,um,prag\\r\\nEX-001,Exemplu produs,5941234567890,Ambalaje,buc,10\\r\\n";
+  var blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download="sablon-produse.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 };
 window.loadProducts = function(){
   var q = el("pq") ? el("pq").value : "";

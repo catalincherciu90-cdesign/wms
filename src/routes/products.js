@@ -62,6 +62,40 @@ export async function remove(request, env, ctx, user, params) {
   return json({ ok: true });
 }
 
+// Import în masă (din Excel/CSV parsat în client -> listă de produse)
+export async function importProducts(request, env, ctx, user) {
+  const b = await readJson(request);
+  if (!Array.isArray(b?.products) || !b.products.length) return error('Lista de produse e goală', 400);
+  if (b.products.length > 3000) return error('Prea multe rânduri (max 3000)', 400);
+  const clientId = b.client_id ? Number(b.client_id) : null;
+
+  const valid = [];
+  let skipped = 0;
+  for (const p of b.products) {
+    const sku = (p.sku ?? '').toString().trim();
+    const name = (p.name ?? '').toString().trim();
+    if (!sku || !name) { skipped++; continue; }
+    valid.push({
+      sku, name,
+      barcode: (p.barcode ?? '').toString().trim() || null,
+      category: (p.category ?? '').toString().trim() || null,
+      unit: (p.unit ?? '').toString().trim() || 'buc',
+      reorder_point: Number(p.reorder_point) || 0,
+    });
+  }
+
+  let created = 0;
+  for (let i = 0; i < valid.length; i += 100) {
+    const chunk = valid.slice(i, i + 100);
+    const res = await env.DB.batch(chunk.map((p) =>
+      env.DB.prepare('INSERT OR IGNORE INTO products (sku, barcode, name, category, unit, reorder_point, client_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(p.sku, p.barcode, p.name, p.category, p.unit, p.reorder_point, clientId)
+    ));
+    for (const r of res) { if (r.meta && r.meta.changes > 0) created++; else skipped++; }
+  }
+  return json({ created, skipped, total: b.products.length });
+}
+
 export async function exportCsv(request, env) {
   const { results } = await env.DB.prepare('SELECT * FROM products ORDER BY name').all();
   const rows = [['id', 'sku', 'barcode', 'name', 'category', 'unit', 'reorder_point', 'active']];

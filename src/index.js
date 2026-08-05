@@ -31,6 +31,7 @@ const routes = [
   ['GET', '/api/products', products.list, 'viewer'],
   ['GET', '/api/products/export', products.exportCsv, 'viewer'],
   ['POST', '/api/products', products.create, 'operator'],
+  ['POST', '/api/products/import', products.importProducts, 'operator'],
   ['PUT', '/api/products/:id', products.update, 'operator'],
   ['DELETE', '/api/products/:id', products.remove, 'admin'],
 
@@ -146,8 +147,9 @@ export default {
       return error('Endpoint inexistent', 404);
     }
 
-    // Bibliotecă client (ZXing) servită de Worker
+    // Biblioteci client servite de Worker
     if (path === '/vendor/zxing.js') return vendor.zxing();
+    if (path === '/vendor/xlsx.js') return vendor.xlsx();
 
     // PWA (instalabil pe Android / bază pentru APK)
     if (path === '/manifest.webmanifest') return pwa.manifest();
