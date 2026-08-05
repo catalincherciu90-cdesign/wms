@@ -422,7 +422,7 @@ var _impRows=[];
 window.importUI = function(){
   _impRows=[];
   modal("Import produse din Excel / CSV",
-    '<div class="muted" style="margin-bottom:10px;font-size:12.5px">Coloane recunoscute (prima linie = antet): <b>sku</b>, <b>nume</b>, cod_bare, categorie, um, prag.</div>'
+    '<div class="muted" style="margin-bottom:10px;font-size:12.5px">Coloane recunoscute (prima linie = antet): <b>cod_bare (EAN)</b>, <b>nume</b>, categorie, um, prag, sku (opțional). EAN-ul e codul principal.</div>'
     + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv"></div>'
     + '<div class="field"><label>Atribuie toate unui client (opțional)</label><select id="imp_client"><option value="">— intern (al companiei) —</option></select></div>'
     + '<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadTemplate()">⬇ Descarcă șablon</button></div>'
@@ -434,10 +434,12 @@ window.importUI = function(){
 };
 function impGet(row, keys){ for(var k in row){ if(keys.indexOf(String(k).toLowerCase().trim())>=0) return row[k]; } return ""; }
 function mapRow(r){
+  var barcode = String(impGet(r,["cod_bare","cod bare","cod de bare","barcode","ean","cod ean"])).trim();
+  var sku = String(impGet(r,["sku","cod","cod produs","cod_produs"])).trim() || barcode; // SKU auto din EAN
   return {
-    sku: String(impGet(r,["sku","cod","cod produs","cod_produs"])).trim(),
+    sku: sku,
+    barcode: barcode,
     name: String(impGet(r,["nume","name","denumire","produs","descriere"])).trim(),
-    barcode: String(impGet(r,["cod_bare","cod bare","cod de bare","barcode","ean"])).trim(),
     category: String(impGet(r,["categorie","category"])).trim(),
     unit: String(impGet(r,["um","unit","unitate","unitate de masura"])).trim() || "buc",
     reorder_point: Number(impGet(r,["prag","reorder","reorder_point","stoc minim","prag reorder"]))||0
@@ -452,11 +454,11 @@ window.importParseFile = function(){
       try{
         var wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
         var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
-        _impRows=rows.map(mapRow).filter(function(r){ return r.sku && r.name; });
-        var head=_impRows.slice(0,5).map(function(r){ return '<tr><td><b>'+esc(r.sku)+'</b></td><td>'+esc(r.name)+'</td><td>'+esc(r.barcode)+'</td><td>'+esc(r.category)+'</td></tr>'; }).join("");
-        if(!_impRows.length){ el("imp_preview").innerHTML='<div class="pill bad">Niciun rând valid — verifică să existe coloanele «sku» și «nume»</div>'; var s=el("modalSave"); if(s) s.disabled=true; return; }
+        _impRows=rows.map(mapRow).filter(function(r){ return (r.barcode||r.sku) && r.name; });
+        var head=_impRows.slice(0,5).map(function(r){ return '<tr><td><b>'+esc(r.barcode||r.sku)+'</b></td><td>'+esc(r.name)+'</td><td>'+esc(r.category)+'</td></tr>'; }).join("");
+        if(!_impRows.length){ el("imp_preview").innerHTML='<div class="pill bad">Niciun rând valid — verifică să existe coloanele «cod_bare» (EAN) și «nume»</div>'; var s=el("modalSave"); if(s) s.disabled=true; return; }
         el("imp_preview").innerHTML='<div style="margin-bottom:6px"><b>'+_impRows.length+'</b> produse valide (din '+rows.length+' rânduri)</div>'
-          +'<div style="max-height:200px;overflow:auto"><table><thead><tr><th>SKU</th><th>Nume</th><th>Cod bare</th><th>Categorie</th></tr></thead><tbody>'+head+'</tbody></table></div>'
+          +'<div style="max-height:200px;overflow:auto"><table><thead><tr><th>EAN</th><th>Nume</th><th>Categorie</th></tr></thead><tbody>'+head+'</tbody></table></div>'
           +(_impRows.length>5?'<div class="muted" style="margin-top:4px">…și încă '+(_impRows.length-5)+'</div>':'');
         var s2=el("modalSave"); if(s2) s2.disabled=false;
       }catch(err){ el("imp_preview").innerHTML='<div class="pill bad">Nu am putut citi fișierul</div>'; }
@@ -473,7 +475,7 @@ window.importDoImport = function(){
     .catch(function(e){ var s=el("modalSave"); if(s) s.disabled=false; toast(e.message,"bad"); });
 };
 window.downloadTemplate = function(){
-  var csv="sku,nume,cod_bare,categorie,um,prag\\r\\nEX-001,Exemplu produs,5941234567890,Ambalaje,buc,10\\r\\n";
+  var csv="cod_bare,nume,categorie,um,prag,sku\\r\\n5941234567890,Exemplu produs,Ambalaje,buc,10,\\r\\n";
   var blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
   a.href=url; a.download="sablon-produse.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 };
