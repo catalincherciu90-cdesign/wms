@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS locations (
   code       TEXT NOT NULL UNIQUE,   -- ex: A-01-03 (zonă-raft-nivel)
   name       TEXT,
   zone       TEXT,
+  capacity   INTEGER NOT NULL DEFAULT 0,  -- nr. de spații/capacitate (0 = nedefinit)
   active     INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -136,3 +137,25 @@ CREATE TABLE IF NOT EXISTS barcode_cache (
   source     TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ── Paleți: fiecare palet ocupă un spațiu într-o locație, aparține unui
+--    client și conține produse (pallet_items). ────────────────────────────
+CREATE TABLE IF NOT EXISTS pallets (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code        TEXT NOT NULL UNIQUE,        -- eticheta paletului (LPN)
+  client_id   INTEGER REFERENCES clients(id),
+  location_id INTEGER REFERENCES locations(id),
+  status      TEXT NOT NULL DEFAULT 'stored' CHECK (status IN ('draft','stored','shipped')),
+  notes       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pallets_location ON pallets(location_id);
+CREATE INDEX IF NOT EXISTS idx_pallets_client ON pallets(client_id);
+
+CREATE TABLE IF NOT EXISTS pallet_items (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  pallet_id  INTEGER NOT NULL REFERENCES pallets(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  quantity   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pallet_items_pallet ON pallet_items(pallet_id);

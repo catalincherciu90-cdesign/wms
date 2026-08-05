@@ -17,6 +17,7 @@ import * as vendor from './routes/vendor.js';
 import * as barcode from './routes/barcode.js';
 import * as clients from './routes/clients.js';
 import * as portal from './routes/portal.js';
+import * as pallets from './routes/pallets.js';
 import * as pwa from './routes/pwa.js';
 import { ensureSchema } from './lib/schema.js';
 
@@ -80,10 +81,20 @@ const routes = [
   ['GET', '/api/clients/:id/users', clients.listUsers, 'admin'],
   ['POST', '/api/clients/:id/users', clients.createUser, 'admin'],
 
+  // Paleți (staff)
+  ['GET', '/api/pallets', pallets.list, 'viewer'],
+  ['GET', '/api/pallets/:id', pallets.get, 'viewer'],
+  ['POST', '/api/pallets', pallets.create, 'operator'],
+  ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
+  ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
+  ['DELETE', '/api/pallets/:id/items/:itemId', pallets.removeItem, 'operator'],
+  ['DELETE', '/api/pallets/:id', pallets.remove, 'operator'],
+
   // Portal client (acces doar la datele proprii)
   ['GET', '/api/portal/me', portal.me, 'client'],
   ['GET', '/api/portal/summary', portal.summary, 'client'],
   ['GET', '/api/portal/products', portal.products, 'client'],
+  ['GET', '/api/portal/pallets', portal.pallets, 'client'],
   ['GET', '/api/portal/movements', portal.movements, 'client'],
   ['GET', '/api/portal/export', portal.exportCsv, 'client'],
 ];

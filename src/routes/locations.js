@@ -2,7 +2,11 @@
 import { json, error, readJson } from '../lib/http.js';
 
 export async function list(request, env) {
-  const { results } = await env.DB.prepare('SELECT * FROM locations ORDER BY code').all();
+  // used = câți paleți sunt depozitați în locație (pentru bara de ocupare)
+  const { results } = await env.DB.prepare(`
+    SELECT l.*,
+      (SELECT COUNT(*) FROM pallets p WHERE p.location_id = l.id AND p.status = 'stored') AS used
+    FROM locations l ORDER BY l.code`).all();
   return json({ locations: results });
 }
 
@@ -11,8 +15,8 @@ export async function create(request, env) {
   if (!b?.code) return error('Cod locație obligatoriu', 400);
   try {
     const res = await env.DB.prepare(
-      'INSERT INTO locations (code, name, zone) VALUES (?, ?, ?)'
-    ).bind(b.code.trim(), b.name || null, b.zone || null).run();
+      'INSERT INTO locations (code, name, zone, capacity) VALUES (?, ?, ?, ?)'
+    ).bind(b.code.trim(), b.name || null, b.zone || null, Number(b.capacity) || 0).run();
     const location = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(res.meta.last_row_id).first();
     return json({ location }, 201);
   } catch (e) {
@@ -27,8 +31,8 @@ export async function update(request, env, ctx, user, params) {
   const existing = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
   if (!existing) return error('Locație inexistentă', 404);
   const m = { ...existing, ...b };
-  await env.DB.prepare('UPDATE locations SET code=?, name=?, zone=?, active=? WHERE id=?')
-    .bind(m.code, m.name || null, m.zone || null, m.active ? 1 : 0, id).run();
+  await env.DB.prepare('UPDATE locations SET code=?, name=?, zone=?, capacity=?, active=? WHERE id=?')
+    .bind(m.code, m.name || null, m.zone || null, Number(m.capacity) || 0, m.active ? 1 : 0, id).run();
   const location = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
   return json({ location });
 }

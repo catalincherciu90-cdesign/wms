@@ -55,7 +55,12 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
   individual, cu total și locațiile unde e depozitat, plus mișcările mărfii lui și export CSV
 - 🛡️ **Izolare între clienți** — un client nu vede niciodată marfa altuia; conturile de client
   nu au acces la funcțiile de operare (staff)
-- *(tabelele noi + coloana `products.client_id` se creează automat la runtime — fără migrare manuală)*
+- 🟦 **Capacitate & ocupare rafturi** — fiecare locație are un nr. de spații (capacitate);
+  bara de încărcare arată cât e de plin (verde/portocaliu/roșu)
+- 🧱 **Paleți** — fiecare palet ocupă un spațiu într-o locație, aparține unui client și conține
+  produse (produs + cantitate). Plasarea respectă capacitatea. Clientul își vede paleții și
+  conținutul lor în portal.
+- *(tabelele noi + coloanele `products.client_id`, `locations.capacity` se creează automat la runtime)*
 
 ### Aplicație Android (PWA → APK) pentru terminale Zebra
 Aplicația este un **PWA instalabil** (manifest + service worker + iconițe), servit de Worker:

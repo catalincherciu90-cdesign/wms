@@ -190,7 +190,7 @@ function step(n,t,d){
 /* ---------------- Portal client ---------------- */
 var pview = "stock";
 window.renderPortal = function(){
-  var nav = [["stock","Stocul meu"],["movements","Mișcări"]].map(function(n){
+  var nav = [["stock","Stocul meu"],["pallets","Paleții mei"],["movements","Mișcări"]].map(function(n){
     return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
   }).join("");
   document.getElementById("root").innerHTML =
@@ -203,7 +203,22 @@ window.renderPortal = function(){
     + '</aside><main id="main"></main></div>';
   pgo(pview);
 };
-window.pgo = function(v){ pview=v; renderPortal(); if(v==="movements") portalMovements(); else portalStock(); };
+window.pgo = function(v){ pview=v; renderPortal(); if(v==="movements") portalMovements(); else if(v==="pallets") portalPallets(); else portalStock(); };
+
+function portalPallets(){
+  setMain(topbar("Paleții mei") + '<div id="ppal">…</div>');
+  api("GET","/api/portal/pallets").then(function(d){
+    if(!d.pallets.length){ el("ppal").innerHTML='<div class="card" style="padding:18px" class="muted">Nu ai paleți în depozit.</div>'; return; }
+    el("ppal").innerHTML = d.pallets.map(function(p){
+      var items=(p.items||[]).map(function(it){return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td></tr>';}).join("")
+        || '<tr><td colspan=3 class="muted center">Palet gol</td></tr>';
+      return '<div class="card" style="padding:16px;margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">'
+        +'<div><b style="font-size:15px">📦 '+esc(p.code)+'</b> <span class="muted">'+(p.location_code?('· '+esc(p.location_code)):'· neplasat')+'</span></div>'
+        +'<span class="pill mut">'+esc(p.status)+'</span></div>'
+        +'<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+items+'</tbody></table></div>';
+    }).join("");
+  });
+}
 
 function portalStock(){
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/portal/export\\',\\'stocul-meu.csv\\')">Export CSV</button>';
@@ -237,10 +252,10 @@ function portalMovements(){
 /* ---------------- App shell ---------------- */
 var NAV = [
   ["dashboard","Dashboard","viewer"], ["stock","Stoc","viewer"], ["products","Produse","viewer"],
-  ["locations","Locații","viewer"], ["receive","Recepție","operator"], ["ship","Expediere","operator"],
-  ["transfer","Transfer","operator"], ["orders","Comenzi","viewer"], ["partners","Parteneri","viewer"],
-  ["clients","Clienți","operator"], ["movements","Mișcări","viewer"], ["reports","Rapoarte","viewer"],
-  ["users","Utilizatori","admin"]
+  ["locations","Locații","viewer"], ["pallets","Paleți","viewer"],
+  ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"],
+  ["orders","Comenzi","viewer"], ["partners","Parteneri","viewer"], ["clients","Clienți","operator"],
+  ["movements","Mișcări","viewer"], ["reports","Rapoarte","viewer"], ["users","Utilizatori","admin"]
 ];
 
 function renderApp(){
@@ -262,7 +277,8 @@ var HELP = {
   dashboard: ["Ce vezi aici", "<p>Panoul general al depozitului.</p><ul><li><b>Cardurile de sus</b>: produse active, locații, unități în stoc, comenzi deschise și câte produse sunt sub prag.</li><li><b>Graficul</b>: intrările (verde) și ieșirile (roșu) din ultimele 7 zile.</li><li><b>Jos</b>: comenzi recente și produsele care trebuie reaprovizionate.</li></ul>"],
   stock: ["Ce vezi și cum modifici", "<p>Stocul curent.</p><ul><li><b>Sus</b>: total per produs, cu eticheta «sub prag» dacă e sub nivelul de reaprovizionare.</li><li><b>Jos</b>: detaliu pe fiecare locație.</li><li><b>Export CSV</b>: descarcă stocul.</li></ul><p>Stocul <b>nu</b> se editează direct aici — folosește <b>Recepție</b> (intrare), <b>Expediere</b> (ieșire) sau <b>Transfer</b>.</p>"],
   products: ["Cum adaugi un produs", "<ol><li>Apeși <b>+ Produs</b>.</li><li>Completezi <b>SKU</b> (cod intern) și numele.</li><li>La codul de bare apeși <b>📷</b> și scanezi — apar automat <b>țara</b> (din prefix) și, dacă e găsit online, <b>numele + categoria</b>. Sau apeși <b>🔍</b> să cauți după un cod tastat.</li><li><b>Salvează</b>.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile pentru fiecare produs.</p>"],
-  locations: ["La ce folosesc locațiile", "<p>Rafturile/zonele din depozit (ex: <b>A-01-03</b> = zonă-raft-nivel).</p><ol><li><b>+ Locație</b> pentru a adăuga (pui un cod unic).</li><li><b>▦ QR</b> = etichetă de raft: o printezi și o lipești pe raft. Scanată cu telefonul deschide direct stocul din acel raft.</li><li><b>Vezi</b> = ce marfă se află în locație, cu recepție/expediere rapidă acolo.</li></ol>"],
+  locations: ["La ce folosesc locațiile", "<p>Rafturile/zonele din depozit (ex: <b>A-01-03</b> = zonă-raft-nivel).</p><ol><li><b>+ Locație</b> — pui un cod unic și <b>Capacitatea</b> (câte spații/paleți încap).</li><li><b>Ocupare</b> — bara arată câți paleți sunt față de capacitate (verde/portocaliu/roșu).</li><li><b>▦ QR</b> = etichetă de raft (o scanezi cu telefonul → vezi stocul din raft).</li></ol>"],
+  pallets: ["Paleți: spații, produse și client", "<p>Fiecare palet ocupă un <b>spațiu</b> într-o locație, aparține unui <b>client</b> și conține <b>produse</b>.</p><ol><li><b>+ Palet</b> — pui codul paletului, alegi clientul (proprietar) și locația (spațiul). Adaugi produsele + cantitățile.</li><li>Dacă locația e plină (fără spații libere), plasarea e respinsă.</li><li><b>Vezi</b> — adaugi/scoți produse, muți paletul în altă locație sau îl ștergi.</li></ol><p>Clientul își vede paleții și conținutul lor în portalul lui.</p>"],
   receive: ["Recepție marfă (intrare)", "<p>Adaugă marfă în stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> unde pui marfa.</li><li>Pui <b>cantitatea</b> (opțional o referință, ex: nr. aviz).</li><li>Apeși <b>Recepție</b>.</li></ol><p>Stocul crește și se înregistrează în <b>Mișcări</b>.</p>"],
   ship: ["Expediere (ieșire)", "<p>Scoate marfă din stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> din care iese marfa.</li><li>Pui <b>cantitatea</b> → <b>Expediază</b>.</li></ol><p>Dacă nu e stoc suficient în locație, operațiunea e <b>respinsă</b>.</p>"],
   transfer: ["Transfer între locații", "<p>Mută marfă dintr-o locație în alta (stocul total rămâne același).</p><ol><li>Alegi produsul.</li><li>Alegi locația <b>sursă</b> și cea <b>destinație</b>.</li><li>Pui cantitatea → <b>Transfer</b>.</li></ol>"],
@@ -410,28 +426,47 @@ VIEWS.locations = function(){
     cache.locations = d.locations;
     var rows = d.locations.map(function(l){
       return '<tr><td><b>'+esc(l.code)+'</b></td><td>'+esc(l.name||"—")+'</td><td>'+esc(l.zone||"—")+'</td>'
+        + '<td>'+fillBar(l.used, l.capacity)+'</td>'
         + '<td>'+(l.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showQR(appOrigin()+\\'/#loc=\\'+encodeURIComponent(\\''+esc(l.code)+'\\'),\\''+esc(l.code)+'\\')">▦ QR</button>'
         + ' <button class="ghost sm" onclick="locationView(\\''+esc(l.code)+'\\')">Vezi</button>'
         + (can("operator")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')+'</td></tr>';
     }).join("");
-    el("ltbl").innerHTML='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio locație</td></tr>')+'</tbody></table>';
+    el("ltbl").innerHTML='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Ocupare</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Nicio locație</td></tr>')+'</tbody></table>';
   });
 };
 window.locationForm = function(id){
   var l = id ? cache.locations.find(function(x){return x.id===id;}) : {};
   modal((id?"Editează":"Adaugă")+" locație",
-    field("Cod (ex: A-01-03)","l_code",l.code||"",id?"disabled":"") + field("Nume","l_name",l.name||"") + field("Zonă","l_zone",l.zone||""),
+    field("Cod (ex: A-01-03)","l_code",l.code||"",id?"disabled":"") + field("Nume","l_name",l.name||"") + field("Zonă","l_zone",l.zone||"")
+    + field("Capacitate (nr. spații / paleți)","l_cap",l.capacity||0,"","number"),
     function(){
-      var body={ code:el("l_code").value, name:el("l_name").value, zone:el("l_zone").value };
+      var body={ code:el("l_code").value, name:el("l_name").value, zone:el("l_zone").value, capacity:Number(el("l_cap").value)||0 };
       var pr = id ? api("PUT","/api/locations/"+id,body) : api("POST","/api/locations",body);
       pr.then(function(){ closeModal(); toast("Salvat"); go("locations"); }).catch(function(e){ toast(e.message,"bad"); });
     });
 };
+function fillBar(used, cap){
+  used=Number(used)||0; cap=Number(cap)||0;
+  if(cap<=0) return '<span class="muted" style="font-size:12px">'+used+' paleți · fără capacitate</span>';
+  var pct=Math.min(100, Math.round(used/cap*100));
+  var col = pct>=90?'var(--bad)':(pct>=70?'var(--warn)':'var(--good)');
+  return '<div style="min-width:150px"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:2px"><span>'+used+' / '+cap+' spații</span><span class="muted">'+pct+'%'+(used>cap?' ⚠':'')+'</span></div>'
+    +'<div style="height:9px;background:var(--panel-2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:6px"></div></div></div>';
+}
 
 VIEWS.stock = function(){
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/inventory/export\\',\\'stoc.csv\\')">Export CSV</button>';
-  setMain(topbar("Stoc", exp) + '<h2 style="margin-top:6px">Total per produs</h2><div class="card" id="sumtbl" style="margin-bottom:18px">…</div><h2>Detaliu pe locație</h2><div class="card" id="stbl">…</div>');
+  setMain(topbar("Stoc", exp)
+    + '<h2 style="margin-top:6px">Ocupare rafturi</h2><div class="card" id="occ" style="margin-bottom:18px;padding:8px 4px">…</div>'
+    + '<h2>Total per produs</h2><div class="card" id="sumtbl" style="margin-bottom:18px">…</div><h2>Detaliu pe locație</h2><div class="card" id="stbl">…</div>');
+  api("GET","/api/locations").then(function(d){
+    var locs=d.locations.filter(function(l){return l.active;});
+    var rows=locs.map(function(l){
+      return '<tr><td style="padding-left:14px"><b>'+esc(l.code)+'</b> <span class="muted">'+esc(l.zone||"")+'</span></td><td style="width:200px">'+fillBar(l.used,l.capacity)+'</td></tr>';
+    }).join("");
+    el("occ").innerHTML=rows?('<table><tbody>'+rows+'</tbody></table>'):'<div class="muted center" style="padding:10px">Nicio locație</div>';
+  });
   api("GET","/api/inventory/summary").then(function(d){
     var rows=d.summary.map(function(s){
       return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.name)+'</td><td class="right">'+esc(s.total)+' '+esc(s.unit)+'</td>'
@@ -536,6 +571,86 @@ window.userForm = function(id){
       pr.then(function(){ closeModal(); toast("Salvat"); go("users"); }).catch(function(e){ toast(e.message,"bad"); });
     });
 };
+
+/* ---------------- Paleți (staff) ---------------- */
+VIEWS.pallets = function(){
+  var addBtn = can("operator") ? '<button onclick="palletForm()">+ Palet</button>' : '';
+  setMain(topbar("Paleți", addBtn) + '<div class="card" id="pal">…</div>');
+  api("GET","/api/pallets").then(function(d){
+    var rows=d.pallets.map(function(p){
+      return '<tr><td><b>'+esc(p.code)+'</b></td><td>'+esc(p.client_name||"—")+'</td>'
+        +'<td>'+(p.location_code?esc(p.location_code):'<span class="pill warn">neplasat</span>')+'</td>'
+        +'<td class="right">'+esc(p.item_count)+'</td><td class="right">'+esc(p.total_qty)+'</td>'
+        +'<td class="right"><button class="ghost sm" onclick="showQR(\\''+esc(p.code)+'\\',\\''+esc(p.code)+'\\')">▦ QR</button> <button class="ghost sm" onclick="palletDetail('+p.id+')">Vezi</button></td></tr>';
+    }).join("");
+    el("pal").innerHTML='<table><thead><tr><th>Cod palet</th><th>Client</th><th>Locație</th><th class="right">Produse</th><th class="right">Cant.</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Niciun palet</td></tr>')+'</tbody></table>';
+  });
+};
+var palLines=[];
+window.palletForm = function(){
+  palLines=[{product_id:"",quantity:1}];
+  setMain(topbar("Palet nou")
+    + '<div class="card" style="padding:20px;max-width:640px"><div id="plmsg"></div>'
+    + '<div class="row"><div style="flex:1">'+field("Cod palet","pl_code","")+'</div>'
+    + '<div style="flex:1"><label>Client (proprietar)</label><select id="pl_client"><option value="">— fără —</option></select></div></div>'
+    + '<div class="field"><label>Locație (spațiu)</label><select id="pl_loc"><option value="">— neplasat (draft) —</option></select></div>'
+    + '<h2 style="margin-top:8px">Produse pe palet</h2><div id="pl_lines"></div>'
+    + '<button class="ghost sm" onclick="palAddLine()" style="margin-top:8px">+ Adaugă produs</button>'
+    + '<div style="margin-top:16px"><button onclick="palSubmit()">Creează paletul</button></div></div>');
+  Promise.all([api("GET","/api/products"),api("GET","/api/clients"),api("GET","/api/locations")]).then(function(r){
+    cache.palProducts=r[0].products.filter(function(p){return p.active;});
+    el("pl_client").innerHTML='<option value="">— fără —</option>'+r[1].clients.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");
+    el("pl_loc").innerHTML='<option value="">— neplasat (draft) —</option>'+r[2].locations.filter(function(l){return l.active;}).map(function(l){
+      var full=(l.capacity>0 && l.used>=l.capacity);
+      return '<option value="'+l.id+'"'+(full?' disabled':'')+'>'+esc(l.code)+(l.capacity>0?(' ('+l.used+'/'+l.capacity+')'):'')+(full?' — plin':'')+'</option>';
+    }).join("");
+    palRenderLines();
+  });
+};
+window.palAddLine = function(){ palLines.push({product_id:"",quantity:1}); palRenderLines(); };
+window.palRemoveLine = function(i){ palLines.splice(i,1); if(!palLines.length) palLines.push({product_id:"",quantity:1}); palRenderLines(); };
+function palRenderLines(){
+  var prods=cache.palProducts||[];
+  el("pl_lines").innerHTML=palLines.map(function(l,i){
+    var opts=prods.map(function(p){return '<option value="'+p.id+'"'+(String(l.product_id)===String(p.id)?' selected':'')+'>'+esc(p.sku+" — "+p.name)+'</option>';}).join("");
+    return '<div class="row" style="margin-bottom:8px;align-items:flex-end"><div style="flex:3"><select onchange="palLines['+i+'].product_id=this.value"><option value="">— produs —</option>'+opts+'</select></div>'
+      +'<div style="flex:1"><input type="number" min="1" value="'+esc(l.quantity)+'" onchange="palLines['+i+'].quantity=Number(this.value)"></div>'
+      +'<button class="ghost sm" onclick="palRemoveLine('+i+')">✕</button></div>';
+  }).join("");
+}
+window.palSubmit = function(){
+  var items=palLines.filter(function(l){return l.product_id && Number(l.quantity)>0;}).map(function(l){return {product_id:Number(l.product_id),quantity:Number(l.quantity)};});
+  var body={ code:el("pl_code").value, client_id:el("pl_client").value?Number(el("pl_client").value):null, location_id:el("pl_loc").value?Number(el("pl_loc").value):null, items:items };
+  if(!body.code){ el("plmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">Codul paletului e obligatoriu</div>'; return; }
+  api("POST","/api/pallets",body).then(function(){ toast("Palet creat"); go("pallets"); }).catch(function(e){ el("plmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
+};
+window.palletDetail = function(id){
+  api("GET","/api/pallets/"+id).then(function(d){
+    var p=d.pallet;
+    var items='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th>'+(can("operator")?'<th></th>':'')+'</tr></thead><tbody>'
+      + d.items.map(function(it){ return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+'</td>'+(can("operator")?'<td class="right"><button class="ghost sm" onclick="palDelItem('+id+','+it.id+')">✕</button></td>':'')+'</tr>'; }).join("")
+      + '</tbody></table>';
+    var actions='';
+    if(can("operator")){
+      actions='<div class="field" style="margin-top:14px"><label>Mută în locația</label><div class="row"><select id="pd_loc" style="flex:1"></select><button onclick="palMove('+id+')">Mută</button></div></div>'
+        + '<h2 style="margin-top:10px;font-size:14px">Adaugă produs</h2><div class="row"><select id="pd_prod" style="flex:3"></select><input id="pd_qty" type="number" min="1" value="1" style="flex:1"><button onclick="palAddItem('+id+')">+</button></div>'
+        + '<div class="row" style="margin-top:12px"><button class="danger sm" onclick="palDelete('+id+')">Șterge paletul</button></div>';
+    }
+    modal("Palet "+esc(p.code)+(p.location_code?(" · "+esc(p.location_code)):" · neplasat"),
+      '<div class="muted" style="margin-bottom:10px">Client: <b>'+esc(p.client_name||"—")+'</b> · status: '+esc(p.status)+'</div>'+items+actions, null);
+    var sv=el("modalSave"); if(sv) sv.style.display="none";
+    if(can("operator")){
+      Promise.all([api("GET","/api/locations"),api("GET","/api/products")]).then(function(r){
+        if(el("pd_loc")) el("pd_loc").innerHTML='<option value="">— scoate din locație —</option>'+r[0].locations.filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'"'+(l.id===p.location_id?' selected':'')+'>'+esc(l.code)+(l.capacity>0?(' ('+l.used+'/'+l.capacity+')'):'')+'</option>';}).join("");
+        if(el("pd_prod")) el("pd_prod").innerHTML=r[1].products.filter(function(x){return x.active;}).map(function(x){return '<option value="'+x.id+'">'+esc(x.sku+" — "+x.name)+'</option>';}).join("");
+      });
+    }
+  });
+};
+window.palMove = function(id){ api("PUT","/api/pallets/"+id,{location_id:el("pd_loc").value?Number(el("pd_loc").value):null}).then(function(){ closeModal(); toast("Palet mutat"); go("pallets"); }).catch(function(e){ toast(e.message,"bad"); }); };
+window.palAddItem = function(id){ api("POST","/api/pallets/"+id+"/items",{product_id:Number(el("pd_prod").value),quantity:Number(el("pd_qty").value)}).then(function(){ toast("Adăugat"); palletDetail(id); }).catch(function(e){ toast(e.message,"bad"); }); };
+window.palDelItem = function(id,itemId){ api("DELETE","/api/pallets/"+id+"/items/"+itemId).then(function(){ palletDetail(id); }).catch(function(e){ toast(e.message,"bad"); }); };
+window.palDelete = function(id){ api("DELETE","/api/pallets/"+id).then(function(){ closeModal(); toast("Palet șters"); go("pallets"); }).catch(function(e){ toast(e.message,"bad"); }); };
 
 /* ---------------- Clienți de depozitare (staff) ---------------- */
 VIEWS.clients = function(){
