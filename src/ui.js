@@ -8,16 +8,15 @@ export function renderUI() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>WMS — Gestiune Depozit</title>
 <style>
+  /* Temă fixă, fundal alb (nu urmează dark mode-ul sistemului) */
   :root{
-    --bg:#f4f6fb; --panel:#ffffff; --panel-2:#f9fafc; --text:#1a2233; --muted:#6b7688;
+    color-scheme: light;
+    --bg:#ffffff; --panel:#ffffff; --panel-2:#f4f6fb; --text:#1a2233; --muted:#6b7688;
     --border:#e3e8f0; --brand:#2f6df6; --brand-2:#1e51d6; --good:#12a150; --warn:#e0902a; --bad:#d64545;
     --shadow:0 1px 3px rgba(20,30,60,.08),0 8px 24px rgba(20,30,60,.06);
-  }
-  @media (prefers-color-scheme:dark){
-    :root{ --bg:#0f141c; --panel:#161d29; --panel-2:#1b2430; --text:#e7ecf5; --muted:#93a0b5;
-      --border:#26313f; --brand:#4d84ff; --brand-2:#3a6df0; --shadow:0 1px 3px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); }
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
