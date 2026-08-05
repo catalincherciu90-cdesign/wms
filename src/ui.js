@@ -470,6 +470,18 @@ window.downloadTemplate = function(){
   var blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
   a.href=url; a.download="sablon-produse.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 };
+window.deleteProduct = function(id){
+  var p=(cache.products||[]).find(function(x){return x.id===id;});
+  var name=p?p.name:("#"+id);
+  var code=p?(p.barcode||p.sku):"";
+  modal("Confirmă ștergerea",
+    '<p>Sigur vrei să ștergi produsul <b>'+esc(name)+'</b>'+(code?(' <span class="muted">('+esc(code)+')</span>'):'')+'?</p>'
+    +'<p class="muted" style="font-size:12.5px">Produsul devine inactiv și nu mai apare în catalog. Istoricul de mișcări se păstrează.</p>',
+    function(){
+      api("DELETE","/api/products/"+id).then(function(){ closeModal(); toast("Produs șters"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; }
+};
 window.loadProducts = function(){
   var q = el("pq") ? el("pq").value : "";
   api("GET","/api/products"+(q?("?q="+encodeURIComponent(q)):"")).then(function(d){
@@ -482,7 +494,9 @@ window.loadProducts = function(){
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
         + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦ QR</button>'
-        + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')+'</td></tr>';
+        + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
+        + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
+        + '</td></tr>';
     }).join("");
     el("ptbl").innerHTML = '<table><thead><tr><th>EAN (cod bare)</th><th>Nume</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
   });
