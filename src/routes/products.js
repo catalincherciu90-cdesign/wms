@@ -14,6 +14,9 @@ export async function list(request, env) {
     binds.push(like, like, like);
   }
   if (clientId) { conds.push('p.client_id = ?'); binds.push(Number(clientId)); }
+  const owner = url.searchParams.get('owner');
+  if (owner === 'client') conds.push('p.client_id IS NOT NULL');
+  else if (owner === 'internal') conds.push('p.client_id IS NULL');
   if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
   sql += ' ORDER BY p.name';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();

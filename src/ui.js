@@ -260,7 +260,7 @@ function portalMovements(){
 var NAV = [
   ["dashboard","Dashboard","viewer"],
   ["stock","Stoc","viewer"],
-  ["products","Produse","viewer"],
+  { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
   { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"] ] },
   ["orders","Comenzi","viewer"],
@@ -295,7 +295,9 @@ function renderApp(){
 var HELP = {
   dashboard: ["Ce vezi aici", "<p>Panoul general al depozitului.</p><ul><li><b>Cardurile de sus</b>: produse active, locații, unități în stoc, comenzi deschise și câte produse sunt sub prag.</li><li><b>Graficul</b>: intrările (verde) și ieșirile (roșu) din ultimele 7 zile.</li><li><b>Jos</b>: comenzi recente și produsele care trebuie reaprovizionate.</li></ul>"],
   stock: ["Ce vezi și cum modifici", "<p>Stocul curent.</p><ul><li><b>Sus</b>: total per produs, cu eticheta «sub prag» dacă e sub nivelul de reaprovizionare.</li><li><b>Jos</b>: detaliu pe fiecare locație.</li><li><b>Export CSV</b>: descarcă stocul.</li></ul><p>Stocul <b>nu</b> se editează direct aici — folosește <b>Recepție</b> (intrare), <b>Expediere</b> (ieșire) sau <b>Transfer</b>.</p>"],
-  products: ["Cum adaugi produse", "<p>Codul principal e <b>EAN-ul (codul de bare)</b>. SKU-ul e opțional — dacă nu-l dai, se completează automat din EAN.</p><ol><li><b>+ Produs</b> — scanezi/tastezi <b>EAN-ul</b> (📷 scanare, 🔍 identificare online) + numele.</li><li><b>⬆ Import Excel</b> — .xlsx/.csv cu multe produse (coloane: cod_bare/EAN, nume, categorie, um, prag; sku opțional). Poți atribui toate unui client.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile.</p>"],
+  products: ["Toate produsele", "<p>Catalogul complet (marfă clienți + consumabile interne). Codul principal e <b>EAN-ul</b>; SKU-ul e opțional (auto din EAN).</p><ol><li><b>+ Produs</b> — scanezi/tastezi EAN-ul + numele; la «Client» alegi proprietarul (sau lași «intern»).</li><li><b>⬆ Import Excel</b> — mulți produse deodată dintr-un .xlsx/.csv.</li></ol><p>Sub «Gestiuni» ai și liste separate: <b>Produse clienți</b> și <b>Consumabile depozit</b>.</p>"],
+  products_clients: ["Produsele clienților", "<p>Marfa care aparține clienților tăi (are un <b>proprietar</b> setat). Le adaugi la fel ca orice produs, dar la «Client» alegi firma căreia îi aparțin.</p><p>Fiecare client își vede doar produsele lui în portal.</p>"],
+  products_consumabile: ["Consumabilele depozitului", "<p>Materialele interne ale depozitului (fără proprietar client): ambalaje, folie, bandă, mănuși etc.</p><p>La adăugare lași câmpul «Client» pe <b>intern (al companiei)</b>.</p>"],
   locations: ["La ce folosesc locațiile", "<p>Rafturile/zonele din depozit (ex: <b>A-01-03</b> = zonă-raft-nivel).</p><ol><li><b>+ Locație</b> — pui un cod unic și <b>Capacitatea</b> (câte spații/paleți încap).</li><li><b>Ocupare</b> — bara arată câți paleți sunt față de capacitate (verde/portocaliu/roșu).</li><li><b>▦ QR</b> = etichetă de raft (o scanezi cu telefonul → vezi stocul din raft).</li></ol>"],
   pallets: ["Paleți: spații, produse și client", "<p>Fiecare palet ocupă un <b>spațiu</b> într-o locație, aparține unui <b>client</b> și conține <b>produse</b>.</p><ol><li><b>+ Palet</b> — pui codul paletului, alegi clientul (proprietar) și locația (spațiul). Adaugi produsele + cantitățile.</li><li>Dacă locația e plină (fără spații libere), plasarea e respinsă.</li><li><b>Vezi</b> — adaugi/scoți produse, muți paletul în altă locație sau îl ștergi.</li></ol><p>Clientul își vede paleții și conținutul lor în portalul lui.</p>"],
   receive: ["Recepție marfă (intrare)", "<p>Adaugă marfă în stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> unde pui marfa.</li><li>Pui <b>cantitatea</b> (opțional o referință, ex: nr. aviz).</li><li>Apeși <b>Recepție</b>.</li></ol><p>Stocul crește și se înregistrează în <b>Mișcări</b>.</p>"],
@@ -396,13 +398,18 @@ function drawChart(data){
   ctx.strokeStyle="rgba(120,130,150,.3)"; ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.stroke();
 }
 
-VIEWS.products = function(){
+var prodScope = "all";
+function productsView(scope, title){
+  prodScope = scope;
   var addBtn = can("operator") ? '<button onclick="productForm()">+ Produs</button>' : '';
   var impBtn = can("operator") ? '<button class="ghost" onclick="importUI()">⬆ Import Excel</button>' : '';
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/products/export\\',\\'produse.csv\\')">Export CSV</button>';
-  setMain(topbar("Produse", addBtn+impBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută SKU / nume / cod bare" oninput="loadProducts()" style="max-width:320px"></div><div class="card" id="ptbl">…</div>');
+  setMain(topbar(title, addBtn+impBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută EAN / SKU / nume" oninput="loadProducts()" style="max-width:320px"></div><div class="card" id="ptbl">…</div>');
   loadProducts();
-};
+}
+VIEWS.products = function(){ productsView("all","Toate produsele"); };
+VIEWS.products_clients = function(){ productsView("client","Produse clienți"); };
+VIEWS.products_consumabile = function(){ productsView("internal","Consumabile depozit"); };
 function ensureXLSX(){
   return new Promise(function(res,rej){
     if(window.XLSX) return res();
@@ -484,12 +491,17 @@ window.deleteProduct = function(id){
 };
 window.loadProducts = function(){
   var q = el("pq") ? el("pq").value : "";
-  api("GET","/api/products"+(q?("?q="+encodeURIComponent(q)):"")).then(function(d){
+  var params=[];
+  if(q) params.push("q="+encodeURIComponent(q));
+  if(prodScope==="client") params.push("owner=client");
+  else if(prodScope==="internal") params.push("owner=internal");
+  api("GET","/api/products"+(params.length?("?"+params.join("&")):"")).then(function(d){
     cache.products = d.products;
     var rows = d.products.map(function(p){
       var ean = p.barcode || '<span class="muted">— fără EAN —</span>';
       var skuLine = (p.sku && p.sku!==p.barcode) ? '<div class="muted" style="font-size:11.5px">SKU: '+esc(p.sku)+'</div>' : '';
-      return '<tr><td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
+      var owner = p.client_name ? esc(p.client_name) : '<span class="muted">intern</span>';
+      return '<tr><td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+owner+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
@@ -498,7 +510,7 @@ window.loadProducts = function(){
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
     }).join("");
-    el("ptbl").innerHTML = '<table><thead><tr><th>EAN (cod bare)</th><th>Nume</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
+    el("ptbl").innerHTML = '<table><thead><tr><th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=8 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
   });
 };
 window.productForm = function(id){
