@@ -61,6 +61,15 @@ export function renderUI() {
   .modal-bg{position:fixed;inset:0;background:rgba(10,15,25,.5);display:grid;place-items:center;padding:20px;z-index:50}
   .modal{width:100%;max-width:440px;padding:22px}
   .toast{position:fixed;bottom:20px;right:20px;padding:12px 16px;border-radius:10px;color:#fff;box-shadow:var(--shadow);z-index:99;font-weight:600}
+  details.help{background:var(--panel);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
+  details.help summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:13px;color:var(--brand);list-style:none;user-select:none}
+  details.help summary::-webkit-details-marker{display:none}
+  details.help summary::before{content:"\\25B8  "}
+  details.help[open] summary::before{content:"\\25BE  "}
+  details.help .help-body{padding:2px 14px 14px;font-size:13px;color:var(--text);line-height:1.6}
+  details.help .help-body ol,details.help .help-body ul{margin:6px 0;padding-left:20px}
+  details.help .help-body li{margin:3px 0}
+  details.help .help-body b{color:var(--text)}
   @media(max-width:820px){ #app{grid-template-columns:1fr} aside{flex-direction:row;overflow:auto} .kpis{grid-template-columns:repeat(2,1fr)} }
 </style>
 </head>
@@ -144,7 +153,31 @@ function renderApp(){
     + '</aside><main id="main"></main></div>';
 }
 
-window.go = function(v){ view=v; renderApp(); var f=VIEWS[v]; if(f) f(); };
+var HELP = {
+  dashboard: ["Ce vezi aici", "<p>Panoul general al depozitului.</p><ul><li><b>Cardurile de sus</b>: produse active, locații, unități în stoc, comenzi deschise și câte produse sunt sub prag.</li><li><b>Graficul</b>: intrările (verde) și ieșirile (roșu) din ultimele 7 zile.</li><li><b>Jos</b>: comenzi recente și produsele care trebuie reaprovizionate.</li></ul>"],
+  stock: ["Ce vezi și cum modifici", "<p>Stocul curent.</p><ul><li><b>Sus</b>: total per produs, cu eticheta «sub prag» dacă e sub nivelul de reaprovizionare.</li><li><b>Jos</b>: detaliu pe fiecare locație.</li><li><b>Export CSV</b>: descarcă stocul.</li></ul><p>Stocul <b>nu</b> se editează direct aici — folosește <b>Recepție</b> (intrare), <b>Expediere</b> (ieșire) sau <b>Transfer</b>.</p>"],
+  products: ["Cum adaugi un produs", "<ol><li>Apeși <b>+ Produs</b>.</li><li>Completezi <b>SKU</b> (cod intern) și numele.</li><li>La codul de bare apeși <b>📷</b> și scanezi — apar automat <b>țara</b> (din prefix) și, dacă e găsit online, <b>numele + categoria</b>. Sau apeși <b>🔍</b> să cauți după un cod tastat.</li><li><b>Salvează</b>.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile pentru fiecare produs.</p>"],
+  locations: ["La ce folosesc locațiile", "<p>Rafturile/zonele din depozit (ex: <b>A-01-03</b> = zonă-raft-nivel).</p><ol><li><b>+ Locație</b> pentru a adăuga (pui un cod unic).</li><li><b>▦ QR</b> = etichetă de raft: o printezi și o lipești pe raft. Scanată cu telefonul deschide direct stocul din acel raft.</li><li><b>Vezi</b> = ce marfă se află în locație, cu recepție/expediere rapidă acolo.</li></ol>"],
+  receive: ["Recepție marfă (intrare)", "<p>Adaugă marfă în stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> unde pui marfa.</li><li>Pui <b>cantitatea</b> (opțional o referință, ex: nr. aviz).</li><li>Apeși <b>Recepție</b>.</li></ol><p>Stocul crește și se înregistrează în <b>Mișcări</b>.</p>"],
+  ship: ["Expediere (ieșire)", "<p>Scoate marfă din stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> din care iese marfa.</li><li>Pui <b>cantitatea</b> → <b>Expediază</b>.</li></ol><p>Dacă nu e stoc suficient în locație, operațiunea e <b>respinsă</b>.</p>"],
+  transfer: ["Transfer între locații", "<p>Mută marfă dintr-o locație în alta (stocul total rămâne același).</p><ol><li>Alegi produsul.</li><li>Alegi locația <b>sursă</b> și cea <b>destinație</b>.</li><li>Pui cantitatea → <b>Transfer</b>.</li></ol>"],
+  orders: ["Comenzi și finalizare", "<p>Comenzi de la <b>furnizori</b> (intrare) și către <b>clienți</b> (ieșire).</p><ol><li><b>+ Comandă</b>: alegi tipul, partenerul și adaugi linii de produse.</li><li>La <b>Vezi</b> o poți <b>Confirma</b>.</li><li><b>Finalizezi</b> alegând o locație — atunci stocul se mișcă automat: recepție (intrare) sau picking (ieșire).</li></ol>"],
+  partners: ["Furnizori și clienți", "<p>Aici gestionezi partenerii.</p><ol><li><b>+ Partener</b> → alegi tipul (furnizor/client) și completezi datele.</li></ol><p>Îi folosești când creezi <b>Comenzi</b>. Filtrează cu butoanele de sus.</p>"],
+  movements: ["Istoricul mișcărilor", "<p>Jurnalul complet al tuturor mișcărilor de stoc: <b>cine</b>, <b>ce</b>, <b>când</b> și <b>cât</b> (intrare, ieșire, transfer, ajustare).</p><p>Este doar pentru <b>consultare și audit</b> — nu se modifică nimic de aici.</p>"],
+  reports: ["Rapoarte disponibile", "<ul><li><b>Stoc pe categorie</b> — cât ai pe fiecare categorie.</li><li><b>Top produse</b> — cele cu cel mai mare rulaj (30 zile).</li><li><b>Sub prag</b> — ce trebuie reaprovizionat (cu <b>Export CSV</b>).</li><li><b>Mișcări pe zi</b> — activitatea zilnică.</li></ul>"],
+  users: ["Utilizatori și roluri (doar admin)", "<ol><li><b>+ Utilizator</b> → nume, email, rol, parolă.</li></ol><p>Roluri: <b>viewer</b> (doar citește), <b>operator</b> (operează stocul și comenzile), <b>admin</b> (tot + gestionează utilizatori).</p><p>💡 Schimbă-ți parola implicită de admin de aici, la prima folosire.</p>"]
+};
+function viewHelp(v){
+  var h=HELP[v]; if(!h) return "";
+  return '<details class="help"><summary>ℹ️ Cum funcționează — '+esc(h[0])+'</summary><div class="help-body">'+h[1]+'</div></details>';
+}
+window.go = function(v){
+  view=v; renderApp(); var f=VIEWS[v]; if(f) f();
+  if(HELP[v]){
+    var m=el("main"), tb=m&&m.querySelector(".topbar");
+    if(tb){ var wrap=document.createElement("div"); wrap.innerHTML=viewHelp(v); var node=wrap.firstChild; if(node) tb.insertAdjacentElement("afterend", node); }
+  }
+};
 
 function setMain(html){ document.getElementById("main").innerHTML = html; }
 function topbar(title, right){ return '<div class="topbar"><h1>'+esc(title)+'</h1><div class="row">'+(right||"")+'</div></div>'; }
