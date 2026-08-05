@@ -55,6 +55,13 @@ export function renderUI() {
   aside .nav{display:block;padding:9px 12px;border-radius:8px;color:var(--text);font-weight:500}
   aside .nav:hover{background:var(--panel-2)}
   aside .nav.active{background:var(--brand);color:#fff}
+  aside details.navgroup{margin:0}
+  aside details.navgroup>summary{list-style:none;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--text);font-weight:500;user-select:none}
+  aside details.navgroup>summary::-webkit-details-marker{display:none}
+  aside details.navgroup>summary::after{content:"\\25B8";float:right;color:var(--muted);font-size:11px;margin-top:3px}
+  aside details.navgroup[open]>summary::after{content:"\\25BE"}
+  aside details.navgroup>summary:hover{background:var(--panel-2)}
+  aside details.navgroup .nav{padding-left:26px;font-size:13.5px}
   main{padding:22px 26px;overflow:auto}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
   h1{font-size:20px;margin:0} h2{font-size:15px;margin:0 0 12px}
@@ -251,16 +258,28 @@ function portalMovements(){
 
 /* ---------------- App shell ---------------- */
 var NAV = [
-  ["dashboard","Dashboard","viewer"], ["stock","Stoc","viewer"], ["products","Produse","viewer"],
-  ["locations","Locații","viewer"], ["pallets","Paleți","viewer"],
-  ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"],
-  ["orders","Comenzi","viewer"], ["partners","Parteneri","viewer"], ["clients","Clienți","operator"],
-  ["movements","Mișcări","viewer"], ["reports","Rapoarte","viewer"], ["users","Utilizatori","admin"]
+  ["dashboard","Dashboard","viewer"],
+  ["stock","Stoc","viewer"],
+  ["products","Produse","viewer"],
+  { label:"Depozit", items:[ ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
+  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"] ] },
+  ["orders","Comenzi","viewer"],
+  { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
+  ["movements","Mișcări","viewer"],
+  ["reports","Rapoarte","viewer"],
+  ["users","Utilizatori","admin"]
 ];
 
+function navLink(item){
+  return '<a class="nav'+(view===item[0]?' active':'')+'" href="#" onclick="go(\\''+item[0]+'\\');return false">'+esc(item[1])+'</a>';
+}
 function renderApp(){
-  var nav = NAV.filter(function(n){ return can(n[2]); }).map(function(n){
-    return '<a class="nav'+(view===n[0]?' active':'')+'" href="#" onclick="go(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
+  var nav = NAV.map(function(n){
+    if(Array.isArray(n)){ return can(n[2]) ? navLink(n) : ""; }
+    var kids = n.items.filter(function(it){ return can(it[2]); });
+    if(!kids.length) return "";
+    var open = kids.some(function(it){ return it[0]===view; });
+    return '<details class="navgroup"'+(open?' open':'')+'><summary>'+esc(n.label)+'</summary>'+kids.map(navLink).join("")+'</details>';
   }).join("");
   document.getElementById("root").innerHTML =
     '<div id="app"><aside>'
