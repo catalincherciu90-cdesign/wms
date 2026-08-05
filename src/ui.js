@@ -238,10 +238,10 @@ function portalStock(){
   api("GET","/api/portal/products").then(function(d){
     var rows=d.products.map(function(p){
       var locs=(p.locations||[]).map(function(l){return esc(l.location)+': '+esc(l.qty);}).join(" · ")||'<span class="muted">—</span>';
-      return '<tr><td><b>'+esc(p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
+      return '<tr><td><b>'+esc(p.barcode||p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
         +'<td class="right"><b>'+esc(p.total)+'</b> '+esc(p.unit||"")+'</td><td style="font-size:12.5px">'+locs+'</td></tr>';
     }).join("");
-    el("pstock").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th>Categorie</th><th class="right">Total</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
+    el("pstock").innerHTML='<table><thead><tr><th>EAN</th><th>Produs</th><th>Categorie</th><th class="right">Total</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
   });
 }
 function portalMovements(){
@@ -295,7 +295,7 @@ function renderApp(){
 var HELP = {
   dashboard: ["Ce vezi aici", "<p>Panoul general al depozitului.</p><ul><li><b>Cardurile de sus</b>: produse active, locații, unități în stoc, comenzi deschise și câte produse sunt sub prag.</li><li><b>Graficul</b>: intrările (verde) și ieșirile (roșu) din ultimele 7 zile.</li><li><b>Jos</b>: comenzi recente și produsele care trebuie reaprovizionate.</li></ul>"],
   stock: ["Ce vezi și cum modifici", "<p>Stocul curent.</p><ul><li><b>Sus</b>: total per produs, cu eticheta «sub prag» dacă e sub nivelul de reaprovizionare.</li><li><b>Jos</b>: detaliu pe fiecare locație.</li><li><b>Export CSV</b>: descarcă stocul.</li></ul><p>Stocul <b>nu</b> se editează direct aici — folosește <b>Recepție</b> (intrare), <b>Expediere</b> (ieșire) sau <b>Transfer</b>.</p>"],
-  products: ["Cum adaugi produse", "<ol><li><b>+ Produs</b> — completezi SKU + nume; la codul de bare apeși <b>📷</b> (scanezi → apar țara + numele/categoria) sau <b>🔍</b> (cauți online).</li><li><b>⬆ Import Excel</b> — încarci un fișier .xlsx/.csv cu multe produse deodată (coloane: sku, nume, cod_bare, categorie, um, prag). Poți descărca un șablon și atribui toate produsele unui client.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile.</p>"],
+  products: ["Cum adaugi produse", "<p>Codul principal e <b>EAN-ul (codul de bare)</b>. SKU-ul e opțional — dacă nu-l dai, se completează automat din EAN.</p><ol><li><b>+ Produs</b> — scanezi/tastezi <b>EAN-ul</b> (📷 scanare, 🔍 identificare online) + numele.</li><li><b>⬆ Import Excel</b> — .xlsx/.csv cu multe produse (coloane: cod_bare/EAN, nume, categorie, um, prag; sku opțional). Poți atribui toate unui client.</li></ol><p><b>⌗ Bare</b> și <b>▦ QR</b> generează etichete printabile.</p>"],
   locations: ["La ce folosesc locațiile", "<p>Rafturile/zonele din depozit (ex: <b>A-01-03</b> = zonă-raft-nivel).</p><ol><li><b>+ Locație</b> — pui un cod unic și <b>Capacitatea</b> (câte spații/paleți încap).</li><li><b>Ocupare</b> — bara arată câți paleți sunt față de capacitate (verde/portocaliu/roșu).</li><li><b>▦ QR</b> = etichetă de raft (o scanezi cu telefonul → vezi stocul din raft).</li></ol>"],
   pallets: ["Paleți: spații, produse și client", "<p>Fiecare palet ocupă un <b>spațiu</b> într-o locație, aparține unui <b>client</b> și conține <b>produse</b>.</p><ol><li><b>+ Palet</b> — pui codul paletului, alegi clientul (proprietar) și locația (spațiul). Adaugi produsele + cantitățile.</li><li>Dacă locația e plină (fără spații libere), plasarea e respinsă.</li><li><b>Vezi</b> — adaugi/scoți produse, muți paletul în altă locație sau îl ștergi.</li></ol><p>Clientul își vede paleții și conținutul lor în portalul lui.</p>"],
   receive: ["Recepție marfă (intrare)", "<p>Adaugă marfă în stoc.</p><ol><li>Scanezi <b>📷</b> sau alegi produsul.</li><li>Alegi <b>locația</b> unde pui marfa.</li><li>Pui <b>cantitatea</b> (opțional o referință, ex: nr. aviz).</li><li>Apeși <b>Recepție</b>.</li></ol><p>Stocul crește și se înregistrează în <b>Mișcări</b>.</p>"],
@@ -475,21 +475,23 @@ window.loadProducts = function(){
   api("GET","/api/products"+(q?("?q="+encodeURIComponent(q)):"")).then(function(d){
     cache.products = d.products;
     var rows = d.products.map(function(p){
-      return '<tr><td><b>'+esc(p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
+      var ean = p.barcode || '<span class="muted">— fără EAN —</span>';
+      var skuLine = (p.sku && p.sku!==p.barcode) ? '<div class="muted" style="font-size:11.5px">SKU: '+esc(p.sku)+'</div>' : '';
+      return '<tr><td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
-        + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.sku)+'\\')">⌗ Bare</button>'
-        + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.sku)+'\\')">▦ QR</button>'
+        + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
+        + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦ QR</button>'
         + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')+'</td></tr>';
     }).join("");
-    el("ptbl").innerHTML = '<table><thead><tr><th>SKU</th><th>Nume</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
+    el("ptbl").innerHTML = '<table><thead><tr><th>EAN (cod bare)</th><th>Nume</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
   });
 };
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",
-    field("SKU","p_sku",p.sku||"",id?"disabled":"")
-    + '<div class="field"><label>Cod de bare</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div><div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
+    '<div class="field"><label>Cod de bare (EAN) — cod principal</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează EAN-ul" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div><div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
+    + field("SKU (opțional — auto din EAN)","p_sku",p.sku||"",id?"disabled":"")
     + field("Nume","p_name",p.name||"")
     + field("Categorie","p_category",p.category||"")
     + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select></div>'

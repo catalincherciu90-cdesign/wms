@@ -22,19 +22,22 @@ export async function list(request, env) {
 
 export async function create(request, env) {
   const b = await readJson(request);
-  if (!b?.sku || !b?.name) return error('SKU și nume obligatorii', 400);
+  const barcode = (b?.barcode ?? '').toString().trim();
+  const sku = (b?.sku ?? '').toString().trim() || barcode; // SKU auto din EAN dacă lipsește
+  if (!barcode) return error('Codul EAN (cod de bare) e obligatoriu', 400);
+  if (!b?.name) return error('Numele e obligatoriu', 400);
   try {
     const res = await env.DB.prepare(
       `INSERT INTO products (sku, barcode, name, description, category, unit, reorder_point, client_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      b.sku.trim(), b.barcode?.trim() || null, b.name.trim(), b.description || null,
+      sku, barcode, b.name.trim(), b.description || null,
       b.category || null, b.unit || 'buc', Number(b.reorder_point) || 0, b.client_id ? Number(b.client_id) : null
     ).run();
     const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(res.meta.last_row_id).first();
     return json({ product }, 201);
   } catch (e) {
-    if (String(e).includes('UNIQUE')) return error('SKU sau cod de bare deja existent', 409);
+    if (String(e).includes('UNIQUE')) return error('EAN sau SKU deja existent', 409);
     throw e;
   }
 }
@@ -72,12 +75,13 @@ export async function importProducts(request, env, ctx, user) {
   const valid = [];
   let skipped = 0;
   for (const p of b.products) {
-    const sku = (p.sku ?? '').toString().trim();
+    const barcode = (p.barcode ?? '').toString().trim();
+    const sku = (p.sku ?? '').toString().trim() || barcode; // SKU auto din EAN
     const name = (p.name ?? '').toString().trim();
     if (!sku || !name) { skipped++; continue; }
     valid.push({
       sku, name,
-      barcode: (p.barcode ?? '').toString().trim() || null,
+      barcode: barcode || null,
       category: (p.category ?? '').toString().trim() || null,
       unit: (p.unit ?? '').toString().trim() || 'buc',
       reorder_point: Number(p.reorder_point) || 0,
