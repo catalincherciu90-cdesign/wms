@@ -45,7 +45,19 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
 - 🌍 **Decodare prefix GS1** — afișează instant (offline) țara unde e înregistrat codul de bare
   (ex: `594` = România, `400-440` = Germania), imediat ce scanezi/tastezi
 
-Roadmap (etape următoare): roluri granulare pe locație, integrare curieri,
+### Etapa 4 — portal clienți (3PL) + site de prezentare
+- 🌐 **Site public de prezentare** la `/` — servicii de depozitare, cum funcționează, contact,
+  cu buton «Autentificare client»
+- 🏢 **Clienți de depozitare** (multi-tenant) — gestionezi firmele client și le creezi
+  **conturi de portal** (login propriu)
+- 📦 **Proprietar pe produs** — fiecare produs poate fi alocat unui client (câmpul „Client")
+- 🔐 **Portal client** — clientul se loghează și vede **doar marfa lui**: fiecare produs
+  individual, cu total și locațiile unde e depozitat, plus mișcările mărfii lui și export CSV
+- 🛡️ **Izolare între clienți** — un client nu vede niciodată marfa altuia; conturile de client
+  nu au acces la funcțiile de operare (staff)
+- *(tabelele noi + coloana `products.client_id` se creează automat la runtime — fără migrare manuală)*
+
+Roadmap (etape următoare): urmărire pe paleți individuali, integrare curieri,
 notificări automate la stoc minim, aplicație mobilă dedicată.
 
 ## Arhitectură

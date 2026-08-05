@@ -24,10 +24,33 @@ CREATE TABLE IF NOT EXISTS products (
   category     TEXT,
   unit         TEXT NOT NULL DEFAULT 'buc',
   reorder_point INTEGER NOT NULL DEFAULT 0,
+  client_id    INTEGER,              -- proprietarul mărfii (NULL = intern / al companiei)
   active       INTEGER NOT NULL DEFAULT 1,
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_client ON products(client_id);
+
+-- ── Clienți de depozitare (3PL) + conturile lor de portal ───────────────
+CREATE TABLE IF NOT EXISTS clients (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  email      TEXT,
+  phone      TEXT,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS client_users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id     INTEGER NOT NULL REFERENCES clients(id),
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_client_users_client ON client_users(client_id);
 
 -- ── Locații de depozit ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS locations (

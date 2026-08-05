@@ -15,6 +15,9 @@ import * as reports from './routes/reports.js';
 import * as qr from './routes/qr.js';
 import * as vendor from './routes/vendor.js';
 import * as barcode from './routes/barcode.js';
+import * as clients from './routes/clients.js';
+import * as portal from './routes/portal.js';
+import { ensureSchema } from './lib/schema.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
@@ -68,6 +71,20 @@ const routes = [
   ['GET', '/api/qr', qr.svg, 'viewer'],
 
   ['GET', '/api/barcode-lookup', barcode.lookup, 'operator'],
+
+  // Clienți de depozitare + conturile lor (staff)
+  ['GET', '/api/clients', clients.list, 'operator'],
+  ['POST', '/api/clients', clients.create, 'admin'],
+  ['PUT', '/api/clients/:id', clients.update, 'admin'],
+  ['GET', '/api/clients/:id/users', clients.listUsers, 'admin'],
+  ['POST', '/api/clients/:id/users', clients.createUser, 'admin'],
+
+  // Portal client (acces doar la datele proprii)
+  ['GET', '/api/portal/me', portal.me, 'client'],
+  ['GET', '/api/portal/summary', portal.summary, 'client'],
+  ['GET', '/api/portal/products', portal.products, 'client'],
+  ['GET', '/api/portal/movements', portal.movements, 'client'],
+  ['GET', '/api/portal/export', portal.exportCsv, 'client'],
 ];
 
 function match(routePath, actualPath) {
@@ -91,6 +108,7 @@ export default {
 
     // API
     if (path.startsWith('/api/')) {
+      await ensureSchema(env); // migrare idempotentă (clienți, portal, coloane noi)
       for (const [method, pattern, handler, role] of routes) {
         if (method !== request.method) continue;
         const params = match(pattern, path);
@@ -100,7 +118,12 @@ export default {
         if (role !== null) {
           user = await authenticate(request, env);
           if (!user) return error('Neautentificat', 401);
-          if (!hasRole(user, role)) return error('Permisiuni insuficiente', 403);
+          if (role === 'client') {
+            if (user.kind !== 'client') return error('Doar conturi de client', 403);
+          } else {
+            // rutele de staff nu sunt accesibile conturilor de client
+            if (user.kind === 'client' || !hasRole(user, role)) return error('Permisiuni insuficiente', 403);
+          }
         }
         try {
           return await handler(request, env, ctx, user, params);

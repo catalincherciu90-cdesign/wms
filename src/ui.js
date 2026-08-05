@@ -107,34 +107,133 @@ function api(method, path, body){
 function can(min){ var o={viewer:1,operator:2,admin:3}; return me && o[me.role] >= o[min]; }
 
 /* ---------------- Auth ---------------- */
-function logout(){ token=null; me=null; localStorage.removeItem("wms_token"); renderLogin(); }
+function logout(){ token=null; me=null; localStorage.removeItem("wms_token"); renderLanding(); }
 
-function renderLogin(err){
-  el("root") ; document.getElementById("root").innerHTML =
+// După autentificare: portal pentru clienți, aplicația de operare pentru staff
+function enterApp(){
+  if(me && (me.kind==="client" || me.role==="client")) renderPortal();
+  else { renderApp(); if(!handleHash()) go("dashboard"); }
+}
+
+window.renderLogin = function(err){
+  document.getElementById("root").innerHTML =
     '<div id="login"><form class="card" onsubmit="return doLogin(event)">'
-    + '<div class="logo" style="margin-bottom:6px">W<b>MS</b></div>'
-    + '<div class="muted" style="margin-bottom:20px">Gestiune depozit</div>'
+    + '<div class="logo" style="margin-bottom:6px">📦 Depozit</div>'
+    + '<div class="muted" style="margin-bottom:20px">Autentificare</div>'
     + '<div class="field"><label>Email</label><input id="li_email" type="email" autofocus required></div>'
     + '<div class="field"><label>Parolă</label><input id="li_pass" type="password" required></div>'
     + (err?'<div class="pill bad" style="margin-bottom:12px">'+esc(err)+'</div>':'')
-    + '<button style="width:100%" type="submit">Autentificare</button>'
-    + '<div class="muted center" style="margin-top:14px;font-size:12px">admin@wms.local / admin123 (seed)</div>'
+    + '<button style="width:100%" type="submit">Intră în cont</button>'
+    + '<div class="center" style="margin-top:14px;font-size:12.5px"><a href="#" onclick="renderLanding();return false">← Înapoi la site</a></div>'
     + '</form></div>';
-}
+};
 window.doLogin = function(e){
   e.preventDefault();
   api("POST","/api/auth/login",{ email: el("li_email").value, password: el("li_pass").value })
-    .then(function(d){ token=d.token; me=d.user; localStorage.setItem("wms_token",token); renderApp(); if(!handleHash()) go("dashboard"); })
+    .then(function(d){ token=d.token; me=d.user; localStorage.setItem("wms_token",token); enterApp(); })
     .catch(function(err){ renderLogin(err.message); });
   return false;
 };
+
+/* ---------------- Site de prezentare (public) ---------------- */
+window.renderLanding = function(){
+  var svc = [
+    ["📦","Depozitare pe paleți","Spațiu securizat, climatizat, cu locații dedicate pentru marfa ta."],
+    ["🚚","Recepție & expediere","Preluăm, depozităm și livrăm marfa după comenzile tale, rapid și corect."],
+    ["🔎","Vizibilitate în timp real","Vezi online, oricând, fiecare produs pe care îl ai la noi în depozit."],
+    ["📊","Rapoarte & control","Mișcări, stocuri și export — transparență totală asupra mărfii tale."]
+  ].map(function(s){
+    return '<div class="card" style="padding:22px"><div style="font-size:30px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+s[1]+'</h3><div class="muted" style="font-size:13.5px;line-height:1.5">'+s[2]+'</div></div>';
+  }).join("");
+  document.getElementById("root").innerHTML =
+    '<div style="max-width:1080px;margin:0 auto;padding:0 20px">'
+    // header
+    + '<header style="display:flex;justify-content:space-between;align-items:center;padding:18px 0">'
+    + '<div class="logo" style="font-size:22px">📦 Depozit</div>'
+    + '<button onclick="renderLogin()">Autentificare client</button></header>'
+    // hero
+    + '<section style="text-align:center;padding:56px 0 40px">'
+    + '<h1 style="font-size:38px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & logistică<br>pentru afacerea ta</h1>'
+    + '<p class="muted" style="font-size:17px;max-width:620px;margin:0 auto 26px;line-height:1.6">Îți depozităm marfa în siguranță și îți dăm acces online la stocul tău, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
+    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Intră în cont</button><button class="ghost" onclick="document.getElementById(\\'contact\\').scrollIntoView({behavior:\\'smooth\\'})" style="padding:12px 22px">Contactează-ne</button></div>'
+    + '</section>'
+    // servicii
+    + '<section style="padding:30px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Serviciile noastre</h2>'
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+svc+'</div></section>'
+    // cum functioneaza
+    + '<section style="padding:34px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Cum funcționează</h2>'
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">'
+    + step(1,"Ne trimiți marfa","O recepționăm și o depozităm pe locații dedicate.")
+    + step(2,"O vezi online","Primești un cont și vezi fiecare produs, în timp real.")
+    + step(3,"Livrăm la cerere","Pregătim și expediem comenzile tale rapid.")
+    + '</div></section>'
+    // contact
+    + '<section id="contact" class="card" style="padding:30px;margin:30px 0;text-align:center">'
+    + '<h2 style="font-size:22px;margin:0 0 10px">Vrei să lucrezi cu noi?</h2>'
+    + '<p class="muted" style="margin:0 0 16px">Scrie-ne și îți facem o ofertă de depozitare.</p>'
+    + '<div class="row" style="justify-content:center;gap:24px;flex-wrap:wrap"><div>✉️ <a href="mailto:contact@depozit.ro">contact@depozit.ro</a></div><div>📞 <a href="tel:+40700000000">0700 000 000</a></div></div></section>'
+    // footer
+    + '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© Depozit — servicii de depozitare & logistică · <a href="#" onclick="renderLogin();return false">Autentificare</a></footer>'
+    + '</div>';
+};
+function step(n,t,d){
+  return '<div class="card" style="padding:20px"><div class="pill" style="background:var(--brand);color:#fff;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:14px">'+n+'</div><h3 style="margin:10px 0 6px;font-size:15px">'+esc(t)+'</h3><div class="muted" style="font-size:13px;line-height:1.5">'+esc(d)+'</div></div>';
+}
+
+/* ---------------- Portal client ---------------- */
+var pview = "stock";
+window.renderPortal = function(){
+  var nav = [["stock","Stocul meu"],["movements","Mișcări"]].map(function(n){
+    return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
+  }).join("");
+  document.getElementById("root").innerHTML =
+    '<div id="app"><aside>'
+    + '<div class="logo" style="padding:6px 12px 14px">📦 Portal</div>'
+    + nav
+    + '<div style="flex:1"></div>'
+    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">client</span></div>'
+    + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
+    + '</aside><main id="main"></main></div>';
+  pgo(pview);
+};
+window.pgo = function(v){ pview=v; renderPortal(); if(v==="movements") portalMovements(); else portalStock(); };
+
+function portalStock(){
+  var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/portal/export\\',\\'stocul-meu.csv\\')">Export CSV</button>';
+  setMain(topbar("Stocul meu", exp) + '<div id="pkpi"></div><div class="card" id="pstock" style="margin-top:14px">…</div>');
+  api("GET","/api/portal/summary").then(function(d){
+    var s=d.summary;
+    el("pkpi").innerHTML='<div class="kpis" style="grid-template-columns:repeat(3,1fr)">'
+      + kpi(s.products,"Produse") + kpi(s.units,"Unități în stoc") + kpi(s.locations,"Locații ocupate") + '</div>';
+  });
+  api("GET","/api/portal/products").then(function(d){
+    var rows=d.products.map(function(p){
+      var locs=(p.locations||[]).map(function(l){return esc(l.location)+': '+esc(l.qty);}).join(" · ")||'<span class="muted">—</span>';
+      return '<tr><td><b>'+esc(p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
+        +'<td class="right"><b>'+esc(p.total)+'</b> '+esc(p.unit||"")+'</td><td style="font-size:12.5px">'+locs+'</td></tr>';
+    }).join("");
+    el("pstock").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th>Categorie</th><th class="right">Total</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
+  });
+}
+function portalMovements(){
+  setMain(topbar("Mișcările mărfii mele") + '<div class="card" id="pmov">…</div>');
+  api("GET","/api/portal/movements").then(function(d){
+    var rows=d.movements.map(function(m){
+      return '<tr><td class="muted">'+esc(String(m.created_at).slice(0,16))+'</td><td><span class="pill mut">'+esc(m.type)+'</span></td>'
+        +'<td><b>'+esc(m.sku)+'</b> '+esc(m.product_name)+'</td><td>'+esc(m.location_code)+'</td>'
+        +'<td class="right">'+(m.quantity>0?'<span class="pill good">+'+m.quantity+'</span>':'<span class="pill bad">'+m.quantity+'</span>')+'</td></tr>';
+    }).join("");
+    el("pmov").innerHTML='<table><thead><tr><th>Data</th><th>Tip</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio mișcare</td></tr>')+'</tbody></table>';
+  });
+}
 
 /* ---------------- App shell ---------------- */
 var NAV = [
   ["dashboard","Dashboard","viewer"], ["stock","Stoc","viewer"], ["products","Produse","viewer"],
   ["locations","Locații","viewer"], ["receive","Recepție","operator"], ["ship","Expediere","operator"],
   ["transfer","Transfer","operator"], ["orders","Comenzi","viewer"], ["partners","Parteneri","viewer"],
-  ["movements","Mișcări","viewer"], ["reports","Rapoarte","viewer"], ["users","Utilizatori","admin"]
+  ["clients","Clienți","operator"], ["movements","Mișcări","viewer"], ["reports","Rapoarte","viewer"],
+  ["users","Utilizatori","admin"]
 ];
 
 function renderApp(){
@@ -164,6 +263,7 @@ var HELP = {
   partners: ["Furnizori și clienți", "<p>Aici gestionezi partenerii.</p><ol><li><b>+ Partener</b> → alegi tipul (furnizor/client) și completezi datele.</li></ol><p>Îi folosești când creezi <b>Comenzi</b>. Filtrează cu butoanele de sus.</p>"],
   movements: ["Istoricul mișcărilor", "<p>Jurnalul complet al tuturor mișcărilor de stoc: <b>cine</b>, <b>ce</b>, <b>când</b> și <b>cât</b> (intrare, ieșire, transfer, ajustare).</p><p>Este doar pentru <b>consultare și audit</b> — nu se modifică nimic de aici.</p>"],
   reports: ["Rapoarte disponibile", "<ul><li><b>Stoc pe categorie</b> — cât ai pe fiecare categorie.</li><li><b>Top produse</b> — cele cu cel mai mare rulaj (30 zile).</li><li><b>Sub prag</b> — ce trebuie reaprovizionat (cu <b>Export CSV</b>).</li><li><b>Mișcări pe zi</b> — activitatea zilnică.</li></ul>"],
+  clients: ["Clienți de depozitare + conturi portal", "<p>Aici gestionezi clienții pentru care depozitezi marfă (model 3PL).</p><ol><li><b>+ Client</b> — adaugi firma client.</li><li><b>Conturi</b> — creezi login-uri de portal pentru client (nume, email, parolă). Clientul se loghează cu ele și își vede <b>doar marfa lui</b>.</li></ol><p>Ca marfa să apară la un client, la <b>Produse</b> setezi câmpul «Client (proprietar marfă)». Recepția/expedierea funcționează la fel ca pentru marfa internă.</p>"],
   users: ["Utilizatori și roluri (doar admin)", "<ol><li><b>+ Utilizator</b> → nume, email, rol, parolă.</li></ol><p>Roluri: <b>viewer</b> (doar citește), <b>operator</b> (operează stocul și comenzile), <b>admin</b> (tot + gestionează utilizatori).</p><p>💡 Schimbă-ți parola implicită de admin de aici, la prima folosire.</p>"]
 };
 function viewHelp(v){
@@ -282,13 +382,18 @@ window.productForm = function(id){
     + '<div class="field"><label>Cod de bare</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div><div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
     + field("Nume","p_name",p.name||"")
     + field("Categorie","p_category",p.category||"")
+    + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select></div>'
     + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number")+'</div></div>',
     function(){
-      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value) };
+      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
   setTimeout(function(){ if(el("p_barcode")) bcInfo(); }, 20);
+  api("GET","/api/clients").then(function(d){
+    var sel=el("p_client"); if(!sel) return;
+    sel.innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'"'+(String(p.client_id||"")===String(c.id)?' selected':'')+'>'+esc(c.name)+'</option>';}).join("");
+  }).catch(function(){});
 };
 
 VIEWS.locations = function(){
@@ -423,6 +528,48 @@ window.userForm = function(id){
       var pr = id ? api("PUT","/api/users/"+id,body) : api("POST","/api/users",body);
       pr.then(function(){ closeModal(); toast("Salvat"); go("users"); }).catch(function(e){ toast(e.message,"bad"); });
     });
+};
+
+/* ---------------- Clienți de depozitare (staff) ---------------- */
+VIEWS.clients = function(){
+  var addBtn = can("admin") ? '<button onclick="clientForm()">+ Client</button>' : '';
+  setMain(topbar("Clienți de depozitare", addBtn) + '<div class="card" id="cln">…</div>');
+  api("GET","/api/clients").then(function(d){
+    cache.clients=d.clients;
+    var rows=d.clients.map(function(c){
+      return '<tr><td><b>'+esc(c.name)+'</b></td><td>'+esc(c.email||"—")+'</td><td>'+esc(c.phone||"—")+'</td>'
+        +'<td class="right">'+esc(c.product_count)+'</td><td class="right">'+esc(c.user_count)+'</td>'
+        +'<td class="right">'+(can("admin")?'<button class="ghost sm" onclick="clientUsers('+c.id+')">Conturi</button> <button class="ghost sm" onclick="clientForm('+c.id+')">Edit</button>':'')+'</td></tr>';
+    }).join("");
+    el("cln").innerHTML='<table><thead><tr><th>Client</th><th>Email</th><th>Telefon</th><th class="right">Produse</th><th class="right">Conturi</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Niciun client</td></tr>')+'</tbody></table>';
+  });
+};
+window.clientForm = function(id){
+  var c = id ? cache.clients.find(function(x){return x.id===id;}) : {};
+  modal((id?"Editează":"Adaugă")+" client",
+    field("Nume firmă","cl_name",c.name||"") + field("Email","cl_email",c.email||"","","email") + field("Telefon","cl_phone",c.phone||""),
+    function(){
+      var body={ name:el("cl_name").value, email:el("cl_email").value, phone:el("cl_phone").value };
+      var pr = id ? api("PUT","/api/clients/"+id,body) : api("POST","/api/clients",body);
+      pr.then(function(){ closeModal(); toast("Salvat"); go("clients"); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+};
+window.clientUsers = function(id){
+  var c = cache.clients.find(function(x){return x.id===id;});
+  modal("Conturi portal — "+esc(c?c.name:""),
+    '<div id="cu_list" class="muted">Se încarcă…</div>'
+    + '<h2 style="margin:16px 0 8px;font-size:14px">Adaugă cont nou</h2>'
+    + field("Nume persoană","cu_name","") + field("Email (login)","cu_email","","","email") + field("Parolă","cu_pass","","","password"),
+    function(){
+      var body={ name:el("cu_name").value, email:el("cu_email").value, password:el("cu_pass").value };
+      api("POST","/api/clients/"+id+"/users",body).then(function(){ toast("Cont creat"); clientUsers(id); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  el("modalSave").textContent="Creează cont";
+  api("GET","/api/clients/"+id+"/users").then(function(d){
+    el("cu_list").innerHTML = d.users.length
+      ? '<table><tbody>'+d.users.map(function(u){return '<tr><td>'+esc(u.name)+'</td><td class="muted">'+esc(u.email)+'</td><td>'+(u.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td></tr>';}).join("")+'</tbody></table>'
+      : '<div class="muted">Niciun cont încă. Creează unul mai jos ca clientul să se poată loga.</div>';
+  });
 };
 
 /* ---------------- Parteneri ---------------- */
@@ -807,11 +954,11 @@ window.closeModal=function(){
 };
 
 /* ---------------- Boot ---------------- */
-window.onhashchange=function(){ if(me) handleHash(); };
+window.onhashchange=function(){ if(me && me.kind!=="client") handleHash(); };
 if(token){
-  api("GET","/api/auth/me").then(function(d){ me=d.user; renderApp(); if(!handleHash()) go("dashboard"); })
-    .catch(function(){ logout(); });
-} else { renderLogin(); }
+  api("GET","/api/auth/me").then(function(d){ me=d.user; enterApp(); })
+    .catch(function(){ token=null; me=null; localStorage.removeItem("wms_token"); renderLanding(); });
+} else { renderLanding(); }
 </script>
 </body>
 </html>`;
