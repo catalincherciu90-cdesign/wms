@@ -17,6 +17,7 @@ import * as vendor from './routes/vendor.js';
 import * as barcode from './routes/barcode.js';
 import * as clients from './routes/clients.js';
 import * as portal from './routes/portal.js';
+import * as pwa from './routes/pwa.js';
 import { ensureSchema } from './lib/schema.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
@@ -136,6 +137,12 @@ export default {
 
     // Bibliotecă client (ZXing) servită de Worker
     if (path === '/vendor/zxing.js') return vendor.zxing();
+
+    // PWA (instalabil pe Android / bază pentru APK)
+    if (path === '/manifest.webmanifest') return pwa.manifest();
+    if (path === '/sw.js') return pwa.sw();
+    if (path === '/icon-192.png') return pwa.icon192();
+    if (path === '/icon-512.png') return pwa.icon512();
 
     // Health check
     if (path === '/health') return json({ ok: true, service: 'wms', ts: new Date().toISOString() });

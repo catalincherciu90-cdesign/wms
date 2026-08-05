@@ -7,8 +7,14 @@ export function renderUI() {
 <html lang="ro">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#2f6df6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>WMS — Gestiune Depozit</title>
 <style>
   /* Temă fixă, fundal alb (nu urmează dark mode-ul sistemului) */
@@ -76,6 +82,7 @@ export function renderUI() {
 <div id="root"></div>
 <script>
 "use strict";
+if("serviceWorker" in navigator){ window.addEventListener("load", function(){ navigator.serviceWorker.register("/sw.js").catch(function(){}); }); }
 var API = "";
 var token = localStorage.getItem("wms_token") || null;
 var me = null;

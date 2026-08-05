@@ -57,8 +57,21 @@ Interfață web inclusă (SPA vanilla, fără dependențe externe) servită dire
   nu au acces la funcțiile de operare (staff)
 - *(tabelele noi + coloana `products.client_id` se creează automat la runtime — fără migrare manuală)*
 
-Roadmap (etape următoare): urmărire pe paleți individuali, integrare curieri,
-notificări automate la stoc minim, aplicație mobilă dedicată.
+### Aplicație Android (PWA → APK) pentru terminale Zebra
+Aplicația este un **PWA instalabil** (manifest + service worker + iconițe), servit de Worker:
+`/manifest.webmanifest`, `/sw.js`, `/icon-192.png`, `/icon-512.png`.
+
+**Cum obții un APK (fără unelte locale):**
+1. Intră pe **https://www.pwabuilder.com** și introdu URL-ul aplicației (`https://wms.<subdomeniu>.workers.dev`).
+2. Alege **Android** → **Generate Package** → descarci APK-ul (TWA semnat) + instrucțiuni.
+3. Instalezi APK-ul pe Zebra (prin MDM sau `adb install`).
+
+**Scanner Zebra (DataWedge):** setează profilul pe **Keyboard (keystroke) output** cu **Enter** la final.
+Câmpurile de scanare din aplicație ascultă `Enter`, deci scannerul hardware funcționează direct.
+Camera rămâne ca alternativă (ZXing).
+
+Roadmap (etape următoare): mod Terminal (UI handheld dedicat), urmărire pe paleți individuali,
+integrare curieri, notificări automate la stoc minim.
 
 ## Arhitectură
 
