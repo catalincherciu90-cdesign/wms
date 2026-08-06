@@ -89,6 +89,20 @@ export function renderUI() {
   .trust .ti svg{width:24px;height:24px}
   .trust b{display:block;font-size:14px;line-height:1.2}
   .trust small{font-size:12px;color:var(--muted)}
+  /* Optimizări mobil (site public) */
+  @media(max-width:640px){
+    .site-hero{padding:40px 18px !important}
+    .site-hero h1{font-size:26px !important;line-height:1.22 !important}
+    .site-hero p{font-size:14.5px !important}
+    .fnav-band{padding:30px 8px 12px !important;border-radius:24px}
+    .fnav{padding:8px 8px !important;gap:2px !important;border-radius:40px}
+    .fnav-logo{padding:0 6px 0 4px !important;margin-right:2px !important;border-right:none !important}
+    .fnav .fic{width:38px !important;height:38px !important}
+    .fnav .fic svg{width:20px;height:20px}
+    .flogin{padding:10px 12px !important;margin-left:2px !important}
+    .trust{padding:13px 14px}
+    .gallery img{height:160px}
+  }
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
   /* App shell */
