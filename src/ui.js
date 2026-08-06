@@ -194,7 +194,30 @@ export function renderUI() {
   details.help .help-body ol,details.help .help-body ul{margin:6px 0;padding-left:20px}
   details.help .help-body li{margin:3px 0}
   details.help .help-body b{color:var(--text)}
-  @media(max-width:820px){ #app{grid-template-columns:1fr} aside{flex-direction:row;overflow:auto} .kpis{grid-template-columns:repeat(2,1fr)} }
+  /* Bara mobilă + drawer (ascunse pe desktop) */
+  .mtop{display:none}
+  .drawer-bg{display:none}
+  @media(max-width:820px){
+    #app{grid-template-columns:1fr}
+    .mtop{display:flex;align-items:center;gap:12px;position:fixed;top:0;left:0;right:0;height:54px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--border);z-index:45}
+    .mtop img{height:26px;display:block}
+    .burger{background:transparent;color:var(--text);padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border)}
+    .burger svg{width:22px;height:22px}
+    main{padding:70px 14px 24px}
+    aside{position:fixed;top:0;left:0;bottom:0;width:258px;transform:translateX(-100%);transition:transform .25s ease;z-index:60;overflow-y:auto;box-shadow:0 0 46px rgba(10,15,25,.28)}
+    #app.menu-open aside{transform:translateX(0)}
+    .drawer-bg{display:block;position:fixed;inset:0;background:rgba(10,15,25,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .25s}
+    #app.menu-open .drawer-bg{opacity:1;pointer-events:auto}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    main .card{overflow-x:auto}
+    .topbar{flex-wrap:wrap;gap:10px}
+    .toolbar input{max-width:none !important}
+    .modal{max-width:100%}
+  }
+  @media(max-width:420px){
+    .kpis{grid-template-columns:1fr}
+    main{padding:68px 11px 24px}
+  }
 </style>
 </head>
 <body>
@@ -304,7 +327,8 @@ function svgIcon(n){
     puzzle:'<path d="M10 4.5a2 2 0 0 1 4 0c0 .9.6 1.5 1.5 1.5H17a1 1 0 0 1 1 1v1.5c0 .9.6 1.5 1.5 1.5a2 2 0 0 1 0 4c-.9 0-1.5.6-1.5 1.5V17a1 1 0 0 1-1 1h-1.5c-.9 0-1.5.6-1.5 1.5a2 2 0 0 1-4 0c0-.9-.6-1.5-1.5-1.5H7a1 1 0 0 1-1-1v-1.5c0-.9-.6-1.5-1.5-1.5a2 2 0 0 1 0-4c.9 0 1.5-.6 1.5-1.5V7a1 1 0 0 1 1-1h1.5c.9 0 1.5-.6 1.5-1.5Z"/>',
     handshake:'<path d="m11 17-2.5 2.5a1.8 1.8 0 0 1-2.5-2.5L10 13"/><path d="M13 7l2-2a1.8 1.8 0 0 1 2.5 2.5L14 11l-2 2a1.8 1.8 0 0 1-2.5-2.5L11 9"/><path d="M3 13l2 2M19 11l2-2"/>',
     monitor:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
-    users:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.7"/>'
+    users:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.7"/>',
+    menu:'<path d="M4 6h16M4 12h16M4 18h16"/>'
   }[n]||'';
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 }
@@ -535,7 +559,10 @@ window.renderPortal = function(){
     return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
   }).join("");
   document.getElementById("root").innerHTML =
-    '<div id="app"><aside>'
+    '<div id="app">'
+    + '<div class="mtop"><button class="burger" onclick="toggleMenu()" aria-label="Meniu">'+svgIcon("menu")+'</button><img src="/assets/logo.png" alt="WSD Logistics"></div>'
+    + '<div class="drawer-bg" onclick="closeMenu()"></div>'
+    + '<aside>'
     + '<div style="padding:10px 12px 6px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
     + '<div class="muted" style="padding:0 12px 12px;font-size:12px">Portal client</div>'
     + nav
@@ -617,7 +644,10 @@ function renderApp(){
     return '<details class="navgroup"'+(open?' open':'')+'><summary>'+esc(n.label)+'</summary>'+kids.map(navLink).join("")+'</details>';
   }).join("");
   document.getElementById("root").innerHTML =
-    '<div id="app"><aside>'
+    '<div id="app">'
+    + '<div class="mtop"><button class="burger" onclick="toggleMenu()" aria-label="Meniu">'+svgIcon("menu")+'</button><img src="/assets/logo.png" alt="WSD Logistics"></div>'
+    + '<div class="drawer-bg" onclick="closeMenu()"></div>'
+    + '<aside>'
     + '<div style="padding:10px 12px 14px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
     + nav
     + '<button class="ghost sm" style="margin:8px 6px 2px" onclick="scanCamera(handleScanResult)">📷 Scanează</button>'
@@ -658,6 +688,8 @@ window.go = function(v){
 };
 
 function setMain(html){ document.getElementById("main").innerHTML = html; }
+window.toggleMenu = function(){ var a=el("app"); if(a) a.classList.toggle("menu-open"); };
+window.closeMenu = function(){ var a=el("app"); if(a) a.classList.remove("menu-open"); };
 function topbar(title, right){ return '<div class="topbar"><h1>'+esc(title)+'</h1><div class="row">'+(right||"")+'</div></div>'; }
 
 /* ---------------- Views ---------------- */
