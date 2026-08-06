@@ -15,7 +15,7 @@ export function renderUI() {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
-<title>WMS — Gestiune Depozit</title>
+<title>WSD Logistics — Depozitare & Transport Marfă</title>
 <style>
   /* Temă fixă, fundal alb (nu urmează dark mode-ul sistemului) */
   :root{
@@ -151,16 +151,16 @@ window.renderLogin = function(err){
   document.getElementById("root").innerHTML =
     '<div id="login">'
     + '<div class="login-hero"><div class="login-hero-inner">'
-    + '<div class="logo" style="color:#fff;font-size:26px">📦 Depozit</div>'
-    + '<h1>Depozitare & logistică pentru afacerea ta</h1>'
-    + '<p>Îți gestionăm marfa în siguranță, iar tu vezi stocul online, în timp real.</p>'
+    + '<div style="color:#fff;font-size:28px;font-weight:800;letter-spacing:.03em">WSD <span style="font-weight:600;opacity:.85">LOGISTICS</span></div>'
+    + '<h1>Depozitare & transport marfă<br>pentru afacerea ta</h1>'
+    + '<p>Îți gestionăm și transportăm marfa în siguranță, iar tu vezi stocul online, în timp real.</p>'
     + '<ul class="login-feats">'
     + '<li><span class="ic">📦</span> Depozitare pe paleți, cu locații dedicate</li>'
     + '<li><span class="ic">🔎</span> Vizibilitate în timp real asupra stocului tău</li>'
-    + '<li><span class="ic">🚚</span> Recepție și expediere rapidă</li>'
+    + '<li><span class="ic">🚚</span> Recepție, expediere și transport marfă</li>'
     + '</ul></div></div>'
     + '<div class="login-form"><form class="card" onsubmit="return doLogin(event)">'
-    + '<div class="logo" style="margin-bottom:6px">📦 Depozit</div>'
+    + '<img src="/assets/logo.png" alt="WSD Logistics" style="height:52px;margin-bottom:14px">'
     + '<div class="muted" style="margin-bottom:20px">Autentificare în cont</div>'
     + '<div class="field"><label>Email</label><input id="li_email" type="email" autofocus required></div>'
     + '<div class="field"><label>Parolă</label><input id="li_pass" type="password" required></div>'
@@ -182,11 +182,11 @@ function siteHeader(active){
   var links=[["home","Acasă"],["about","Despre noi"],["services","Servicii"],["contact","Contact"]];
   var nav=links.map(function(l){ return '<a href="#" onclick="siteGo(\\''+l[0]+'\\');return false" style="font-weight:'+(active===l[0]?'700':'500')+';color:'+(active===l[0]?'var(--brand)':'var(--text)')+'">'+l[1]+'</a>'; }).join('');
   return '<header style="display:flex;justify-content:space-between;align-items:center;padding:18px 0;gap:16px;flex-wrap:wrap">'
-    +'<div class="logo" style="font-size:22px;cursor:pointer" onclick="siteGo(\\'home\\')">📦 Depozit</div>'
+    +'<div style="cursor:pointer" onclick="siteGo(\\'home\\')"><img src="/assets/logo.png" alt="WSD Logistics" style="height:46px;display:block"></div>'
     +'<nav class="row" style="gap:20px;align-items:center;flex-wrap:wrap">'+nav+'<button onclick="renderLogin()">Autentificare client</button></nav></header>';
 }
 function siteFooter(){
-  return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© Depozit — servicii de depozitare & logistică · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
+  return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© WSD Logistics — Depozitare & Transport Marfă · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
 }
 function sitePage(active, content){
   document.getElementById("root").innerHTML='<div style="max-width:1080px;margin:0 auto;padding:0 20px">'+siteHeader(active)+content+siteFooter()+'</div>';
@@ -197,31 +197,49 @@ function valueCard(ic,t,d){ return '<div class="card" style="padding:20px"><div 
 
 window.renderAbout = function(){
   sitePage("about",
-    '<section class="site-hero" style="padding:52px 30px"><h1 style="font-size:34px;margin:0">Despre noi</h1><p style="max-width:640px;margin:12px auto 0">Partenerul tău de depozitare și logistică.</p></section>'
-    + '<section style="padding:34px 0"><div class="grid" style="grid-template-columns:1.2fr 1fr;gap:26px;align-items:center">'
-    + '<div><h2 style="font-size:24px;margin:0 0 12px">Cine suntem</h2><p class="muted" style="line-height:1.7;font-size:15px">Oferim servicii complete de depozitare pentru companii: recepționăm marfa, o depozităm pe paleți în locații dedicate și o expediem la cerere. Fiecare client are acces la un portal online unde își vede stocul în timp real.</p><p class="muted" style="line-height:1.7;font-size:15px">Punem accent pe siguranță, ordine și transparență — știi mereu ce marfă ai la noi și unde este.</p></div>'
-    + '<figure style="margin:0;border-radius:14px;overflow:hidden;box-shadow:var(--shadow)"><img src="/assets/site-1.png" style="width:100%;display:block" alt="Depozit" loading="lazy"></figure>'
+    '<section class="site-hero" style="padding:56px 30px"><h1 style="font-size:36px;margin:0">Despre WSD Logistics</h1><p style="max-width:680px;margin:14px auto 0">Partenerul tău de încredere în depozitare și transport marfă.</p></section>'
+    + '<section style="padding:38px 0"><div class="grid" style="grid-template-columns:1.15fr 1fr;gap:30px;align-items:center">'
+    + '<div><h2 style="font-size:26px;margin:0 0 14px">Cine suntem</h2>'
+    + '<p class="muted" style="line-height:1.75;font-size:15px">WSD Logistics este un partener de <b>depozitare și transport marfă</b> pentru companiile care vor să-și externalizeze logistica fără compromisuri. Preluăm marfa, o depozităm în siguranță pe paleți în locații dedicate și o livrăm la destinație — rapid și corect.</p>'
+    + '<p class="muted" style="line-height:1.75;font-size:15px">Combinăm un depozit bine organizat cu servicii de transport și cu tehnologie modernă: fiecare client are acces la un <b>portal online</b> unde vede în timp real ce stoc are, pe ce locații și ce mișcări s-au făcut cu marfa lui.</p>'
+    + '<p class="muted" style="line-height:1.75;font-size:15px">Fie că ai nevoie de spațiu de depozitare pe termen scurt sau de un partener logistic permanent, ne adaptăm nevoilor afacerii tale — de la câțiva paleți până la operațiuni complexe.</p></div>'
+    + '<figure style="margin:0;border-radius:14px;overflow:hidden;box-shadow:var(--shadow)"><img src="/assets/site-1.png" style="width:100%;display:block" alt="Depozit WSD Logistics" loading="lazy"></figure>'
     + '</div></section>'
-    + '<section style="padding:20px 0"><h2 style="text-align:center;font-size:22px;margin:0 0 22px">De ce noi</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">'
-    + valueCard("🛡️","Siguranță","Spații securizate, marfă gestionată cu grijă.")
-    + valueCard("🔎","Transparență","Vezi online, oricând, fiecare produs al tău.")
-    + valueCard("⚡","Rapiditate","Recepție și expediere fără întârzieri.")
-    + valueCard("🤝","Parteneriat","Ne adaptăm nevoilor afacerii tale.")
+    + '<section class="card" style="padding:30px;margin:12px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 10px">Misiunea noastră</h2><p class="muted" style="max-width:720px;margin:0 auto;line-height:1.7;font-size:15.5px">Îți simplificăm logistica: tu te concentrezi pe vânzări și pe clienții tăi, noi ne ocupăm de depozitare, manipulare și transport — cu <b>transparență totală</b> și marfa mereu sub control.</p></section>'
+    + '<section style="padding:26px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Valorile noastre</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">'
+    + valueCard("🛡️","Siguranță","Spații securizate și marfă gestionată cu grijă, de la recepție la livrare.")
+    + valueCard("🔎","Transparență","Acces online la stocul tău — vezi oricând ce ai și unde.")
+    + valueCard("⏱️","Punctualitate","Recepții, expedieri și transport la timp, de fiecare dată.")
+    + valueCard("🤝","Flexibilitate","Soluții adaptate volumului și ritmului afacerii tale.")
+    + valueCard("💻","Tehnologie","Sistem WMS modern, coduri de bare și trasabilitate completă.")
+    + valueCard("📦","Grijă pentru marfă","Manipulare corectă și organizare riguroasă pe paleți.")
     + '</div></section>');
 };
 window.renderServices = function(){
   var svc=[
-    ["📦","Depozitare pe paleți","Locații dedicate pe rafturi și zone; fiecare palet e urmărit individual."],
-    ["⬇️","Recepție marfă","Preluăm și verificăm marfa la sosire, o înregistrăm și o depozităm rapid."],
-    ["⬆️","Expediere & picking","Pregătim și expediem comenzile tale la cerere, corect și la timp."],
-    ["🔎","Portal client","Cont online cu stocul tău pe locații și toate mișcările mărfii."],
-    ["📊","Rapoarte","Stocuri, mișcări și export — transparență totală."],
-    ["🏷️","Coduri de bare","Identificare rapidă a produselor prin scanare (EAN/QR)."]
+    ["📦","Depozitare pe paleți","Spațiu securizat cu locații dedicate pe rafturi și zone. Fiecare palet e etichetat și urmărit individual, cu evidență exactă a cantităților."],
+    ["⬇️","Recepție marfă","Preluăm și verificăm marfa la sosire, o înregistrăm în sistem și o depozităm rapid pe locații — cu confirmare pe cantități."],
+    ["⬆️","Expediere & picking","Pregătim comenzile tale (picking de pe paleți), le verificăm și le expediem corect și la timp."],
+    ["🚚","Transport marfă","Livrăm marfa la destinație cu flotă proprie/parteneri — de la ultimul kilometru până la transport pe distanțe lungi."],
+    ["🔎","Portal client","Cont online unde vezi în timp real stocul tău, pe ce locații se află și fiecare mișcare a mărfii."],
+    ["📊","Rapoarte & inventar","Stocuri, mișcări, produse sub prag și export — control complet asupra mărfii tale."],
+    ["🏷️","Coduri de bare & trasabilitate","Identificare rapidă prin scanare (EAN/QR) și istoric complet: cine, ce, când."],
+    ["🧩","Soluții personalizate","Ne adaptăm fluxul la nevoile tale — de la câțiva paleți la operațiuni complexe."]
   ].map(function(s){ return '<div class="card" style="padding:24px"><div style="font-size:28px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+esc(s[1])+'</h3><div class="muted" style="font-size:13.5px;line-height:1.55">'+esc(s[2])+'</div></div>'; }).join("");
+  var proc=[
+    ["1","Recepție","Primim și verificăm marfa ta."],
+    ["2","Depozitare","O așezăm pe paleți, în locații dedicate."],
+    ["3","Management stoc","O urmărim în timp real în sistem."],
+    ["4","Picking & expediere","Pregătim comenzile la cerere."],
+    ["5","Transport & livrare","Ducem marfa la destinație."]
+  ].map(function(p){ return '<div class="card" style="padding:18px;text-align:center"><div class="pill" style="background:var(--brand);color:#fff;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-weight:700">'+p[0]+'</div><h4 style="margin:10px 0 5px;font-size:14px">'+esc(p[1])+'</h4><div class="muted" style="font-size:12.5px;line-height:1.5">'+esc(p[2])+'</div></div>'; }).join("");
+  var ind=["🛒 E-commerce","🏬 Retail & distribuție","🏭 Producători","🌍 Importatori","🍽️ FMCG"].map(function(x){ return '<span class="pill mut" style="padding:8px 14px;font-size:13.5px">'+esc(x)+'</span>'; }).join(" ");
   sitePage("services",
-    '<section class="site-hero" style="padding:52px 30px"><h1 style="font-size:34px;margin:0">Serviciile noastre</h1><p style="max-width:640px;margin:12px auto 0">Depozitare, logistică și vizibilitate online — tot ce-ți trebuie.</p></section>'
-    + '<section style="padding:34px 0"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">'+svc+'</div></section>'
-    + '<section style="padding:6px 0 34px;text-align:center"><button onclick="siteGo(\\'contact\\')" style="padding:12px 26px">Cere o ofertă</button></section>');
+    '<section class="site-hero" style="padding:56px 30px"><h1 style="font-size:36px;margin:0">Serviciile noastre</h1><p style="max-width:680px;margin:14px auto 0">Depozitare, transport marfă și vizibilitate online — logistica ta, completă.</p></section>'
+    + '<section style="padding:38px 0"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">'+svc+'</div></section>'
+    + '<section style="padding:14px 0 8px"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Cum funcționează procesul</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">'+proc+'</div></section>'
+    + '<section style="padding:26px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 16px">Pentru cine lucrăm</h2><div class="row" style="justify-content:center;flex-wrap:wrap;gap:10px">'+ind+'</div></section>'
+    + '<section class="card" style="padding:30px;margin:16px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 8px">Pregătit să externalizezi logistica?</h2><p class="muted" style="margin:0 0 16px">Îți facem o ofertă adaptată nevoilor tale.</p><button onclick="siteGo(\\'contact\\')" style="padding:12px 26px">Cere o ofertă</button></section>');
 };
 window.renderContact = function(){
   sitePage("contact",
@@ -250,10 +268,10 @@ window.sendContact = function(e){
 
 window.renderLanding = function(){
   var svc = [
-    ["📦","Depozitare pe paleți","Spațiu securizat, climatizat, cu locații dedicate pentru marfa ta."],
-    ["🚚","Recepție & expediere","Preluăm, depozităm și livrăm marfa după comenzile tale, rapid și corect."],
-    ["🔎","Vizibilitate în timp real","Vezi online, oricând, fiecare produs pe care îl ai la noi în depozit."],
-    ["📊","Rapoarte & control","Mișcări, stocuri și export — transparență totală asupra mărfii tale."]
+    ["📦","Depozitare pe paleți","Spațiu securizat, cu locații dedicate și evidență exactă pentru fiecare palet."],
+    ["🚚","Transport marfă","Livrăm marfa la destinație — de la ultimul kilometru la distanțe lungi."],
+    ["🔄","Recepție & expediere","Preluăm, depozităm și pregătim comenzile tale rapid și corect."],
+    ["🔎","Portal online","Vezi în timp real, oricând, fiecare produs pe care îl ai la noi."]
   ].map(function(s){
     return '<div class="card" style="padding:22px"><div style="font-size:30px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+s[1]+'</h3><div class="muted" style="font-size:13.5px;line-height:1.5">'+s[2]+'</div></div>';
   }).join("");
@@ -262,19 +280,21 @@ window.renderLanding = function(){
     + siteHeader("home")
     // hero (cu poză de fundal)
     + '<section class="site-hero">'
-    + '<h1 style="font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & logistică<br>pentru afacerea ta</h1>'
-    + '<p style="font-size:17px;max-width:620px;margin:0 auto 26px;line-height:1.6">Îți depozităm marfa în siguranță și îți dăm acces online la stocul tău, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
-    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="siteGo(\\'contact\\')">Contactează-ne</button></div>'
+    + '<h1 style="font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & transport marfă<br>pentru afacerea ta</h1>'
+    + '<p style="font-size:17px;max-width:640px;margin:0 auto 22px;line-height:1.6">WSD Logistics îți gestionează și transportă marfa în siguranță, iar tu vezi stocul online, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
+    + '<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:22px"><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Vizibilitate 24/7</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Trasabilitate completă</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Fără investiție în spațiu</span></div>'
+    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="siteGo(\\'contact\\')">Cere o ofertă</button></div>'
     + '</section>'
     // servicii
-    + '<section style="padding:30px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Serviciile noastre</h2>'
+    + '<section style="padding:36px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 8px">Serviciile noastre</h2><p class="muted center" style="margin:0 auto 24px;max-width:560px">Tot ce-ți trebuie ca să-ți externalizezi logistica, într-un singur loc.</p>'
     + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+svc+'</div></section>'
     // cum functioneaza
     + '<section style="padding:34px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Cum funcționează</h2>'
     + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">'
     + step(1,"Ne trimiți marfa","O recepționăm și o depozităm pe locații dedicate.")
     + step(2,"O vezi online","Primești un cont și vezi fiecare produs, în timp real.")
-    + step(3,"Livrăm la cerere","Pregătim și expediem comenzile tale rapid.")
+    + step(3,"Pregătim comenzile","Facem picking-ul și verificăm marfa la cerere.")
+    + step(4,"Transportăm & livrăm","Ducem marfa la destinație, rapid și în siguranță.")
     + '</div></section>'
     // galerie
     + '<section style="padding:20px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 22px">Depozitul nostru</h2>'
@@ -284,10 +304,10 @@ window.renderLanding = function(){
     + '<figure><img src="/assets/site-2.png" alt="Recepție marfă" loading="lazy"><figcaption>Recepție & expediere</figcaption></figure>'
     + '</div></section>'
     // contact
-    + '<section id="contact" class="card" style="padding:30px;margin:30px 0;text-align:center">'
-    + '<h2 style="font-size:22px;margin:0 0 10px">Vrei să lucrezi cu noi?</h2>'
-    + '<p class="muted" style="margin:0 0 16px">Scrie-ne și îți facem o ofertă de depozitare.</p>'
-    + '<div class="row" style="justify-content:center;gap:24px;flex-wrap:wrap"><div>✉️ <a href="mailto:contact@depozit.ro">contact@depozit.ro</a></div><div>📞 <a href="tel:+40700000000">0700 000 000</a></div></div></section>'
+    + '<section class="card" style="padding:34px;margin:30px 0;text-align:center">'
+    + '<h2 style="font-size:24px;margin:0 0 10px">Externalizează-ți logistica cu WSD Logistics</h2>'
+    + '<p class="muted" style="margin:0 0 18px;max-width:560px;margin-left:auto;margin-right:auto">Depozitare, management de stoc și transport marfă — cu marfa ta mereu sub control. Scrie-ne și îți facem o ofertă adaptată.</p>'
+    + '<button onclick="siteGo(\\'contact\\')" style="padding:12px 28px">Cere o ofertă</button></section>'
     + siteFooter()
     + '</div>';
 };
@@ -303,7 +323,8 @@ window.renderPortal = function(){
   }).join("");
   document.getElementById("root").innerHTML =
     '<div id="app"><aside>'
-    + '<div class="logo" style="padding:6px 12px 14px">📦 Portal</div>'
+    + '<div style="padding:10px 12px 6px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
+    + '<div class="muted" style="padding:0 12px 12px;font-size:12px">Portal client</div>'
     + nav
     + '<div style="flex:1"></div>'
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">client</span></div>'
@@ -384,7 +405,7 @@ function renderApp(){
   }).join("");
   document.getElementById("root").innerHTML =
     '<div id="app"><aside>'
-    + '<div class="logo" style="padding:6px 12px 14px">W<b>MS</b></div>'
+    + '<div style="padding:10px 12px 14px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
     + nav
     + '<button class="ghost sm" style="margin:8px 6px 2px" onclick="scanCamera(handleScanResult)">📷 Scanează</button>'
     + '<div style="flex:1"></div>'
