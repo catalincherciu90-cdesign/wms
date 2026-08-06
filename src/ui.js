@@ -66,9 +66,9 @@ export function renderUI() {
   .gallery img{width:100%;height:190px;object-fit:cover;display:block}
   .gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent, rgba(0,0,0,.65))}
   /* Navbar flotant (site public) — logo + iconițe SVG + buton login integrate */
-  .fnav-wrap{display:flex;justify-content:center;padding:6px 0 0}
-  .fnav-band{background:#e7eafb;border-radius:30px;padding:32px 16px 16px;display:inline-flex}
-  .fnav{display:flex;align-items:center;gap:2px;background:#fff;border-radius:46px;box-shadow:0 10px 26px rgba(20,30,60,.10),0 2px 8px rgba(20,30,60,.06);padding:9px 10px;max-width:100%}
+  .fnav-wrap{padding:6px 0 0}
+  .fnav-band{background:#e7eafb;border-radius:30px;padding:32px 16px 16px;display:flex}
+  .fnav{display:flex;align-items:center;justify-content:space-between;gap:4px;flex:1;background:#fff;border-radius:46px;box-shadow:0 10px 26px rgba(20,30,60,.10),0 2px 8px rgba(20,30,60,.06);padding:9px 16px;max-width:100%}
   .fnav-logo{display:flex;align-items:center;padding:0 12px 0 8px;margin-right:4px;border-right:1px solid var(--border);cursor:pointer}
   .fnav-logo img{height:30px;display:block}
   .fitem{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 14px;color:var(--muted);font-weight:600;font-size:12px;text-decoration:none;cursor:pointer}
