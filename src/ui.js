@@ -45,8 +45,19 @@ export function renderUI() {
   .row{display:flex;gap:14px;flex-wrap:wrap} .grid{display:grid;gap:14px}
   .field{margin-bottom:12px}
   /* Login */
-  #login{min-height:100vh;display:grid;place-items:center;padding:20px}
-  #login .card{padding:30px;width:100%;max-width:380px}
+  #login{min-height:100vh;display:grid;grid-template-columns:1.1fr .9fr}
+  .login-hero{position:relative;display:flex;align-items:center;padding:48px;color:#fff;overflow:hidden;
+    background:linear-gradient(130deg, rgba(9,20,34,.90) 0%, rgba(20,55,130,.78) 55%, rgba(47,109,246,.62) 100%), url('/assets/login-bg.jpg') center/cover no-repeat, #0b1a2b;}
+  .login-hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:38px 38px;opacity:.5;pointer-events:none}
+  .login-hero-inner{position:relative;max-width:460px;z-index:1}
+  .login-hero h1{font-size:34px;line-height:1.15;margin:16px 0 12px;letter-spacing:-.02em;color:#fff}
+  .login-hero p{font-size:16px;line-height:1.6;opacity:.92;margin:0}
+  .login-feats{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:13px}
+  .login-feats li{display:flex;gap:11px;align-items:center;font-size:15px;opacity:.95}
+  .login-feats .ic{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 auto}
+  .login-form{display:grid;place-items:center;padding:24px;background:var(--bg)}
+  .login-form .card{padding:32px;width:100%;max-width:380px}
+  @media(max-width:860px){ #login{grid-template-columns:1fr} .login-hero{display:none} }
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
   /* App shell */
@@ -131,15 +142,25 @@ function enterApp(){
 
 window.renderLogin = function(err){
   document.getElementById("root").innerHTML =
-    '<div id="login"><form class="card" onsubmit="return doLogin(event)">'
+    '<div id="login">'
+    + '<div class="login-hero"><div class="login-hero-inner">'
+    + '<div class="logo" style="color:#fff;font-size:26px">📦 Depozit</div>'
+    + '<h1>Depozitare & logistică pentru afacerea ta</h1>'
+    + '<p>Îți gestionăm marfa în siguranță, iar tu vezi stocul online, în timp real.</p>'
+    + '<ul class="login-feats">'
+    + '<li><span class="ic">📦</span> Depozitare pe paleți, cu locații dedicate</li>'
+    + '<li><span class="ic">🔎</span> Vizibilitate în timp real asupra stocului tău</li>'
+    + '<li><span class="ic">🚚</span> Recepție și expediere rapidă</li>'
+    + '</ul></div></div>'
+    + '<div class="login-form"><form class="card" onsubmit="return doLogin(event)">'
     + '<div class="logo" style="margin-bottom:6px">📦 Depozit</div>'
-    + '<div class="muted" style="margin-bottom:20px">Autentificare</div>'
+    + '<div class="muted" style="margin-bottom:20px">Autentificare în cont</div>'
     + '<div class="field"><label>Email</label><input id="li_email" type="email" autofocus required></div>'
     + '<div class="field"><label>Parolă</label><input id="li_pass" type="password" required></div>'
     + (err?'<div class="pill bad" style="margin-bottom:12px">'+esc(err)+'</div>':'')
     + '<button style="width:100%" type="submit">Intră în cont</button>'
     + '<div class="center" style="margin-top:14px;font-size:12.5px"><a href="#" onclick="renderLanding();return false">← Înapoi la site</a></div>'
-    + '</form></div>';
+    + '</form></div></div>';
 };
 window.doLogin = function(e){
   e.preventDefault();
