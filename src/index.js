@@ -150,7 +150,7 @@ export default {
     // Biblioteci client servite de Worker
     if (path === '/vendor/zxing.js') return vendor.zxing();
     if (path === '/vendor/xlsx.js') return vendor.xlsx();
-    if (path === '/assets/login-bg.png') return vendor.loginImage();
+    if (path.startsWith('/assets/') && path.endsWith('.png')) return vendor.image(path.slice(8, -4));
 
     // PWA (instalabil pe Android / bază pentru APK)
     if (path === '/manifest.webmanifest') return pwa.manifest();

@@ -58,6 +58,13 @@ export function renderUI() {
   .login-form{display:grid;place-items:center;padding:24px;background:var(--bg)}
   .login-form .card{padding:32px;width:100%;max-width:380px}
   @media(max-width:860px){ #login{grid-template-columns:1fr} .login-hero{display:none} }
+  .site-hero{position:relative;color:#fff;border-radius:16px;overflow:hidden;margin:6px 0 8px;text-align:center;padding:66px 30px;
+    background:linear-gradient(120deg, rgba(9,20,34,.80), rgba(15,40,95,.52)), url('/assets/site-hero.png') center/cover no-repeat, #0b1a2b;}
+  .site-hero h1{color:#fff} .site-hero p{color:rgba(255,255,255,.92)}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .gallery figure{margin:0;border-radius:12px;overflow:hidden;position:relative;box-shadow:var(--shadow)}
+  .gallery img{width:100%;height:190px;object-fit:cover;display:block}
+  .gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent, rgba(0,0,0,.65))}
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
   /* App shell */
@@ -186,11 +193,11 @@ window.renderLanding = function(){
     + '<header style="display:flex;justify-content:space-between;align-items:center;padding:18px 0">'
     + '<div class="logo" style="font-size:22px">📦 Depozit</div>'
     + '<button onclick="renderLogin()">Autentificare client</button></header>'
-    // hero
-    + '<section style="text-align:center;padding:56px 0 40px">'
-    + '<h1 style="font-size:38px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & logistică<br>pentru afacerea ta</h1>'
-    + '<p class="muted" style="font-size:17px;max-width:620px;margin:0 auto 26px;line-height:1.6">Îți depozităm marfa în siguranță și îți dăm acces online la stocul tău, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
-    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Intră în cont</button><button class="ghost" onclick="document.getElementById(\\'contact\\').scrollIntoView({behavior:\\'smooth\\'})" style="padding:12px 22px">Contactează-ne</button></div>'
+    // hero (cu poză de fundal)
+    + '<section class="site-hero">'
+    + '<h1 style="font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & logistică<br>pentru afacerea ta</h1>'
+    + '<p style="font-size:17px;max-width:620px;margin:0 auto 26px;line-height:1.6">Îți depozităm marfa în siguranță și îți dăm acces online la stocul tău, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
+    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="document.getElementById(\\'contact\\').scrollIntoView({behavior:\\'smooth\\'})">Contactează-ne</button></div>'
     + '</section>'
     // servicii
     + '<section style="padding:30px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Serviciile noastre</h2>'
@@ -201,6 +208,13 @@ window.renderLanding = function(){
     + step(1,"Ne trimiți marfa","O recepționăm și o depozităm pe locații dedicate.")
     + step(2,"O vezi online","Primești un cont și vezi fiecare produs, în timp real.")
     + step(3,"Livrăm la cerere","Pregătim și expediem comenzile tale rapid.")
+    + '</div></section>'
+    // galerie
+    + '<section style="padding:20px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 22px">Depozitul nostru</h2>'
+    + '<div class="gallery">'
+    + '<figure><img src="/assets/login-bg.png" alt="Culoar depozit" loading="lazy"><figcaption>Rafturi & culoare</figcaption></figure>'
+    + '<figure><img src="/assets/site-1.png" alt="Marfă pe paleți" loading="lazy"><figcaption>Marfă pe paleți</figcaption></figure>'
+    + '<figure><img src="/assets/site-2.png" alt="Recepție marfă" loading="lazy"><figcaption>Recepție & expediere</figcaption></figure>'
     + '</div></section>'
     // contact
     + '<section id="contact" class="card" style="padding:30px;margin:30px 0;text-align:center">'

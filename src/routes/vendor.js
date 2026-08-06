@@ -2,7 +2,12 @@
 import zxingSrc from '../vendor/zxing.txt';
 import xlsxSrc from '../vendor/xlsx.txt';
 import loginBg from '../vendor/login-bg.png';
+import siteHero from '../vendor/site-hero.png';
+import site1 from '../vendor/site-1.png';
+import site2 from '../vendor/site-2.png';
 import { corsHeaders } from '../lib/http.js';
+
+const IMAGES = { 'login-bg': loginBg, 'site-hero': siteHero, 'site-1': site1, 'site-2': site2 };
 
 function js(src) {
   return new Response(src, {
@@ -16,8 +21,10 @@ function js(src) {
 
 export function zxing() { return js(zxingSrc); }
 export function xlsx() { return js(xlsxSrc); }
-export function loginImage() {
-  return new Response(loginBg, {
+export function image(name) {
+  const data = IMAGES[name];
+  if (!data) return new Response('Not found', { status: 404, headers: corsHeaders });
+  return new Response(data, {
     headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800', ...corsHeaders },
   });
 }
