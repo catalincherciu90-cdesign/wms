@@ -82,6 +82,13 @@ export function renderUI() {
   .flogin svg{width:18px;height:18px}
   .flogin:hover{background:var(--brand-2)}
   @media(max-width:720px){ .fitem .flbl,.flogin span{display:none} .fnav-logo img{height:26px} .fitem{padding:6px 10px} .flogin{padding:11px 13px} .fitem .fic{width:40px;height:40px} .fitem.active .fic{transform:translateY(-30px)} }
+  /* Trust bar sub hero */
+  .trustbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:20px 0 6px}
+  .trust{display:flex;align-items:center;gap:13px;padding:15px 16px}
+  .trust .ti{width:46px;height:46px;border-radius:13px;background:rgba(47,109,246,.10);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .trust .ti svg{width:24px;height:24px}
+  .trust b{display:block;font-size:14px;line-height:1.2}
+  .trust small{font-size:12px;color:var(--muted)}
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
   /* App shell */
@@ -201,7 +208,11 @@ function svgIcon(n){
     about:'<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 8h.01M15 8h.01M9 12h.01M15 12h.01M9 16h6"/>',
     services:'<path d="m3 7 9-4 9 4v10l-9 4-9-4V7Z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
     contact:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
-    login:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>'
+    login:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+    shield:'<path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3Z"/><path d="m9 12 2 2 4-4"/>',
+    eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+    route:'<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h6a4 4 0 0 0 0-8H10a4 4 0 0 1 0-8h6"/>',
+    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
   }[n]||'';
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 }
@@ -223,6 +234,7 @@ function sitePage(active, content){
 }
 window.siteGo = function(p){ if(p==="about") renderAbout(); else if(p==="services") renderServices(); else if(p==="contact") renderContact(); else renderLanding(); };
 function valueCard(ic,t,d){ return '<div class="card" style="padding:20px"><div style="font-size:26px">'+ic+'</div><h3 style="margin:8px 0 5px;font-size:15px">'+esc(t)+'</h3><div class="muted" style="font-size:13px;line-height:1.5">'+esc(d)+'</div></div>'; }
+function trustItem(ic,t,s){ return '<div class="card trust"><div class="ti">'+svgIcon(ic)+'</div><div><b>'+esc(t)+'</b><small>'+esc(s)+'</small></div></div>'; }
 
 window.renderAbout = function(){
   sitePage("about",
@@ -314,6 +326,13 @@ window.renderLanding = function(){
     + '<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:22px"><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Vizibilitate 24/7</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Trasabilitate completă</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Fără investiție în spațiu</span></div>'
     + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="siteGo(\\'contact\\')">Cere o ofertă</button></div>'
     + '</section>'
+    // trust icons sub hero
+    + '<section style="padding:8px 0 0"><div class="trustbar">'
+    + trustItem("shield","Marfă în siguranță","Depozit securizat")
+    + trustItem("eye","Vizibilitate 24/7","Stoc online, în timp real")
+    + trustItem("route","Trasabilitate completă","Fiecare mișcare, urmărită")
+    + trustItem("clock","Livrare la timp","Transport rapid și corect")
+    + '</div></section>'
     // servicii
     + '<section style="padding:36px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 8px">Serviciile noastre</h2><p class="muted center" style="margin:0 auto 24px;max-width:560px">Tot ce-ți trebuie ca să-ți externalizezi logistica, într-un singur loc.</p>'
     + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+svc+'</div></section>'
