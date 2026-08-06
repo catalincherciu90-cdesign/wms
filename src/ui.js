@@ -66,8 +66,9 @@ export function renderUI() {
   .gallery img{width:100%;height:190px;object-fit:cover;display:block}
   .gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent, rgba(0,0,0,.65))}
   /* Navbar flotant (site public) */
-  .fbar{display:flex;justify-content:space-between;align-items:center;padding:16px 0 0;gap:12px;flex-wrap:wrap}
-  .fnav-band{background:#e7eafb;border-radius:28px;padding:34px 14px 16px;margin:14px 0 20px;display:flex;justify-content:center}
+  .fbar{display:flex;justify-content:space-between;align-items:center;padding:16px 0;gap:14px;flex-wrap:wrap}
+  .fnav-band{background:#e7eafb;border-radius:26px;padding:32px 14px 14px;display:inline-flex;justify-content:center}
+  @media(max-width:820px){ .fbar{justify-content:center} }
   .fnav{display:flex;gap:4px;background:#fff;border-radius:44px;box-shadow:0 10px 26px rgba(20,30,60,.10),0 2px 8px rgba(20,30,60,.06);padding:10px 12px;width:fit-content;max-width:100%}
   .fnav a{display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 16px;color:var(--muted);font-weight:600;font-size:12.5px;text-decoration:none;cursor:pointer}
   .fnav .fic{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;background:transparent;transition:transform .28s cubic-bezier(.34,1.56,.64,1),background .25s,color .25s,box-shadow .25s}
@@ -194,8 +195,8 @@ function siteHeader(active){
   var nav=items.map(function(it){ return '<a class="'+(active===it[0]?'active':'')+'" onclick="siteGo(\\''+it[0]+'\\');return false"><span class="fic">'+it[2]+'</span><span class="flbl">'+esc(it[1])+'</span></a>'; }).join('');
   return '<div class="fbar">'
     +'<div style="cursor:pointer" onclick="siteGo(\\'home\\')"><img src="/assets/logo.png" alt="WSD Logistics" style="height:46px;display:block"></div>'
-    +'<button onclick="renderLogin()">Autentificare client</button></div>'
-    +'<div class="fnav-band"><nav class="fnav">'+nav+'</nav></div>';
+    +'<div class="fnav-band"><nav class="fnav">'+nav+'</nav></div>'
+    +'<button onclick="renderLogin()">Autentificare client</button></div>';
 }
 function siteFooter(){
   return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© WSD Logistics — Depozitare & Transport Marfă · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
