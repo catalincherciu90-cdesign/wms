@@ -91,13 +91,22 @@ export function renderUI() {
     .site-hero{padding:40px 18px !important}
     .site-hero h1{font-size:26px !important;line-height:1.22 !important}
     .site-hero p{font-size:14.5px !important}
-    .fnav-band{padding:30px 8px 12px !important;border-radius:24px}
-    .fnav{padding:8px 8px !important;gap:2px !important;border-radius:40px}
-    .fnav-logo{padding:0 6px 0 4px !important;margin-right:2px !important;border-right:none !important}
-    .fnav .fic{width:38px !important;height:38px !important}
-    .fnav .fic svg{width:20px;height:20px}
+    .fnav-band{padding:30px 6px 12px !important;border-radius:24px}
+    .fnav{padding:7px 6px !important;gap:0 !important;border-radius:40px;min-width:0}
+    .fnav-logo{padding:0 4px 0 2px !important;margin-right:0 !important;border-right:none !important}
+    .fnav-logo img{height:22px !important}
+    .fnav .fitem{padding:4px 4px !important}
+    .fnav .fic{width:36px !important;height:36px !important}
+    .fnav .fic svg{width:19px;height:19px}
     .trust{padding:13px 14px}
     .gallery img{height:160px}
+  }
+  /* Telefoane foarte înguste */
+  @media(max-width:380px){
+    .fnav-logo img{height:20px !important}
+    .fnav .fitem{padding:4px 2px !important}
+    .fnav .fic{width:33px !important;height:33px !important}
+    .fnav .fic svg{width:18px;height:18px}
   }
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
