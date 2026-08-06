@@ -78,10 +78,7 @@ export function renderUI() {
   .fitem.active{color:var(--brand)}
   .fitem.active .fic{transform:translateY(-34px);background:#fff;color:var(--brand);box-shadow:0 0 0 8px #e7eafb,0 12px 22px rgba(20,30,60,.18)}
   .fitem.active .flbl{transform:translateY(-10px)}
-  .flogin{display:flex;align-items:center;gap:8px;background:var(--brand);color:#fff;border-radius:30px;padding:11px 18px;font-weight:600;font-size:13px;cursor:pointer;margin-left:6px}
-  .flogin svg{width:18px;height:18px}
-  .flogin:hover{background:var(--brand-2)}
-  @media(max-width:720px){ .fitem .flbl,.flogin span{display:none} .fnav-logo img{height:26px} .fitem{padding:6px 10px} .flogin{padding:11px 13px} .fitem .fic{width:40px;height:40px} .fitem.active .fic{transform:translateY(-30px)} }
+  @media(max-width:720px){ .fitem .flbl{display:none} .fnav-logo img{height:26px} .fitem{padding:6px 10px} .fitem .fic{width:40px;height:40px} .fitem.active .fic{transform:translateY(-30px)} }
   /* Trust bar sub hero */
   .trustbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:20px 0 6px}
   .trust{display:flex;align-items:center;gap:13px;padding:15px 16px}
@@ -99,7 +96,6 @@ export function renderUI() {
     .fnav-logo{padding:0 6px 0 4px !important;margin-right:2px !important;border-right:none !important}
     .fnav .fic{width:38px !important;height:38px !important}
     .fnav .fic svg{width:20px;height:20px}
-    .flogin{padding:10px 12px !important;margin-left:2px !important}
     .trust{padding:13px 14px}
     .gallery img{height:160px}
   }
@@ -236,7 +232,7 @@ function siteHeader(active){
   return '<div class="fnav-wrap"><div class="fnav-band"><nav class="fnav">'
     +'<div class="fnav-logo" onclick="siteGo(\\'home\\')"><img src="/assets/logo.png" alt="WSD Logistics"></div>'
     + nav
-    +'<a class="flogin" onclick="renderLogin()">'+svgIcon("login")+'<span>Autentificare</span></a>'
+    +'<a class="fitem" onclick="renderLogin();return false"><span class="fic">'+svgIcon("login")+'</span><span class="flbl">Autentificare</span></a>'
     +'</nav></div></div>';
 }
 function siteFooter(){
