@@ -65,6 +65,16 @@ export function renderUI() {
   .gallery figure{margin:0;border-radius:12px;overflow:hidden;position:relative;box-shadow:var(--shadow)}
   .gallery img{width:100%;height:190px;object-fit:cover;display:block}
   .gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent, rgba(0,0,0,.65))}
+  /* Navbar flotant (site public) */
+  .fbar{display:flex;justify-content:space-between;align-items:center;padding:16px 0 0;gap:12px;flex-wrap:wrap}
+  .fnav{display:flex;gap:4px;background:#fff;border-radius:44px;box-shadow:0 10px 30px rgba(20,30,60,.12),0 2px 8px rgba(20,30,60,.08);padding:10px 12px;margin:34px auto 18px;width:fit-content;max-width:100%}
+  .fnav a{display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 16px;color:var(--muted);font-weight:600;font-size:12.5px;text-decoration:none;cursor:pointer}
+  .fnav .fic{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;transition:transform .28s cubic-bezier(.34,1.56,.64,1),background .25s,color .25s,box-shadow .25s}
+  .fnav .flbl{transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
+  .fnav a.active{color:var(--brand)}
+  .fnav a.active .fic{transform:translateY(-32px);background:var(--brand);color:#fff;box-shadow:0 0 0 6px var(--bg),0 12px 22px rgba(47,109,246,.45)}
+  .fnav a.active .flbl{transform:translateY(-8px)}
+  @media(max-width:560px){ .fnav a{padding:6px 9px;font-size:11px} .fnav .fic{width:40px;height:40px;font-size:17px} .fnav a.active .fic{transform:translateY(-28px)} }
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
   /* App shell */
@@ -179,11 +189,12 @@ window.doLogin = function(e){
 
 /* ---------------- Site de prezentare (public, multi-pagină) ---------------- */
 function siteHeader(active){
-  var links=[["home","Acasă"],["about","Despre noi"],["services","Servicii"],["contact","Contact"]];
-  var nav=links.map(function(l){ return '<a href="#" onclick="siteGo(\\''+l[0]+'\\');return false" style="font-weight:'+(active===l[0]?'700':'500')+';color:'+(active===l[0]?'var(--brand)':'var(--text)')+'">'+l[1]+'</a>'; }).join('');
-  return '<header style="display:flex;justify-content:space-between;align-items:center;padding:18px 0;gap:16px;flex-wrap:wrap">'
+  var items=[["home","Acasă","🏠"],["about","Despre noi","🏢"],["services","Servicii","📦"],["contact","Contact","✉️"]];
+  var nav=items.map(function(it){ return '<a class="'+(active===it[0]?'active':'')+'" onclick="siteGo(\\''+it[0]+'\\');return false"><span class="fic">'+it[2]+'</span><span class="flbl">'+esc(it[1])+'</span></a>'; }).join('');
+  return '<div class="fbar">'
     +'<div style="cursor:pointer" onclick="siteGo(\\'home\\')"><img src="/assets/logo.png" alt="WSD Logistics" style="height:46px;display:block"></div>'
-    +'<nav class="row" style="gap:20px;align-items:center;flex-wrap:wrap">'+nav+'<button onclick="renderLogin()">Autentificare client</button></nav></header>';
+    +'<button onclick="renderLogin()">Autentificare client</button></div>'
+    +'<nav class="fnav">'+nav+'</nav>';
 }
 function siteFooter(){
   return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© WSD Logistics — Depozitare & Transport Marfă · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
