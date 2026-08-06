@@ -296,7 +296,15 @@ function svgIcon(n){
     pin:'<path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
     facebook:'<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M15 8h-2a2 2 0 0 0-2 2v8M9 13h5"/>',
     instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1"/>',
-    linkedin:'<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 10v7M7 7v.01M11 17v-4a2 2 0 0 1 4 0v4M11 17v-7"/>'
+    linkedin:'<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 10v7M7 7v.01M11 17v-4a2 2 0 0 1 4 0v4M11 17v-7"/>',
+    truck:'<rect x="1.5" y="6.5" width="13" height="9" rx="1"/><path d="M14.5 9.5h3l2.5 3v3h-5.5"/><circle cx="6" cy="17.5" r="1.7"/><circle cx="16.5" cy="17.5" r="1.7"/>',
+    receive:'<path d="M12 3v9M12 12l3.5-3.5M12 12 8.5 8.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    ship:'<path d="M12 12V3M12 3l3.5 3.5M12 3 8.5 6.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    tag:'<path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9-9-9Z"/><circle cx="8" cy="8" r="1.3"/>',
+    puzzle:'<path d="M10 4.5a2 2 0 0 1 4 0c0 .9.6 1.5 1.5 1.5H17a1 1 0 0 1 1 1v1.5c0 .9.6 1.5 1.5 1.5a2 2 0 0 1 0 4c-.9 0-1.5.6-1.5 1.5V17a1 1 0 0 1-1 1h-1.5c-.9 0-1.5.6-1.5 1.5a2 2 0 0 1-4 0c0-.9-.6-1.5-1.5-1.5H7a1 1 0 0 1-1-1v-1.5c0-.9-.6-1.5-1.5-1.5a2 2 0 0 1 0-4c.9 0 1.5-.6 1.5-1.5V7a1 1 0 0 1 1-1h1.5c.9 0 1.5-.6 1.5-1.5Z"/>',
+    handshake:'<path d="m11 17-2.5 2.5a1.8 1.8 0 0 1-2.5-2.5L10 13"/><path d="M13 7l2-2a1.8 1.8 0 0 1 2.5 2.5L14 11l-2 2a1.8 1.8 0 0 1-2.5-2.5L11 9"/><path d="M3 13l2 2M19 11l2-2"/>',
+    monitor:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    users:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.7"/>'
   }[n]||'';
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 }
@@ -339,63 +347,73 @@ function trustItem(ic,t,s){ return '<div class="card trust"><div class="ti">'+sv
 
 window.renderAbout = function(){
   sitePage("about",
-    '<section class="site-hero" style="padding:56px 30px"><h1 style="font-size:36px;margin:0">Despre WSD Logistics</h1><p style="max-width:680px;margin:14px auto 0">Partenerul tău de încredere în depozitare și transport marfă.</p></section>'
-    + '<section style="padding:38px 0"><div class="grid" style="grid-template-columns:1.15fr 1fr;gap:30px;align-items:center">'
-    + '<div><h2 style="font-size:26px;margin:0 0 14px">Cine suntem</h2>'
+    '<section class="site-hero" style="padding:56px 30px"><span class="eyebrow" style="background:rgba(255,255,255,.16);color:#fff">Despre noi</span><h1 style="font-size:36px;margin:0">Despre WSD Logistics</h1><p style="max-width:680px;margin:14px auto 0">Partenerul tău de încredere în depozitare și transport marfă.</p></section>'
+    + '<section style="padding:40px 0 26px"><div class="grid" style="grid-template-columns:1.15fr 1fr;gap:30px;align-items:center">'
+    + '<div><span class="eyebrow">Cine suntem</span><h2 style="font-size:26px;margin:0 0 14px">Un partener logistic complet</h2>'
     + '<p class="muted" style="line-height:1.75;font-size:15px">WSD Logistics este un partener de <b>depozitare și transport marfă</b> pentru companiile care vor să-și externalizeze logistica fără compromisuri. Preluăm marfa, o depozităm în siguranță pe paleți în locații dedicate și o livrăm la destinație — rapid și corect.</p>'
     + '<p class="muted" style="line-height:1.75;font-size:15px">Combinăm un depozit bine organizat cu servicii de transport și cu tehnologie modernă: fiecare client are acces la un <b>portal online</b> unde vede în timp real ce stoc are, pe ce locații și ce mișcări s-au făcut cu marfa lui.</p>'
     + '<p class="muted" style="line-height:1.75;font-size:15px">Fie că ai nevoie de spațiu de depozitare pe termen scurt sau de un partener logistic permanent, ne adaptăm nevoilor afacerii tale — de la câțiva paleți până la operațiuni complexe.</p></div>'
     + '<figure style="margin:0;border-radius:14px;overflow:hidden;box-shadow:var(--shadow)"><img src="/assets/site-1.png" style="width:100%;display:block" alt="Depozit WSD Logistics" loading="lazy"></figure>'
     + '</div></section>'
-    + '<section class="card" style="padding:30px;margin:12px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 10px">Misiunea noastră</h2><p class="muted" style="max-width:720px;margin:0 auto;line-height:1.7;font-size:15.5px">Îți simplificăm logistica: tu te concentrezi pe vânzări și pe clienții tăi, noi ne ocupăm de depozitare, manipulare și transport — cu <b>transparență totală</b> și marfa mereu sub control.</p></section>'
-    + '<section style="padding:26px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Valorile noastre</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">'
-    + valueCard("🛡️","Siguranță","Spații securizate și marfă gestionată cu grijă, de la recepție la livrare.")
-    + valueCard("🔎","Transparență","Acces online la stocul tău — vezi oricând ce ai și unde.")
-    + valueCard("⏱️","Punctualitate","Recepții, expedieri și transport la timp, de fiecare dată.")
-    + valueCard("🤝","Flexibilitate","Soluții adaptate volumului și ritmului afacerii tale.")
-    + valueCard("💻","Tehnologie","Sistem WMS modern, coduri de bare și trasabilitate completă.")
-    + valueCard("📦","Grijă pentru marfă","Manipulare corectă și organizare riguroasă pe paleți.")
-    + '</div></section>');
+    // bandă statistici
+    + '<section style="padding:6px 0"><div class="stat-strip">'
+    + statItem("12.000","m²","Spațiu de depozitare")
+    + statItem("8.500","+ paleți","Gestionați lunar")
+    + statItem("300","+ livrări","Expediate lunar")
+    + statItem("99,2","%","Comenzi la timp")
+    + '</div><p class="muted center" style="font-size:11.5px;margin:8px 0 0">* cifre orientative — se înlocuiesc cu datele reale WSD Logistics</p></section>'
+    + '<section class="card" style="padding:32px;margin:26px 0;text-align:center"><span class="eyebrow">Misiunea noastră</span><h2 style="font-size:22px;margin:0 0 10px">De ce facem asta</h2><p class="muted" style="max-width:720px;margin:0 auto;line-height:1.7;font-size:15.5px">Îți simplificăm logistica: tu te concentrezi pe vânzări și pe clienții tăi, noi ne ocupăm de depozitare, manipulare și transport — cu <b>transparență totală</b> și marfa mereu sub control.</p></section>'
+    + '<section style="padding:26px 0;text-align:center"><span class="eyebrow">Valori</span><h2 style="font-size:24px;margin:0 0 24px">Valorile noastre</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));text-align:left">'
+    + whoCard("shield","Siguranță","Spații securizate și marfă gestionată cu grijă, de la recepție la livrare.")
+    + whoCard("eye","Transparență","Acces online la stocul tău — vezi oricând ce ai și unde.")
+    + whoCard("clock","Punctualitate","Recepții, expedieri și transport la timp, de fiecare dată.")
+    + whoCard("handshake","Flexibilitate","Soluții adaptate volumului și ritmului afacerii tale.")
+    + whoCard("monitor","Tehnologie","Sistem WMS modern, coduri de bare și trasabilitate completă.")
+    + whoCard("boxes","Grijă pentru marfă","Manipulare corectă și organizare riguroasă pe paleți.")
+    + '</div></section>'
+    + '<section class="card" style="padding:32px;margin:20px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 8px">Hai să lucrăm împreună</h2><p class="muted" style="margin:0 0 16px">Spune-ne ce marfă ai și îți facem o ofertă adaptată.</p><button onclick="siteGo(\\'contact\\')" style="padding:12px 26px">Cere o ofertă</button></section>');
 };
 window.renderServices = function(){
   var svc=[
-    ["📦","Depozitare pe paleți","Spațiu securizat cu locații dedicate pe rafturi și zone. Fiecare palet e etichetat și urmărit individual, cu evidență exactă a cantităților."],
-    ["⬇️","Recepție marfă","Preluăm și verificăm marfa la sosire, o înregistrăm în sistem și o depozităm rapid pe locații — cu confirmare pe cantități."],
-    ["⬆️","Expediere & picking","Pregătim comenzile tale (picking de pe paleți), le verificăm și le expediem corect și la timp."],
-    ["🚚","Transport marfă","Livrăm marfa la destinație cu flotă proprie/parteneri — de la ultimul kilometru până la transport pe distanțe lungi."],
-    ["🔎","Portal client","Cont online unde vezi în timp real stocul tău, pe ce locații se află și fiecare mișcare a mărfii."],
-    ["📊","Rapoarte & inventar","Stocuri, mișcări, produse sub prag și export — control complet asupra mărfii tale."],
-    ["🏷️","Coduri de bare & trasabilitate","Identificare rapidă prin scanare (EAN/QR) și istoric complet: cine, ce, când."],
-    ["🧩","Soluții personalizate","Ne adaptăm fluxul la nevoile tale — de la câțiva paleți la operațiuni complexe."]
-  ].map(function(s){ return '<div class="card" style="padding:24px"><div style="font-size:28px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+esc(s[1])+'</h3><div class="muted" style="font-size:13.5px;line-height:1.55">'+esc(s[2])+'</div></div>'; }).join("");
+    ["boxes","Depozitare pe paleți","Spațiu securizat cu locații dedicate pe rafturi și zone. Fiecare palet e etichetat și urmărit individual, cu evidență exactă a cantităților."],
+    ["receive","Recepție marfă","Preluăm și verificăm marfa la sosire, o înregistrăm în sistem și o depozităm rapid pe locații — cu confirmare pe cantități."],
+    ["ship","Expediere & picking","Pregătim comenzile tale (picking de pe paleți), le verificăm și le expediem corect și la timp."],
+    ["truck","Transport marfă","Livrăm marfa la destinație cu flotă proprie/parteneri — de la ultimul kilometru până la transport pe distanțe lungi."],
+    ["eye","Portal client","Cont online unde vezi în timp real stocul tău, pe ce locații se află și fiecare mișcare a mărfii."],
+    ["chart","Rapoarte & inventar","Stocuri, mișcări, produse sub prag și export — control complet asupra mărfii tale."],
+    ["tag","Coduri de bare & trasabilitate","Identificare rapidă prin scanare (EAN/QR) și istoric complet: cine, ce, când."],
+    ["puzzle","Soluții personalizate","Ne adaptăm fluxul la nevoile tale — de la câțiva paleți la operațiuni complexe."]
+  ].map(function(s){ return whoCard(s[0],s[1],s[2]); }).join("");
   var proc=[
     ["1","Recepție","Primim și verificăm marfa ta."],
     ["2","Depozitare","O așezăm pe paleți, în locații dedicate."],
     ["3","Management stoc","O urmărim în timp real în sistem."],
     ["4","Picking & expediere","Pregătim comenzile la cerere."],
     ["5","Transport & livrare","Ducem marfa la destinație."]
-  ].map(function(p){ return '<div class="card" style="padding:18px;text-align:center"><div class="pill" style="background:var(--brand);color:#fff;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-weight:700">'+p[0]+'</div><h4 style="margin:10px 0 5px;font-size:14px">'+esc(p[1])+'</h4><div class="muted" style="font-size:12.5px;line-height:1.5">'+esc(p[2])+'</div></div>'; }).join("");
-  var ind=["🛒 E-commerce","🏬 Retail & distribuție","🏭 Producători","🌍 Importatori","🍽️ FMCG"].map(function(x){ return '<span class="pill mut" style="padding:8px 14px;font-size:13.5px">'+esc(x)+'</span>'; }).join(" ");
+  ].map(function(p){ return '<div class="card lcard" style="padding:18px;text-align:center"><div class="pill" style="background:var(--brand);color:#fff;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-weight:700">'+p[0]+'</div><h4 style="margin:10px 0 5px;font-size:14px">'+esc(p[1])+'</h4><div class="muted" style="font-size:12.5px;line-height:1.5">'+esc(p[2])+'</div></div>'; }).join("");
+  var ind=[["cart","E-commerce & retail"],["boxes","Distribuitori & angro"],["factory","Producători"],["globe","Importatori & exportatori"],["tag","FMCG & bunuri de consum"]]
+    .map(function(x){ return '<div class="card lcard" style="padding:16px;display:flex;align-items:center;gap:12px"><span class="icircle" style="width:40px;height:40px">'+svgIcon(x[0])+'</span><b style="font-size:14px">'+esc(x[1])+'</b></div>'; }).join("");
   sitePage("services",
-    '<section class="site-hero" style="padding:56px 30px"><h1 style="font-size:36px;margin:0">Serviciile noastre</h1><p style="max-width:680px;margin:14px auto 0">Depozitare, transport marfă și vizibilitate online — logistica ta, completă.</p></section>'
-    + '<section style="padding:38px 0"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">'+svc+'</div></section>'
-    + '<section style="padding:14px 0 8px"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Cum funcționează procesul</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">'+proc+'</div></section>'
-    + '<section style="padding:26px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 16px">Pentru cine lucrăm</h2><div class="row" style="justify-content:center;flex-wrap:wrap;gap:10px">'+ind+'</div></section>'
-    + '<section class="card" style="padding:30px;margin:16px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 8px">Pregătit să externalizezi logistica?</h2><p class="muted" style="margin:0 0 16px">Îți facem o ofertă adaptată nevoilor tale.</p><button onclick="siteGo(\\'contact\\')" style="padding:12px 26px">Cere o ofertă</button></section>');
+    '<section class="site-hero" style="padding:56px 30px"><span class="eyebrow" style="background:rgba(255,255,255,.16);color:#fff">Servicii</span><h1 style="font-size:36px;margin:0">Serviciile noastre</h1><p style="max-width:680px;margin:14px auto 0">Depozitare, transport marfă și vizibilitate online — logistica ta, completă.</p></section>'
+    + '<section style="padding:40px 0 30px;text-align:center"><span class="eyebrow">Ce oferim</span><h2 style="font-size:24px;margin:0 0 24px">Servicii complete de logistică</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));text-align:left">'+svc+'</div></section>'
+    + '<section style="padding:14px 0 8px;text-align:center"><span class="eyebrow">Proces</span><h2 style="font-size:24px;margin:0 0 24px">Cum funcționează procesul</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));text-align:left">'+proc+'</div></section>'
+    + '<section style="padding:30px 0;text-align:center"><span class="eyebrow">Clienți</span><h2 style="font-size:24px;margin:0 0 22px">Pentru cine lucrăm</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));text-align:left">'+ind+'</div></section>'
+    + '<section class="card" style="padding:32px;margin:16px 0;text-align:center"><h2 style="font-size:22px;margin:0 0 8px">Pregătit să externalizezi logistica?</h2><p class="muted" style="margin:0 0 16px">Îți facem o ofertă adaptată nevoilor tale.</p><button onclick="siteGo(\\'contact\\')" style="padding:12px 26px">Cere o ofertă</button></section>');
 };
 window.renderContact = function(){
+  var crow=function(ic,label,val){ return '<div style="display:flex;align-items:center;gap:13px"><span class="icircle" style="width:42px;height:42px;flex:0 0 auto">'+svgIcon(ic)+'</span><div><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">'+esc(label)+'</div><div style="font-size:14.5px;font-weight:600">'+val+'</div></div></div>'; };
   sitePage("contact",
-    '<section class="site-hero" style="padding:52px 30px"><h1 style="font-size:34px;margin:0">Contact</h1><p style="max-width:640px;margin:12px auto 0">Scrie-ne și îți facem o ofertă de depozitare.</p></section>'
-    + '<section style="padding:34px 0"><div class="grid" style="grid-template-columns:1fr 1.1fr;gap:26px">'
-    + '<div class="card" style="padding:24px"><h2 style="font-size:18px;margin:0 0 14px">Date de contact</h2><div style="display:grid;gap:12px;font-size:15px">'
-    + '<div>✉️ <a href="mailto:contact@depozit.ro">contact@depozit.ro</a></div>'
-    + '<div>📞 <a href="tel:+40700000000">0700 000 000</a></div>'
-    + '<div>📍 Adresă depozit (de completat)</div>'
-    + '<div>🕒 Luni–Vineri, 08:00–18:00</div>'
-    + '</div></div>'
-    + '<form class="card" style="padding:24px" onsubmit="return sendContact(event)"><h2 style="font-size:18px;margin:0 0 14px">Trimite-ne un mesaj</h2>'
+    '<section class="site-hero" style="padding:52px 30px"><span class="eyebrow" style="background:rgba(255,255,255,.16);color:#fff">Contact</span><h1 style="font-size:34px;margin:0">Hai să vorbim</h1><p style="max-width:640px;margin:12px auto 0">Scrie-ne și îți facem o ofertă de depozitare adaptată mărfii tale.</p></section>'
+    + '<section style="padding:38px 0"><div class="grid" style="grid-template-columns:1fr 1.1fr;gap:26px">'
+    + '<div class="card" style="padding:26px"><span class="eyebrow">Date de contact</span><h2 style="font-size:18px;margin:6px 0 20px">Ne găsești aici</h2><div style="display:grid;gap:18px">'
+    + crow("contact","Email",'<a href="mailto:contact@depozit.ro" style="color:inherit;text-decoration:none">contact@depozit.ro</a>')
+    + crow("phone","Telefon",'<a href="tel:+40700000000" style="color:inherit;text-decoration:none">0700 000 000</a>')
+    + crow("pin","Adresă","Adresă depozit (de completat)")
+    + crow("clock","Program","Luni–Vineri, 08:00–18:00")
+    + '</div><div class="sfoot-social" style="margin-top:24px"><a href="#" onclick="return false">'+svgIcon("facebook")+'</a><a href="#" onclick="return false">'+svgIcon("instagram")+'</a><a href="#" onclick="return false">'+svgIcon("linkedin")+'</a></div></div>'
+    + '<form class="card" style="padding:26px" onsubmit="return sendContact(event)"><span class="eyebrow">Formular</span><h2 style="font-size:18px;margin:6px 0 18px">Trimite-ne un mesaj</h2>'
     + field("Nume","ct_name","")+field("Email","ct_email","","","email")
-    + '<div class="field"><label>Mesaj</label><textarea id="ct_msg" rows="4"></textarea></div>'
+    + '<div class="field"><label>Mesaj</label><textarea id="ct_msg" rows="4" placeholder="Spune-ne ce marfă ai și de ce ai nevoie..."></textarea></div>'
     + '<button type="submit" style="width:100%">Trimite mesajul</button></form>'
     + '</div></section>');
 };
