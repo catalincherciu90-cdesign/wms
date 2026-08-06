@@ -86,6 +86,35 @@ export function renderUI() {
   .trust .ti svg{width:24px;height:24px}
   .trust b{display:block;font-size:14px;line-height:1.2}
   .trust small{font-size:12px;color:var(--muted)}
+  /* Secțiuni landing suplimentare */
+  .eyebrow{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);background:rgba(47,75,255,.09);padding:5px 13px;border-radius:999px;margin-bottom:12px}
+  .stat-strip{background:linear-gradient(135deg,#2f4bff 0%,#1e33c4 100%);border-radius:22px;color:#fff;display:grid;grid-template-columns:repeat(4,1fr);padding:34px 18px;margin:26px 0;box-shadow:0 16px 34px -12px rgba(47,75,255,.5)}
+  .stat-item{text-align:center;padding:6px 12px;border-right:1px solid rgba(255,255,255,.2)}
+  .stat-item:last-child{border-right:none}
+  .stat-num{font-size:34px;font-weight:800;line-height:1;letter-spacing:-.02em}
+  .stat-num span{font-size:19px;font-weight:700;opacity:.9}
+  .stat-lbl{margin-top:9px;font-size:12px;font-weight:500;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.03em}
+  .checkwrap{display:grid;grid-template-columns:1fr 1fr;gap:14px 28px}
+  .checkitem{display:flex;gap:11px;align-items:flex-start}
+  .checkitem .ci{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:#e8fff2;color:#16a34a;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  .checkitem .ci svg{width:15px;height:15px;stroke-width:2.6}
+  .checkitem b{display:block;font-size:14.5px;margin-bottom:2px}
+  .checkitem small{color:var(--muted);font-size:13px;line-height:1.5}
+  .lcard{transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+  .lcard:hover{transform:translateY(-4px);box-shadow:0 12px 24px -8px rgba(47,75,255,.18);border-color:rgba(47,75,255,.35)}
+  .icircle{width:46px;height:46px;border-radius:12px;background:rgba(47,75,255,.09);color:var(--brand);display:flex;align-items:center;justify-content:center}
+  .icircle svg{width:24px;height:24px}
+  .tcard{display:flex;flex-direction:column;gap:10px}
+  .tquote{font-size:40px;line-height:.6;color:var(--brand);opacity:.28;font-weight:800;height:20px}
+  .stars{color:#f59e0b;font-size:13px;letter-spacing:2px}
+  .faq{max-width:820px;margin:0 auto}
+  .faq-item{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;background:#fff}
+  .faq-q{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;font-weight:600;font-size:14.5px}
+  .faq-q .fqi{flex:0 0 auto;width:20px;height:20px;transition:transform .25s;color:var(--brand)}
+  .faq-item.open .fqi{transform:rotate(45deg)}
+  .faq-a{max-height:0;overflow:hidden;transition:max-height .3s ease;color:var(--muted);font-size:13.5px;line-height:1.6}
+  .faq-item.open .faq-a{max-height:360px}
+  .faq-a div{padding:0 18px 16px}
   /* Optimizări mobil (site public) */
   @media(max-width:640px){
     .site-hero{padding:40px 18px !important}
@@ -100,6 +129,10 @@ export function renderUI() {
     .fnav .fic svg{width:19px;height:19px}
     .trust{padding:13px 14px}
     .gallery img{height:160px}
+    .stat-strip{grid-template-columns:1fr 1fr;gap:22px 0;padding:26px 12px}
+    .stat-item:nth-child(2){border-right:none}
+    .stat-num{font-size:28px}
+    .checkwrap{grid-template-columns:1fr;gap:13px}
   }
   /* Telefoane foarte înguste */
   @media(max-width:380px){
@@ -231,7 +264,16 @@ function svgIcon(n){
     shield:'<path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3Z"/><path d="m9 12 2 2 4-4"/>',
     eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
     route:'<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h6a4 4 0 0 0 0-8H10a4 4 0 0 1 0-8h6"/>',
-    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    check:'<path d="M20 6 9 17l-5-5"/>',
+    lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    chart:'<rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="M8 15v-3M12 15V8M16 15v-5"/>',
+    headset:'<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/><path d="M20 19v1a2 2 0 0 1-2 2h-3"/>',
+    factory:'<path d="M3 20.5V11l5 3.5V11l5 3.5V11l5 3.5v6"/><path d="M3 20.5h18M6 20.5v-3M18 8.5V6M18 6h3"/>',
+    cart:'<circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2l2.2 11.2a1 1 0 0 0 1 .8h8.2a1 1 0 0 0 1-.8L20 7H6"/>',
+    boxes:'<rect x="3" y="9" width="8" height="8" rx="1"/><rect x="13" y="9" width="8" height="8" rx="1"/><path d="M5 9V6h6v3M15 9V6h4v3"/>',
+    globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>'
   }[n]||'';
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 }
@@ -333,7 +375,7 @@ window.renderLanding = function(){
     ["🔄","Recepție & expediere","Preluăm, depozităm și pregătim comenzile tale rapid și corect."],
     ["🔎","Portal online","Vezi în timp real, oricând, fiecare produs pe care îl ai la noi."]
   ].map(function(s){
-    return '<div class="card" style="padding:22px"><div style="font-size:30px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+s[1]+'</h3><div class="muted" style="font-size:13.5px;line-height:1.5">'+s[2]+'</div></div>';
+    return '<div class="card lcard" style="padding:22px"><div style="font-size:30px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+s[1]+'</h3><div class="muted" style="font-size:13.5px;line-height:1.5">'+s[2]+'</div></div>';
   }).join("");
   document.getElementById("root").innerHTML =
     '<div style="max-width:1080px;margin:0 auto;padding:0 20px">'
@@ -345,30 +387,71 @@ window.renderLanding = function(){
     + '<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:22px"><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Vizibilitate 24/7</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Trasabilitate completă</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Fără investiție în spațiu</span></div>'
     + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="siteGo(\\'contact\\')">Cere o ofertă</button></div>'
     + '</section>'
+    // bandă statistici
+    + '<section style="padding:6px 0 0"><div class="stat-strip">'
+    + statItem("12.000","m²","Spațiu de depozitare")
+    + statItem("8.500","+ paleți","Gestionați lunar")
+    + statItem("300","+ livrări","Expediate lunar")
+    + statItem("99,2","%","Comenzi la timp")
+    + '</div><p class="muted center" style="font-size:11.5px;margin:8px 0 0">* cifre orientative — se înlocuiesc cu datele reale WSD Logistics</p></section>'
     // trust icons sub hero
-    + '<section style="padding:8px 0 0"><div class="trustbar">'
+    + '<section style="padding:14px 0 0"><div class="trustbar">'
     + trustItem("shield","Marfă în siguranță","Depozit securizat")
     + trustItem("eye","Vizibilitate 24/7","Stoc online, în timp real")
     + trustItem("route","Trasabilitate completă","Fiecare mișcare, urmărită")
     + trustItem("clock","Livrare la timp","Transport rapid și corect")
     + '</div></section>'
     // servicii
-    + '<section style="padding:36px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 8px">Serviciile noastre</h2><p class="muted center" style="margin:0 auto 24px;max-width:560px">Tot ce-ți trebuie ca să-ți externalizezi logistica, într-un singur loc.</p>'
-    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+svc+'</div></section>'
+    + '<section style="padding:40px 0 34px;text-align:center"><span class="eyebrow">Servicii</span><h2 style="font-size:24px;margin:0 0 8px">Serviciile noastre</h2><p class="muted center" style="margin:0 auto 24px;max-width:560px">Tot ce-ți trebuie ca să-ți externalizezi logistica, într-un singur loc.</p>'
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));text-align:left">'+svc+'</div></section>'
+    // pentru cine
+    + '<section style="padding:16px 0 34px;text-align:center"><span class="eyebrow">Clienți</span><h2 style="font-size:24px;margin:0 0 8px">Pentru cine este WSD Logistics</h2><p class="muted center" style="margin:0 auto 24px;max-width:580px">Lucrăm cu companii care au nevoie de depozitare sigură și transport rapid, din diverse industrii.</p>'
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));text-align:left">'
+    + whoCard("cart","E-commerce & retail","Externalizează stocarea și livrarea comenzilor. Ne ocupăm de recepție, picking și expediere pentru fiecare comandă.")
+    + whoCard("boxes","Distribuitori & angro","Depozităm stocuri mari pe paleți și coordonăm livrările către rețeaua ta de clienți, cu vizibilitate completă.")
+    + whoCard("globe","Importatori & exportatori","Preluăm marfa din vamă sau port, o depozităm în siguranță și o pregătim pentru distribuție sau export.")
+    + whoCard("factory","Producători","Stocăm produsul finit și materiile prime, eliberând spațiu în fabrică pentru producție.")
+    + '</div></section>'
     // cum functioneaza
-    + '<section style="padding:34px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Cum funcționează</h2>'
+    + '<section style="padding:34px 0;text-align:center"><span class="eyebrow">Cum lucrăm</span><h2 style="font-size:24px;margin:0 0 24px">Cum funcționează</h2>'
+    + '<div style="text-align:left">'
     + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">'
     + step(1,"Ne trimiți marfa","O recepționăm și o depozităm pe locații dedicate.")
     + step(2,"O vezi online","Primești un cont și vezi fiecare produs, în timp real.")
     + step(3,"Pregătim comenzile","Facem picking-ul și verificăm marfa la cerere.")
     + step(4,"Transportăm & livrăm","Ducem marfa la destinație, rapid și în siguranță.")
-    + '</div></section>'
+    + '</div></div></section>'
+    // de ce WSD (checklist)
+    + '<section style="padding:20px 0 34px"><div style="text-align:center"><span class="eyebrow">Avantaje</span><h2 style="font-size:24px;margin:0 0 8px">De ce să alegi WSD Logistics</h2><p class="muted" style="margin:0 auto 26px;max-width:560px">Siguranță, transparență și profesionalism la fiecare pas.</p></div>'
+    + '<div class="card" style="padding:26px 28px"><div class="checkwrap">'
+    + checkItem("Marfă asigurată","Stocul tău este acoperit printr-o poliță de asigurare pe toată perioada depozitării.")
+    + checkItem("Contract clar, fără costuri ascunse","Tarife transparente, stabilite de la început — fără surprize la factură.")
+    + checkItem("Depozit securizat 24/7","Acces controlat, supraveghere video și pază permanentă.")
+    + checkItem("Raportare & acces online","Vezi stocul, comenzile și livrările în timp real, din portalul de client.")
+    + checkItem("Echipă cu experiență","Oameni specializați în depozitare și transport marfă, dedicați afacerii tale.")
+    + checkItem("Flexibilitate contractuală","Mărim sau reducem spațiul de depozitare după sezonalitatea afacerii tale.")
+    + '</div></div></section>'
     // galerie
-    + '<section style="padding:20px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 22px">Depozitul nostru</h2>'
+    + '<section style="padding:20px 0"><div style="text-align:center"><span class="eyebrow">Galerie</span><h2 style="font-size:24px;margin:0 0 22px">Depozitul nostru</h2></div>'
     + '<div class="gallery">'
     + '<figure><img src="/assets/login-bg.png" alt="Culoar depozit" loading="lazy"><figcaption>Rafturi & culoare</figcaption></figure>'
     + '<figure><img src="/assets/site-1.png" alt="Marfă pe paleți" loading="lazy"><figcaption>Marfă pe paleți</figcaption></figure>'
     + '<figure><img src="/assets/site-2.png" alt="Recepție marfă" loading="lazy"><figcaption>Recepție & expediere</figcaption></figure>'
+    + '</div></section>'
+    // testimoniale
+    + '<section style="padding:38px 0 30px;text-align:center"><span class="eyebrow">Testimoniale</span><h2 style="font-size:24px;margin:0 0 8px">Ce spun clienții noștri</h2><p class="muted center" style="margin:0 auto 24px;max-width:560px;font-size:12.5px">Exemple — de înlocuit cu recenzii reale ale clienților WSD Logistics înainte de lansare.</p>'
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));text-align:left">'
+    + testimonial("De când lucrăm cu WSD Logistics nu ne mai facem griji pentru stoc — vedem totul în timp real din portal, iar livrările ajung mereu la timp.","Manager E-commerce")
+    + testimonial("Am redus semnificativ timpul de procesare a comenzilor de când am externalizat depozitarea. Comunicarea este rapidă și profesionistă.","Director Distribuție")
+    + testimonial("Ne-am mutat marfa la WSD fără nicio pauză în activitate. Echipa a fost implicată și organizată încă din prima zi.","Antreprenor")
+    + '</div></section>'
+    // FAQ
+    + '<section style="padding:20px 0 36px"><div style="text-align:center"><span class="eyebrow">FAQ</span><h2 style="font-size:24px;margin:0 0 24px">Întrebări frecvente</h2></div><div class="faq">'
+    + faqItem("Ce tip de marfă puteți depozita?","Depozităm marfă paletizată din majoritatea industriilor — retail, e-commerce, distribuție și producție. Pentru mărfuri cu cerințe speciale (refrigerare, produse periculoase etc.) contactează-ne pentru a verifica disponibilitatea.")
+    + faqItem("Cum văd stocul meu în timp real?","Primești acces la portalul online de client, unde urmărești stocul, comenzile și livrările 24/7, de pe orice dispozitiv.")
+    + faqItem("Care este durata minimă de contractare?","Ne adaptăm nevoilor tale — oferim atât contracte pe termen lung, cât și soluții flexibile, pe termen scurt sau sezoniere.")
+    + faqItem("Este marfa mea asigurată în depozit?","Da, marfa depozitată este acoperită printr-o poliță de asigurare pe toată durata contractului.")
+    + faqItem("Cum încep colaborarea cu WSD Logistics?","Completezi formularul de ofertă, te contactăm pentru detalii despre volumul și tipul mărfii, apoi stabilim împreună condițiile contractuale și data de start.")
     + '</div></section>'
     // contact
     + '<section class="card" style="padding:34px;margin:30px 0;text-align:center">'
@@ -379,8 +462,13 @@ window.renderLanding = function(){
     + '</div>';
 };
 function step(n,t,d){
-  return '<div class="card" style="padding:20px"><div class="pill" style="background:var(--brand);color:#fff;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:14px">'+n+'</div><h3 style="margin:10px 0 6px;font-size:15px">'+esc(t)+'</h3><div class="muted" style="font-size:13px;line-height:1.5">'+esc(d)+'</div></div>';
+  return '<div class="card lcard" style="padding:20px"><div class="pill" style="background:var(--brand);color:#fff;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:14px">'+n+'</div><h3 style="margin:10px 0 6px;font-size:15px">'+esc(t)+'</h3><div class="muted" style="font-size:13px;line-height:1.5">'+esc(d)+'</div></div>';
 }
+function statItem(num,suf,lbl){ return '<div class="stat-item"><div class="stat-num">'+esc(num)+(suf?'<span> '+esc(suf)+'</span>':'')+'</div><div class="stat-lbl">'+esc(lbl)+'</div></div>'; }
+function whoCard(ic,t,d){ return '<div class="card lcard" style="padding:22px"><div class="icircle">'+svgIcon(ic)+'</div><h3 style="margin:14px 0 6px;font-size:15.5px">'+esc(t)+'</h3><div class="muted" style="font-size:13.5px;line-height:1.55">'+esc(d)+'</div></div>'; }
+function checkItem(t,d){ return '<div class="checkitem"><span class="ci">'+svgIcon("check")+'</span><div><b>'+esc(t)+'</b><small>'+esc(d)+'</small></div></div>'; }
+function testimonial(q,role){ return '<div class="card lcard tcard" style="padding:22px"><div class="tquote">&#8220;</div><div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p style="font-size:13.8px;line-height:1.6;font-style:italic;margin:0;color:#374151">'+esc(q)+'</p><div style="margin-top:auto;padding-top:8px"><b style="font-size:13.5px">'+esc(role)+'</b><div class="muted" style="font-size:11.5px;font-style:italic">client exemplu</div></div></div>'; }
+function faqItem(q,a){ return '<div class="faq-item"><div class="faq-q" onclick="this.parentNode.classList.toggle(\\'open\\')"><span>'+esc(q)+'</span><span class="fqi">'+svgIcon("plus")+'</span></div><div class="faq-a"><div>'+esc(a)+'</div></div></div>'; }
 
 /* ---------------- Portal client ---------------- */
 var pview = "stock";
