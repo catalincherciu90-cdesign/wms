@@ -115,6 +115,22 @@ export function renderUI() {
   .faq-a{max-height:0;overflow:hidden;transition:max-height .3s ease;color:var(--muted);font-size:13.5px;line-height:1.6}
   .faq-item.open .faq-a{max-height:360px}
   .faq-a div{padding:0 18px 16px}
+  /* Footer site */
+  .sfooter{margin-top:44px;border-top:1px solid var(--border);padding:40px 0 0}
+  .sfooter-grid{display:grid;grid-template-columns:1.6fr 1fr 1.1fr 1.3fr;gap:30px}
+  .sfooter h4{font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 14px;color:var(--muted);font-weight:700}
+  .sfooter a{display:block;color:var(--text);text-decoration:none;font-size:13.5px;padding:4px 0;cursor:pointer}
+  .sfooter a:hover{color:var(--brand)}
+  .sfooter img{height:34px;display:block}
+  .sfooter .fdesc{font-size:13px;color:var(--muted);line-height:1.6;max-width:290px;margin:14px 0 0}
+  .sfoot-social{display:flex;gap:10px;margin-top:16px}
+  .sfoot-social a{width:34px;height:34px;border:1px solid var(--border);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);padding:0}
+  .sfoot-social a:hover{color:var(--brand);border-color:var(--brand)}
+  .sfoot-social svg{width:17px;height:17px}
+  .sfoot-contact{font-size:13.5px;color:var(--muted);line-height:1.55}
+  .sfoot-contact a{color:var(--muted);padding:5px 0}
+  .sfoot-bottom{border-top:1px solid var(--border);margin-top:30px;padding:16px 0 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+  .sfoot-bottom a{color:var(--brand);cursor:pointer;text-decoration:none;font-weight:600}
   /* Optimizări mobil (site public) */
   @media(max-width:640px){
     .site-hero{padding:40px 18px !important}
@@ -133,6 +149,8 @@ export function renderUI() {
     .stat-item:nth-child(2){border-right:none}
     .stat-num{font-size:28px}
     .checkwrap{grid-template-columns:1fr;gap:13px}
+    .sfooter-grid{grid-template-columns:1fr 1fr;gap:26px 20px}
+    .sfoot-bottom{flex-direction:column;align-items:flex-start;gap:8px}
   }
   /* Telefoane foarte înguste */
   @media(max-width:380px){
@@ -273,7 +291,12 @@ function svgIcon(n){
     cart:'<circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2l2.2 11.2a1 1 0 0 0 1 .8h8.2a1 1 0 0 0 1-.8L20 7H6"/>',
     boxes:'<rect x="3" y="9" width="8" height="8" rx="1"/><rect x="13" y="9" width="8" height="8" rx="1"/><path d="M5 9V6h6v3M15 9V6h4v3"/>',
     globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/>',
-    plus:'<path d="M12 5v14M5 12h14"/>'
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    phone:'<path d="M4 5c0 8.3 6.7 15 15 15v-3.5l-4-1.5-2 2a12 12 0 0 1-5-5l2-2L8.5 5H4Z"/>',
+    pin:'<path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+    facebook:'<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M15 8h-2a2 2 0 0 0-2 2v8M9 13h5"/>',
+    instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1"/>',
+    linkedin:'<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 10v7M7 7v.01M11 17v-4a2 2 0 0 1 4 0v4M11 17v-7"/>'
   }[n]||'';
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 }
@@ -287,7 +310,24 @@ function siteHeader(active){
     +'</nav></div></div>';
 }
 function siteFooter(){
-  return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© WSD Logistics — Depozitare & Transport Marfă · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
+  var lnk=function(p,t){ return '<a onclick="siteGo(\\''+p+'\\')">'+esc(t)+'</a>'; };
+  var soc=function(ic){ return '<a href="#" onclick="return false" title="'+ic+'">'+svgIcon(ic)+'</a>'; };
+  return '<footer class="sfooter">'
+    +'<div class="sfooter-grid">'
+    +'<div><img src="/assets/logo.png" alt="WSD Logistics">'
+      +'<p class="fdesc">Depozitare securizată și transport marfă pentru afacerea ta. Tu vinzi — de restul ne ocupăm noi.</p>'
+      +'<div class="sfoot-social">'+soc("facebook")+soc("instagram")+soc("linkedin")+'</div></div>'
+    +'<div><h4>Navigare</h4>'+lnk("home","Acasă")+lnk("about","Despre noi")+lnk("services","Servicii")+lnk("contact","Contact")+'</div>'
+    +'<div><h4>Servicii</h4>'+lnk("services","Depozitare pe paleți")+lnk("services","Transport marfă")+lnk("services","Recepție & expediere")+'<a onclick="renderLogin()">Portal client</a></div>'
+    +'<div><h4>Contact</h4><div class="sfoot-contact">'
+      +'<a href="mailto:contact@depozit.ro">contact@depozit.ro</a>'
+      +'<a href="tel:0700000000">0700 000 000</a>'
+      +'<div style="padding:5px 0">Adresă de completat</div>'
+      +'<div style="padding:5px 0">Luni–Vineri, 09:00–18:00</div>'
+    +'</div></div>'
+    +'</div>'
+    +'<div class="sfoot-bottom"><span>© '+new Date().getFullYear()+' WSD Logistics — Depozitare & Transport Marfă. Toate drepturile rezervate.</span><a onclick="renderLogin()">Autentificare client</a></div>'
+    +'</footer>';
 }
 function sitePage(active, content){
   document.getElementById("root").innerHTML='<div style="max-width:1080px;margin:0 auto;padding:0 20px">'+siteHeader(active)+content+siteFooter()+'</div>';
