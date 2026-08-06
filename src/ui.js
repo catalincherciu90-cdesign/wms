@@ -177,7 +177,77 @@ window.doLogin = function(e){
   return false;
 };
 
-/* ---------------- Site de prezentare (public) ---------------- */
+/* ---------------- Site de prezentare (public, multi-pagină) ---------------- */
+function siteHeader(active){
+  var links=[["home","Acasă"],["about","Despre noi"],["services","Servicii"],["contact","Contact"]];
+  var nav=links.map(function(l){ return '<a href="#" onclick="siteGo(\\''+l[0]+'\\');return false" style="font-weight:'+(active===l[0]?'700':'500')+';color:'+(active===l[0]?'var(--brand)':'var(--text)')+'">'+l[1]+'</a>'; }).join('');
+  return '<header style="display:flex;justify-content:space-between;align-items:center;padding:18px 0;gap:16px;flex-wrap:wrap">'
+    +'<div class="logo" style="font-size:22px;cursor:pointer" onclick="siteGo(\\'home\\')">📦 Depozit</div>'
+    +'<nav class="row" style="gap:20px;align-items:center;flex-wrap:wrap">'+nav+'<button onclick="renderLogin()">Autentificare client</button></nav></header>';
+}
+function siteFooter(){
+  return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© Depozit — servicii de depozitare & logistică · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
+}
+function sitePage(active, content){
+  document.getElementById("root").innerHTML='<div style="max-width:1080px;margin:0 auto;padding:0 20px">'+siteHeader(active)+content+siteFooter()+'</div>';
+  window.scrollTo(0,0);
+}
+window.siteGo = function(p){ if(p==="about") renderAbout(); else if(p==="services") renderServices(); else if(p==="contact") renderContact(); else renderLanding(); };
+function valueCard(ic,t,d){ return '<div class="card" style="padding:20px"><div style="font-size:26px">'+ic+'</div><h3 style="margin:8px 0 5px;font-size:15px">'+esc(t)+'</h3><div class="muted" style="font-size:13px;line-height:1.5">'+esc(d)+'</div></div>'; }
+
+window.renderAbout = function(){
+  sitePage("about",
+    '<section class="site-hero" style="padding:52px 30px"><h1 style="font-size:34px;margin:0">Despre noi</h1><p style="max-width:640px;margin:12px auto 0">Partenerul tău de depozitare și logistică.</p></section>'
+    + '<section style="padding:34px 0"><div class="grid" style="grid-template-columns:1.2fr 1fr;gap:26px;align-items:center">'
+    + '<div><h2 style="font-size:24px;margin:0 0 12px">Cine suntem</h2><p class="muted" style="line-height:1.7;font-size:15px">Oferim servicii complete de depozitare pentru companii: recepționăm marfa, o depozităm pe paleți în locații dedicate și o expediem la cerere. Fiecare client are acces la un portal online unde își vede stocul în timp real.</p><p class="muted" style="line-height:1.7;font-size:15px">Punem accent pe siguranță, ordine și transparență — știi mereu ce marfă ai la noi și unde este.</p></div>'
+    + '<figure style="margin:0;border-radius:14px;overflow:hidden;box-shadow:var(--shadow)"><img src="/assets/site-1.png" style="width:100%;display:block" alt="Depozit" loading="lazy"></figure>'
+    + '</div></section>'
+    + '<section style="padding:20px 0"><h2 style="text-align:center;font-size:22px;margin:0 0 22px">De ce noi</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">'
+    + valueCard("🛡️","Siguranță","Spații securizate, marfă gestionată cu grijă.")
+    + valueCard("🔎","Transparență","Vezi online, oricând, fiecare produs al tău.")
+    + valueCard("⚡","Rapiditate","Recepție și expediere fără întârzieri.")
+    + valueCard("🤝","Parteneriat","Ne adaptăm nevoilor afacerii tale.")
+    + '</div></section>');
+};
+window.renderServices = function(){
+  var svc=[
+    ["📦","Depozitare pe paleți","Locații dedicate pe rafturi și zone; fiecare palet e urmărit individual."],
+    ["⬇️","Recepție marfă","Preluăm și verificăm marfa la sosire, o înregistrăm și o depozităm rapid."],
+    ["⬆️","Expediere & picking","Pregătim și expediem comenzile tale la cerere, corect și la timp."],
+    ["🔎","Portal client","Cont online cu stocul tău pe locații și toate mișcările mărfii."],
+    ["📊","Rapoarte","Stocuri, mișcări și export — transparență totală."],
+    ["🏷️","Coduri de bare","Identificare rapidă a produselor prin scanare (EAN/QR)."]
+  ].map(function(s){ return '<div class="card" style="padding:24px"><div style="font-size:28px">'+s[0]+'</div><h3 style="margin:10px 0 6px;font-size:16px">'+esc(s[1])+'</h3><div class="muted" style="font-size:13.5px;line-height:1.55">'+esc(s[2])+'</div></div>'; }).join("");
+  sitePage("services",
+    '<section class="site-hero" style="padding:52px 30px"><h1 style="font-size:34px;margin:0">Serviciile noastre</h1><p style="max-width:640px;margin:12px auto 0">Depozitare, logistică și vizibilitate online — tot ce-ți trebuie.</p></section>'
+    + '<section style="padding:34px 0"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">'+svc+'</div></section>'
+    + '<section style="padding:6px 0 34px;text-align:center"><button onclick="siteGo(\\'contact\\')" style="padding:12px 26px">Cere o ofertă</button></section>');
+};
+window.renderContact = function(){
+  sitePage("contact",
+    '<section class="site-hero" style="padding:52px 30px"><h1 style="font-size:34px;margin:0">Contact</h1><p style="max-width:640px;margin:12px auto 0">Scrie-ne și îți facem o ofertă de depozitare.</p></section>'
+    + '<section style="padding:34px 0"><div class="grid" style="grid-template-columns:1fr 1.1fr;gap:26px">'
+    + '<div class="card" style="padding:24px"><h2 style="font-size:18px;margin:0 0 14px">Date de contact</h2><div style="display:grid;gap:12px;font-size:15px">'
+    + '<div>✉️ <a href="mailto:contact@depozit.ro">contact@depozit.ro</a></div>'
+    + '<div>📞 <a href="tel:+40700000000">0700 000 000</a></div>'
+    + '<div>📍 Adresă depozit (de completat)</div>'
+    + '<div>🕒 Luni–Vineri, 08:00–18:00</div>'
+    + '</div></div>'
+    + '<form class="card" style="padding:24px" onsubmit="return sendContact(event)"><h2 style="font-size:18px;margin:0 0 14px">Trimite-ne un mesaj</h2>'
+    + field("Nume","ct_name","")+field("Email","ct_email","","","email")
+    + '<div class="field"><label>Mesaj</label><textarea id="ct_msg" rows="4"></textarea></div>'
+    + '<button type="submit" style="width:100%">Trimite mesajul</button></form>'
+    + '</div></section>');
+};
+window.sendContact = function(e){
+  e.preventDefault();
+  var n=el("ct_name").value, em=el("ct_email").value, msg=el("ct_msg").value;
+  var subject=encodeURIComponent("Cerere depozitare - "+n);
+  var body=encodeURIComponent("Nume: "+n+"\\nEmail: "+em+"\\n\\n"+msg);
+  window.location.href="mailto:contact@depozit.ro?subject="+subject+"&body="+body;
+  return false;
+};
+
 window.renderLanding = function(){
   var svc = [
     ["📦","Depozitare pe paleți","Spațiu securizat, climatizat, cu locații dedicate pentru marfa ta."],
@@ -189,15 +259,12 @@ window.renderLanding = function(){
   }).join("");
   document.getElementById("root").innerHTML =
     '<div style="max-width:1080px;margin:0 auto;padding:0 20px">'
-    // header
-    + '<header style="display:flex;justify-content:space-between;align-items:center;padding:18px 0">'
-    + '<div class="logo" style="font-size:22px">📦 Depozit</div>'
-    + '<button onclick="renderLogin()">Autentificare client</button></header>'
+    + siteHeader("home")
     // hero (cu poză de fundal)
     + '<section class="site-hero">'
     + '<h1 style="font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & logistică<br>pentru afacerea ta</h1>'
     + '<p style="font-size:17px;max-width:620px;margin:0 auto 26px;line-height:1.6">Îți depozităm marfa în siguranță și îți dăm acces online la stocul tău, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
-    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="document.getElementById(\\'contact\\').scrollIntoView({behavior:\\'smooth\\'})">Contactează-ne</button></div>'
+    + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="siteGo(\\'contact\\')">Contactează-ne</button></div>'
     + '</section>'
     // servicii
     + '<section style="padding:30px 0"><h2 style="text-align:center;font-size:24px;margin:0 0 24px">Serviciile noastre</h2>'
@@ -221,8 +288,7 @@ window.renderLanding = function(){
     + '<h2 style="font-size:22px;margin:0 0 10px">Vrei să lucrezi cu noi?</h2>'
     + '<p class="muted" style="margin:0 0 16px">Scrie-ne și îți facem o ofertă de depozitare.</p>'
     + '<div class="row" style="justify-content:center;gap:24px;flex-wrap:wrap"><div>✉️ <a href="mailto:contact@depozit.ro">contact@depozit.ro</a></div><div>📞 <a href="tel:+40700000000">0700 000 000</a></div></div></section>'
-    // footer
-    + '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© Depozit — servicii de depozitare & logistică · <a href="#" onclick="renderLogin();return false">Autentificare</a></footer>'
+    + siteFooter()
     + '</div>';
 };
 function step(n,t,d){
