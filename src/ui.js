@@ -47,7 +47,7 @@ export function renderUI() {
   /* Login */
   #login{min-height:100vh;display:grid;grid-template-columns:1.1fr .9fr}
   .login-hero{position:relative;display:flex;align-items:center;padding:48px;color:#fff;overflow:hidden;
-    background:linear-gradient(130deg, rgba(9,20,34,.90) 0%, rgba(20,55,130,.78) 55%, rgba(47,109,246,.62) 100%), url('/assets/login-bg.jpg') center/cover no-repeat, #0b1a2b;}
+    background:linear-gradient(130deg, rgba(9,20,34,.86) 0%, rgba(13,35,80,.62) 55%, rgba(24,52,110,.40) 100%), url('/assets/login-bg.png') center/cover no-repeat, #0b1a2b;}
   .login-hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:38px 38px;opacity:.5;pointer-events:none}
   .login-hero-inner{position:relative;max-width:460px;z-index:1}
   .login-hero h1{font-size:34px;line-height:1.15;margin:16px 0 12px;letter-spacing:-.02em;color:#fff}

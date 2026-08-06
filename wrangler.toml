@@ -19,6 +19,12 @@ type = "Text"
 globs = ["**/vendor/*.txt"]
 fallthrough = true
 
+# Imagini vendorizate importate ca binar (ex: fundal login)
+[[rules]]
+type = "Data"
+globs = ["**/vendor/*.png"]
+fallthrough = true
+
 # JWT_SECRET se setează ca secret, NU aici:
 #   wrangler secret put JWT_SECRET
 # Pentru dev local există un fallback în cod.
