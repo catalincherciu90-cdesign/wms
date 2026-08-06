@@ -65,18 +65,23 @@ export function renderUI() {
   .gallery figure{margin:0;border-radius:12px;overflow:hidden;position:relative;box-shadow:var(--shadow)}
   .gallery img{width:100%;height:190px;object-fit:cover;display:block}
   .gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent, rgba(0,0,0,.65))}
-  /* Navbar flotant (site public) */
-  .fbar{display:flex;justify-content:space-between;align-items:center;padding:16px 0;gap:14px;flex-wrap:wrap}
-  .fnav-band{background:#e7eafb;border-radius:26px;padding:32px 14px 14px;display:inline-flex;justify-content:center}
-  @media(max-width:820px){ .fbar{justify-content:center} }
-  .fnav{display:flex;gap:4px;background:#fff;border-radius:44px;box-shadow:0 10px 26px rgba(20,30,60,.10),0 2px 8px rgba(20,30,60,.06);padding:10px 12px;width:fit-content;max-width:100%}
-  .fnav a{display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 16px;color:var(--muted);font-weight:600;font-size:12.5px;text-decoration:none;cursor:pointer}
-  .fnav .fic{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;background:transparent;transition:transform .28s cubic-bezier(.34,1.56,.64,1),background .25s,color .25s,box-shadow .25s}
-  .fnav .flbl{transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
-  .fnav a.active{color:var(--brand)}
-  .fnav a.active .fic{transform:translateY(-34px);background:#fff;color:var(--brand);box-shadow:0 0 0 8px #e7eafb,0 12px 22px rgba(20,30,60,.18)}
-  .fnav a.active .flbl{transform:translateY(-10px)}
-  @media(max-width:560px){ .fnav a{padding:6px 9px;font-size:11px} .fnav .fic{width:40px;height:40px;font-size:17px} .fnav a.active .fic{transform:translateY(-30px)} }
+  /* Navbar flotant (site public) — logo + iconițe SVG + buton login integrate */
+  .fnav-wrap{display:flex;justify-content:center;padding:6px 0 0}
+  .fnav-band{background:#e7eafb;border-radius:30px;padding:32px 16px 16px;display:inline-flex}
+  .fnav{display:flex;align-items:center;gap:2px;background:#fff;border-radius:46px;box-shadow:0 10px 26px rgba(20,30,60,.10),0 2px 8px rgba(20,30,60,.06);padding:9px 10px;max-width:100%}
+  .fnav-logo{display:flex;align-items:center;padding:0 12px 0 8px;margin-right:4px;border-right:1px solid var(--border);cursor:pointer}
+  .fnav-logo img{height:30px;display:block}
+  .fitem{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 14px;color:var(--muted);font-weight:600;font-size:12px;text-decoration:none;cursor:pointer}
+  .fitem .fic{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;transition:transform .28s cubic-bezier(.34,1.56,.64,1),background .25s,color .25s,box-shadow .25s}
+  .fitem .fic svg{width:22px;height:22px}
+  .fitem .flbl{transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
+  .fitem.active{color:var(--brand)}
+  .fitem.active .fic{transform:translateY(-34px);background:#fff;color:var(--brand);box-shadow:0 0 0 8px #e7eafb,0 12px 22px rgba(20,30,60,.18)}
+  .fitem.active .flbl{transform:translateY(-10px)}
+  .flogin{display:flex;align-items:center;gap:8px;background:var(--brand);color:#fff;border-radius:30px;padding:11px 18px;font-weight:600;font-size:13px;cursor:pointer;margin-left:6px}
+  .flogin svg{width:18px;height:18px}
+  .flogin:hover{background:var(--brand-2)}
+  @media(max-width:720px){ .fitem .flbl,.flogin span{display:none} .fnav-logo img{height:26px} .fitem{padding:6px 10px} .flogin{padding:11px 13px} .fitem .fic{width:40px;height:40px} .fitem.active .fic{transform:translateY(-30px)} }
   .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
   .logo b{color:var(--brand)}
   /* App shell */
@@ -190,13 +195,24 @@ window.doLogin = function(e){
 };
 
 /* ---------------- Site de prezentare (public, multi-pagină) ---------------- */
+function svgIcon(n){
+  var p={
+    home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+    about:'<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 8h.01M15 8h.01M9 12h.01M15 12h.01M9 16h6"/>',
+    services:'<path d="m3 7 9-4 9 4v10l-9 4-9-4V7Z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+    contact:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    login:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>'
+  }[n]||'';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+}
 function siteHeader(active){
-  var items=[["home","Acasă","🏠"],["about","Despre noi","🏢"],["services","Servicii","📦"],["contact","Contact","✉️"]];
-  var nav=items.map(function(it){ return '<a class="'+(active===it[0]?'active':'')+'" onclick="siteGo(\\''+it[0]+'\\');return false"><span class="fic">'+it[2]+'</span><span class="flbl">'+esc(it[1])+'</span></a>'; }).join('');
-  return '<div class="fbar">'
-    +'<div style="cursor:pointer" onclick="siteGo(\\'home\\')"><img src="/assets/logo.png" alt="WSD Logistics" style="height:46px;display:block"></div>'
-    +'<div class="fnav-band"><nav class="fnav">'+nav+'</nav></div>'
-    +'<button onclick="renderLogin()">Autentificare client</button></div>';
+  var items=[["home","Acasă","home"],["about","Despre noi","about"],["services","Servicii","services"],["contact","Contact","contact"]];
+  var nav=items.map(function(it){ return '<a class="fitem'+(active===it[0]?' active':'')+'" onclick="siteGo(\\''+it[0]+'\\');return false"><span class="fic">'+svgIcon(it[2])+'</span><span class="flbl">'+esc(it[1])+'</span></a>'; }).join('');
+  return '<div class="fnav-wrap"><div class="fnav-band"><nav class="fnav">'
+    +'<div class="fnav-logo" onclick="siteGo(\\'home\\')"><img src="/assets/logo.png" alt="WSD Logistics"></div>'
+    + nav
+    +'<a class="flogin" onclick="renderLogin()">'+svgIcon("login")+'<span>Autentificare</span></a>'
+    +'</nav></div></div>';
 }
 function siteFooter(){
   return '<footer class="muted center" style="padding:24px 0;font-size:12.5px;border-top:1px solid var(--border)">© WSD Logistics — Depozitare & Transport Marfă · <a href="#" onclick="siteGo(\\'contact\\');return false">Contact</a> · <a href="#" onclick="renderLogin();return false">Autentificare client</a></footer>';
