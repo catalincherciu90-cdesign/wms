@@ -231,6 +231,8 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
+var APP_VERSION = "v9";
+try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
 
@@ -567,7 +569,7 @@ window.renderPortal = function(){
     + '<div class="muted" style="padding:0 12px 12px;font-size:12px">Portal client</div>'
     + nav
     + '<div style="flex:1"></div>'
-    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">client</span></div>'
+    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">client</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
     + '</aside><main id="main"></main></div>';
   pgo(pview);
@@ -759,7 +761,7 @@ function renderApp(){
     + nav
     + '<button class="ghost sm" style="margin:8px 6px 2px" onclick="scanCamera(handleScanResult)">📷 Scanează</button>'
     + '<div style="flex:1"></div>'
-    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span></div>'
+    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
     + '</aside><main id="main"></main></div>';
 }

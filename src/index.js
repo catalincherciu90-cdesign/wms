@@ -164,7 +164,11 @@ export default {
     // Health check
     if (path === '/health') return json({ ok: true, service: 'wms', ts: new Date().toISOString() });
 
-    // Interfața web (SPA) pentru orice altă cale
-    return new Response(renderUI(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    // Interfața web (SPA) pentru orice altă cale.
+    // no-store: browserul ia mereu versiunea nouă (evită UI vechi din cache).
+    return new Response(renderUI(), { headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    } });
   },
 };
