@@ -1290,6 +1290,8 @@ window.clientUsers = function(id){
     el("cu_list").innerHTML = d.users.length
       ? '<table><tbody>'+d.users.map(function(u){return '<tr><td>'+esc(u.name)+'</td><td class="muted">'+esc(u.email)+'</td><td>'+(u.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td></tr>';}).join("")+'</tbody></table>'
       : '<div class="muted">Niciun cont încă. Creează unul mai jos ca clientul să se poată loga.</div>';
+  }).catch(function(e){
+    el("cu_list").innerHTML = '<div class="pill bad" style="display:block;padding:8px 12px">Nu am putut încărca conturile: '+esc(e.message)+'</div>';
   });
 };
 
