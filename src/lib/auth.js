@@ -1,13 +1,29 @@
 // Autentificare: JWT (HS256) + hashing parole (PBKDF2) — Web Crypto, fără dependențe.
 
 const enc = new TextEncoder();
+const dec = new TextDecoder();
 
-function b64u(bytes) {
-  const s = typeof bytes === 'string' ? bytes : String.fromCharCode(...new Uint8Array(bytes));
+// Base64url din bytes — loop (fără spread, care poate arunca "Maximum call stack" pe array-uri mari).
+function bytesToB64u(input) {
+  const u8 = input instanceof Uint8Array ? input : new Uint8Array(input);
+  let s = '';
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
-function fromB64u(s) {
-  return atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+// Base64url dintr-un string, codat UTF-8 (btoa singur NU acceptă diacritice: ă â î ș ț).
+function b64u(bytes) {
+  return typeof bytes === 'string' ? bytesToB64u(enc.encode(bytes)) : bytesToB64u(bytes);
+}
+// Decodează base64url în bytes.
+function b64uToBytes(s) {
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+// Decodează base64url într-un string UTF-8 (pentru payload-ul JWT).
+function b64uToStr(s) {
+  return dec.decode(b64uToBytes(s));
 }
 
 export function jwtSecret(env) {
@@ -28,10 +44,10 @@ export async function verifyJWT(token, secret) {
   if (parts.length !== 3) throw new Error('Token invalid');
   const [h, b, s] = parts;
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-  const sigBytes = Uint8Array.from(fromB64u(s), (c) => c.charCodeAt(0));
+  const sigBytes = b64uToBytes(s);
   const ok = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(`${h}.${b}`));
   if (!ok) throw new Error('Semnătură invalidă');
-  const payload = JSON.parse(fromB64u(b));
+  const payload = JSON.parse(b64uToStr(b));
   if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error('Token expirat');
   return payload;
 }
@@ -47,7 +63,7 @@ export async function verifyPassword(password, stored) {
   try {
     const [algo, iter, saltB64, hashB64] = stored.split('$');
     if (algo !== 'pbkdf2') return false;
-    const salt = Uint8Array.from(fromB64u(saltB64), (c) => c.charCodeAt(0));
+    const salt = b64uToBytes(saltB64);
     const bits = await pbkdf2(password, salt, parseInt(iter, 10));
     return b64u(bits) === hashB64;
   } catch {
