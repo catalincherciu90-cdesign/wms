@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v12";
+var APP_VERSION = "v13";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -286,6 +286,7 @@ window.renderLogin = function(err){
     + (err?'<div class="pill bad" style="margin-bottom:12px">'+esc(err)+'</div>':'')
     + '<button style="width:100%" type="submit">Intră în cont</button>'
     + '<div class="center" style="margin-top:14px;font-size:12.5px"><a href="#" onclick="renderLanding();return false">← Înapoi la site</a></div>'
+    + '<div class="center muted" style="margin-top:10px;font-size:11px">versiune '+APP_VERSION+'</div>'
     + '</form></div></div>';
 };
 window.doLogin = function(e){

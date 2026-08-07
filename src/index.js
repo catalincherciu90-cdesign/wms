@@ -1,4 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
+const APP_VERSION = 'v13';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -164,7 +165,7 @@ export default {
     if (path === '/icon-512.png') return pwa.icon512();
 
     // Health check
-    if (path === '/health') return json({ ok: true, service: 'wms', ts: new Date().toISOString() });
+    if (path === '/health') return json({ ok: true, service: 'wms', version: APP_VERSION, ts: new Date().toISOString() });
 
     // Interfața web (SPA) pentru orice altă cale.
     // no-store: browserul ia mereu versiunea nouă (evită UI vechi din cache).
