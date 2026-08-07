@@ -128,6 +128,23 @@ export async function reassign(request, env, ctx, user) {
   return json({ ok: true, updated: res.meta.changes });
 }
 
+// Ștergere DEFINITIVĂ în masă (cu cascadă pe referințe).
+export async function bulkDelete(request, env, ctx, user) {
+  const b = await readJson(request);
+  const ids = Array.isArray(b?.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return error('Selectează cel puțin un produs', 400);
+  if (ids.length > 1000) return error('Prea multe produse selectate (max 1000)', 400);
+  const ph = ids.map(() => '?').join(',');
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM stock_movements WHERE product_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM inventory WHERE product_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM pallet_items WHERE product_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM order_lines WHERE product_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM products WHERE id IN (${ph})`).bind(...ids),
+  ]);
+  return json({ ok: true, deleted: ids.length });
+}
+
 export async function exportCsv(request, env) {
   const { results } = await env.DB.prepare('SELECT * FROM products ORDER BY name').all();
   const rows = [['id', 'sku', 'barcode', 'name', 'category', 'unit', 'reorder_point', 'active']];

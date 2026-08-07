@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v15";
+var APP_VERSION = "v16";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -895,6 +895,7 @@ function productsView(scope, title){
       + '<label style="margin:0">Mută la client:</label>'
       + '<select id="pbulk_client" style="max-width:220px"><option value="">— intern (al companiei) —</option></select>'
       + '<button class="sm" onclick="reassignSelected()">Mută</button>'
+      + (can("admin")?'<button class="danger sm" onclick="deleteSelected()">Șterge selectate</button>':'')
       + '<button class="ghost sm" onclick="pselClear()">Anulează selecția</button>'
       + '</div></div>'
     : '';
@@ -1041,6 +1042,19 @@ window.reassignSelected = function(){
       }).catch(function(e){ toast(e.message,"bad"); });
     });
   var sv=el("modalSave"); if(sv) sv.textContent="Da, mută";
+};
+window.deleteSelected = function(){
+  var ids=pselIds();
+  if(!ids.length){ toast("Selectează cel puțin un produs","bad"); return; }
+  modal("Confirmă ștergerea definitivă",
+    '<p>Sigur vrei să ștergi <b>definitiv</b> cele <b>'+ids.length+'</b> produse selectate?</p>'
+    +'<p class="pill bad" style="font-size:12.5px;display:block;padding:8px 10px">⚠️ Ștergere permanentă și ireversibilă. Se șterg și stocul, mișcările, liniile de comandă și prezența pe paleți ale acestor produse.</p>',
+    function(){
+      api("POST","/api/products/bulk-delete",{ ids:ids }).then(function(r){
+        closeModal(); toast("Am șters "+r.deleted+" produse"); loadProducts();
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge definitiv"; sv.className="danger"; }
 };
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
