@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v16";
+var APP_VERSION = "v17";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -557,6 +557,22 @@ function faqItem(q,a){ return '<div class="faq-item"><div class="faq-q" onclick=
 
 /* ---------------- Portal client ---------------- */
 var pview = "stock";
+var portalMe = null;
+function portalFirmHtml(){
+  var c = portalMe && portalMe.client;
+  if(!c) return '<div class="muted" style="font-size:12px">Portal client</div>';
+  var lines='';
+  if(c.cui) lines+='<div>CUI: '+esc(c.cui)+'</div>';
+  if(c.reg_com) lines+='<div>'+esc(c.reg_com)+'</div>';
+  if(c.address) lines+='<div>'+esc(c.address)+'</div>';
+  if(c.phone) lines+='<div>📞 '+esc(c.phone)+'</div>';
+  if(c.email) lines+='<div>✉️ '+esc(c.email)+'</div>';
+  return '<div class="card" style="padding:11px 12px;background:var(--panel-2)">'
+    +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">Contul firmei</div>'
+    +'<b style="font-size:13.5px;line-height:1.3;display:block">'+esc(c.name)+'</b>'
+    +(lines?'<div class="muted" style="font-size:11.5px;line-height:1.55;margin-top:4px">'+lines+'</div>':'')
+    +'</div>';
+}
 window.renderPortal = function(){
   var nav = [["stock","Stocul meu"],["pallets","Paleții mei"],["orders","Comenzile mele"],["movements","Mișcări"]].map(function(n){
     return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
@@ -566,14 +582,17 @@ window.renderPortal = function(){
     + '<div class="mtop"><button class="burger" onclick="toggleMenu()" aria-label="Meniu">'+svgIcon("menu")+'</button><img src="/assets/logo.png" alt="WSD Logistics"></div>'
     + '<div class="drawer-bg" onclick="closeMenu()"></div>'
     + '<aside>'
-    + '<div style="padding:10px 12px 6px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
-    + '<div class="muted" style="padding:0 12px 12px;font-size:12px">Portal client</div>'
+    + '<div style="padding:10px 12px 8px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
+    + '<div id="pfirm" style="padding:0 12px 12px">'+portalFirmHtml()+'</div>'
     + nav
     + '<div style="flex:1"></div>'
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">client</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
     + '</aside><main id="main"></main></div>';
   portalRender(pview);
+  if(!portalMe){
+    api("GET","/api/portal/me").then(function(d){ portalMe=d; var f=el("pfirm"); if(f) f.innerHTML=portalFirmHtml(); }).catch(function(){});
+  }
 };
 // pgo: schimbă vederea → re-randează shell-ul (care încarcă conținutul). FĂRĂ recursie.
 window.pgo = function(v){ pview=v; renderPortal(); };

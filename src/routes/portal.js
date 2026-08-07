@@ -2,7 +2,7 @@
 import { json, csv, error, readJson } from '../lib/http.js';
 
 export async function me(request, env, ctx, user) {
-  const client = await env.DB.prepare('SELECT id, name, email, phone FROM clients WHERE id = ?').bind(user.client_id).first();
+  const client = await env.DB.prepare('SELECT id, name, email, phone, cui, reg_com, address FROM clients WHERE id = ?').bind(user.client_id).first();
   return json({ client, user: { name: user.name, email: user.email } });
 }
 
