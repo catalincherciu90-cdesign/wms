@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v13";
+var APP_VERSION = "v14";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -573,9 +573,16 @@ window.renderPortal = function(){
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">client</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
     + '</aside><main id="main"></main></div>';
-  pgo(pview);
+  portalRender(pview);
 };
-window.pgo = function(v){ pview=v; renderPortal(); if(v==="movements") portalMovements(); else if(v==="pallets") portalPallets(); else if(v==="orders") portalOrders(); else portalStock(); };
+// pgo: schimbă vederea → re-randează shell-ul (care încarcă conținutul). FĂRĂ recursie.
+window.pgo = function(v){ pview=v; renderPortal(); };
+function portalRender(v){
+  if(v==="movements") portalMovements();
+  else if(v==="pallets") portalPallets();
+  else if(v==="orders") portalOrders();
+  else portalStock();
+}
 
 function portalPallets(){
   setMain(topbar("Paleții mei") + '<div id="ppal">…</div>');
