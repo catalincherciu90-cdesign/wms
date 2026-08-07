@@ -32,12 +32,39 @@ export async function update(request, env, ctx, user, params) {
   return json({ client });
 }
 
+// Ștergere client (firmă) — blocată dacă mai are marfă (produse/paleți), ca să nu orfanizăm stocul.
+export async function remove(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const client = await env.DB.prepare('SELECT id FROM clients WHERE id = ?').bind(id).first();
+  if (!client) return error('Client inexistent', 404);
+  const prod = await env.DB.prepare('SELECT COUNT(*) AS n FROM products WHERE client_id = ?').bind(id).first();
+  if (prod.n > 0) return error('Clientul are ' + prod.n + ' produse. Șterge sau reasignează întâi produsele.', 400);
+  const pal = await env.DB.prepare('SELECT COUNT(*) AS n FROM pallets WHERE client_id = ?').bind(id).first();
+  if (pal.n > 0) return error('Clientul are ' + pal.n + ' paleți. Golește/șterge întâi paleții.', 400);
+  // Ștergem comenzile (+liniile), conturile de portal, apoi clientul.
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM order_lines WHERE order_id IN (SELECT id FROM orders WHERE client_id = ?)').bind(id),
+    env.DB.prepare('DELETE FROM orders WHERE client_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM client_users WHERE client_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM clients WHERE id = ?').bind(id),
+  ]);
+  return json({ ok: true });
+}
+
 // Conturi de portal ale unui client
 export async function listUsers(request, env, ctx, user, params) {
   const { results } = await env.DB.prepare(
     'SELECT id, client_id, email, name, active, created_at FROM client_users WHERE client_id = ? ORDER BY name'
   ).bind(Number(params.id)).all();
   return json({ users: results });
+}
+
+export async function removeUser(request, env, ctx, user, params) {
+  const clientId = Number(params.id);
+  const userId = Number(params.userId);
+  const res = await env.DB.prepare('DELETE FROM client_users WHERE id = ? AND client_id = ?').bind(userId, clientId).run();
+  if (!res.meta.changes) return error('Cont inexistent', 404);
+  return json({ ok: true });
 }
 
 export async function createUser(request, env, ctx, user, params) {

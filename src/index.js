@@ -79,8 +79,10 @@ const routes = [
   ['GET', '/api/clients', clients.list, 'operator'],
   ['POST', '/api/clients', clients.create, 'admin'],
   ['PUT', '/api/clients/:id', clients.update, 'admin'],
+  ['DELETE', '/api/clients/:id', clients.remove, 'admin'],
   ['GET', '/api/clients/:id/users', clients.listUsers, 'admin'],
   ['POST', '/api/clients/:id/users', clients.createUser, 'admin'],
+  ['DELETE', '/api/clients/:id/users/:userId', clients.removeUser, 'admin'],
 
   // Paleți (staff)
   ['GET', '/api/pallets', pallets.list, 'viewer'],

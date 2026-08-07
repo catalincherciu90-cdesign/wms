@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v10";
+var APP_VERSION = "v11";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1256,7 +1256,7 @@ VIEWS.clients = function(){
       return '<tr><td><b>'+esc(c.name)+'</b>'+(c.address?('<div class="muted" style="font-size:11.5px">'+esc(c.address)+'</div>'):'')+'</td>'
         +'<td>'+fiscal+'</td><td>'+esc(c.email||"—")+'</td><td>'+esc(c.phone||"—")+'</td>'
         +'<td class="right">'+esc(c.product_count)+'</td><td class="right">'+esc(c.user_count)+'</td>'
-        +'<td class="right">'+(can("admin")?'<button class="ghost sm" onclick="clientUsers('+c.id+')">Conturi</button> <button class="ghost sm" onclick="clientForm('+c.id+')">Edit</button>':'')+'</td></tr>';
+        +'<td class="right">'+(can("admin")?'<button class="ghost sm" onclick="clientUsers('+c.id+')">Conturi</button> <button class="ghost sm" onclick="clientForm('+c.id+')">Edit</button> <button class="danger sm" onclick="deleteClient('+c.id+')">Șterge</button>':'')+'</td></tr>';
     }).join("");
     el("cln").innerHTML='<table><thead><tr><th>Client</th><th>CUI / Reg. Com.</th><th>Email</th><th>Telefon</th><th class="right">Produse</th><th class="right">Conturi</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun client</td></tr>')+'</tbody></table>';
   });
@@ -1277,6 +1277,17 @@ window.clientForm = function(id){
       pr.then(function(){ closeModal(); toast("Salvat"); go("clients"); }).catch(function(e){ toast(e.message,"bad"); });
     });
 };
+window.deleteClient = function(id){
+  var c=(cache.clients||[]).find(function(x){return x.id===id;});
+  var name=c?c.name:("#"+id);
+  modal("Confirmă ștergerea clientului",
+    '<p>Sigur vrei să ștergi <b>definitiv</b> clientul <b>'+esc(name)+'</b>?</p>'
+    +'<p class="pill bad" style="font-size:12.5px;display:block;padding:8px 10px">⚠️ Se șterg și conturile de portal și comenzile acestui client. Dacă mai are produse sau paleți în depozit, ștergerea e blocată — mută/șterge întâi marfa.</p>',
+    function(){
+      api("DELETE","/api/clients/"+id).then(function(){ closeModal(); toast("Client șters"); go("clients"); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge clientul"; sv.className="danger"; }
+};
 window.clientUsers = function(id){
   var c = cache.clients.find(function(x){return x.id===id;});
   modal("Conturi portal — "+esc(c?c.name:""),
@@ -1290,11 +1301,15 @@ window.clientUsers = function(id){
   el("modalSave").textContent="Creează cont";
   api("GET","/api/clients/"+id+"/users").then(function(d){
     el("cu_list").innerHTML = d.users.length
-      ? '<table><tbody>'+d.users.map(function(u){return '<tr><td>'+esc(u.name)+'</td><td class="muted">'+esc(u.email)+'</td><td>'+(u.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td></tr>';}).join("")+'</tbody></table>'
+      ? '<table><tbody>'+d.users.map(function(u){return '<tr><td>'+esc(u.name)+'</td><td class="muted">'+esc(u.email)+'</td><td>'+(u.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td><td class="right"><button class="danger sm" onclick="deleteClientUser('+id+','+u.id+')">Șterge</button></td></tr>';}).join("")+'</tbody></table>'
       : '<div class="muted">Niciun cont încă. Creează unul mai jos ca clientul să se poată loga.</div>';
   }).catch(function(e){
     el("cu_list").innerHTML = '<div class="pill bad" style="display:block;padding:8px 12px">Nu am putut încărca conturile: '+esc(e.message)+'</div>';
   });
+};
+window.deleteClientUser = function(clientId, userId){
+  if(!window.confirm("Sigur ștergi acest cont de portal? Persoana nu se va mai putea conecta.")) return;
+  api("DELETE","/api/clients/"+clientId+"/users/"+userId).then(function(){ toast("Cont șters"); clientUsers(clientId); }).catch(function(e){ toast(e.message,"bad"); });
 };
 
 /* ---------------- Parteneri ---------------- */
