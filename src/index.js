@@ -98,6 +98,9 @@ const routes = [
   ['GET', '/api/portal/pallets', portal.pallets, 'client'],
   ['GET', '/api/portal/movements', portal.movements, 'client'],
   ['GET', '/api/portal/export', portal.exportCsv, 'client'],
+  ['GET', '/api/portal/orders', portal.orders, 'client'],
+  ['POST', '/api/portal/orders', portal.orderCreate, 'client'],
+  ['GET', '/api/portal/orders/:id', portal.orderGet, 'client'],
 ];
 
 function match(routePath, actualPath) {

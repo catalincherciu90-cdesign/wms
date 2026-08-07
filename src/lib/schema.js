@@ -18,5 +18,20 @@ export async function ensureSchema(env) {
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN client_id INTEGER').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE locations ADD COLUMN capacity INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
 
+  // comenzi din portal client: proprietar + destinatar final + sursă
+  const orderCols = [
+    'client_id INTEGER',
+    "source TEXT",
+    'recipient_name TEXT',
+    'recipient_phone TEXT',
+    'recipient_address TEXT',
+    'recipient_city TEXT',
+    'recipient_county TEXT',
+    'recipient_postal TEXT',
+  ];
+  for (const col of orderCols) {
+    try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
+  }
+
   ready = true;
 }

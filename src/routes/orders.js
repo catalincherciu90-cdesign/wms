@@ -7,10 +7,10 @@ export async function list(request, env) {
   const type = url.searchParams.get('type');
   const status = url.searchParams.get('status');
   let sql = `
-    SELECT o.*, p.name AS partner_name,
+    SELECT o.*, p.name AS partner_name, c.name AS client_name,
            (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
            (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id) AS total_qty
-    FROM orders o LEFT JOIN partners p ON p.id = o.partner_id WHERE 1=1`;
+    FROM orders o LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN clients c ON c.id = o.client_id WHERE 1=1`;
   const binds = [];
   if (type === 'inbound' || type === 'outbound') { sql += ' AND o.type = ?'; binds.push(type); }
   if (status) { sql += ' AND o.status = ?'; binds.push(status); }
@@ -22,8 +22,8 @@ export async function list(request, env) {
 export async function get(request, env, ctx, user, params) {
   const id = Number(params.id);
   const order = await env.DB.prepare(`
-    SELECT o.*, p.name AS partner_name FROM orders o
-    LEFT JOIN partners p ON p.id = o.partner_id WHERE o.id = ?`).bind(id).first();
+    SELECT o.*, p.name AS partner_name, c.name AS client_name FROM orders o
+    LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN clients c ON c.id = o.client_id WHERE o.id = ?`).bind(id).first();
   if (!order) return error('Comandă inexistentă', 404);
   const { results: lines } = await env.DB.prepare(`
     SELECT ol.*, pr.sku, pr.name AS product_name, pr.unit

@@ -555,7 +555,7 @@ function faqItem(q,a){ return '<div class="faq-item"><div class="faq-q" onclick=
 /* ---------------- Portal client ---------------- */
 var pview = "stock";
 window.renderPortal = function(){
-  var nav = [["stock","Stocul meu"],["pallets","Paleții mei"],["movements","Mișcări"]].map(function(n){
+  var nav = [["stock","Stocul meu"],["pallets","Paleții mei"],["orders","Comenzile mele"],["movements","Mișcări"]].map(function(n){
     return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
   }).join("");
   document.getElementById("root").innerHTML =
@@ -572,7 +572,7 @@ window.renderPortal = function(){
     + '</aside><main id="main"></main></div>';
   pgo(pview);
 };
-window.pgo = function(v){ pview=v; renderPortal(); if(v==="movements") portalMovements(); else if(v==="pallets") portalPallets(); else portalStock(); };
+window.pgo = function(v){ pview=v; renderPortal(); if(v==="movements") portalMovements(); else if(v==="pallets") portalPallets(); else if(v==="orders") portalOrders(); else portalStock(); };
 
 function portalPallets(){
   setMain(topbar("Paleții mei") + '<div id="ppal">…</div>');
@@ -617,6 +617,113 @@ function portalMovements(){
     el("pmov").innerHTML='<table><thead><tr><th>Data</th><th>Tip</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio mișcare</td></tr>')+'</tbody></table>';
   });
 }
+
+/* ---- Comenzi de livrare (portal client) ---- */
+function porderStatusPill(s){
+  if(s==="completed") return '<span class="pill good">Expediată</span>';
+  if(s==="cancelled") return '<span class="pill bad">Anulată</span>';
+  if(s==="confirmed") return '<span class="pill warn">În așteptare</span>';
+  return '<span class="pill mut">Ciornă</span>';
+}
+function portalOrders(){
+  setMain(topbar("Comenzile mele", '<button onclick="portalOrderNew()">+ Comandă nouă</button>') + '<div class="card" id="pord">…</div>');
+  api("GET","/api/portal/orders").then(function(d){
+    var rows=(d.orders||[]).map(function(o){
+      return '<tr onclick="portalOrderView('+o.id+')" style="cursor:pointer">'
+        +'<td><b>'+esc(o.code)+'</b></td>'
+        +'<td class="muted">'+esc(String(o.created_at).slice(0,16))+'</td>'
+        +'<td>'+esc(o.recipient_name||"—")+(o.recipient_city?(' <span class="muted">· '+esc(o.recipient_city)+'</span>'):'')+'</td>'
+        +'<td class="right">'+esc(o.line_count)+' prod. / '+esc(o.total_qty)+' buc.</td>'
+        +'<td>'+porderStatusPill(o.status)+'</td></tr>';
+    }).join("");
+    el("pord").innerHTML='<table><thead><tr><th>Comandă</th><th>Data</th><th>Destinatar</th><th class="right">Conținut</th><th>Status</th></tr></thead><tbody>'
+      +(rows||'<tr><td colspan=5 class="muted center">Nicio comandă încă. Apasă «+ Comandă nouă» ca să trimiți o livrare.</td></tr>')+'</tbody></table>';
+  });
+}
+var porderLines = [];
+var pProducts = [];
+function portalOrderNew(){
+  porderLines = [];
+  setMain(topbar("Comandă nouă de livrare", '<button class="ghost" onclick="pgo(\\'orders\\')">← Înapoi</button>')
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start">'
+    + '<div class="card" style="padding:20px"><h2>Destinatar (clientul tău)</h2>'
+      + field("Nume / firmă destinatar","o_rname","")
+      + field("Telefon","o_rphone","")
+      + '<div class="field"><label>Adresă</label><textarea id="o_raddr" rows="2"></textarea></div>'
+      + '<div class="row"><div style="flex:1">'+field("Oraș","o_rcity","")+'</div><div style="flex:1">'+field("Județ","o_rcounty","")+'</div></div>'
+      + field("Cod poștal","o_rpostal","")
+      + '<div class="field"><label>Observații (opțional)</label><textarea id="o_note" rows="2" placeholder="Ex: livrare în intervalul 9-17, sună înainte..."></textarea></div>'
+    + '</div>'
+    + '<div class="card" style="padding:20px"><h2>Produse de livrat</h2>'
+      + '<div class="row" style="align-items:flex-end;gap:8px"><div style="flex:1"><label>Produs</label><select id="o_prod"><option>Se încarcă…</option></select></div>'
+      + '<div style="width:90px"><label>Cant.</label><input id="o_qty" type="number" min="1" value="1"></div>'
+      + '<button class="sm" onclick="porderAddLine()">Adaugă</button></div>'
+      + '<div id="o_lines" style="margin-top:14px"></div>'
+      + '<button style="width:100%;margin-top:14px" onclick="porderSubmit()">Trimite comanda</button>'
+    + '</div></div>');
+  porderRenderLines();
+  api("GET","/api/portal/products").then(function(d){
+    pProducts = d.products||[];
+    el("o_prod").innerHTML = pProducts.length
+      ? pProducts.map(function(p){ return '<option value="'+p.id+'">'+esc(p.name)+' (disponibil: '+esc(p.total)+' '+esc(p.unit||"")+')</option>'; }).join("")
+      : '<option value="">Nu ai produse în depozit</option>';
+  });
+}
+window.porderAddLine = function(){
+  var pid = Number(el("o_prod").value);
+  var qty = Number(el("o_qty").value);
+  if(!pid){ toast("Alege un produs","bad"); return; }
+  if(!(qty>0)){ toast("Cantitate invalidă","bad"); return; }
+  var p = pProducts.find(function(x){return x.id===pid;});
+  if(!p) return;
+  var ex = porderLines.find(function(l){return l.product_id===pid;});
+  if(ex){ ex.quantity += qty; } else { porderLines.push({product_id:pid, name:p.name, unit:p.unit, avail:p.total, quantity:qty}); }
+  el("o_qty").value=1;
+  porderRenderLines();
+};
+window.porderRemoveLine = function(i){ porderLines.splice(i,1); porderRenderLines(); };
+function porderRenderLines(){
+  var c=el("o_lines"); if(!c) return;
+  if(!porderLines.length){ c.innerHTML='<div class="muted" style="padding:8px 0">Niciun produs adăugat.</div>'; return; }
+  c.innerHTML='<table><thead><tr><th>Produs</th><th class="right">Cant.</th><th></th></tr></thead><tbody>'
+    + porderLines.map(function(l,i){
+        var over = (l.quantity>l.avail) ? ' <span class="pill bad" style="font-size:10px">peste stoc</span>' : '';
+        return '<tr><td>'+esc(l.name)+over+'</td><td class="right">'+esc(l.quantity)+' '+esc(l.unit||"")+'</td>'
+          +'<td class="right"><button class="danger sm" onclick="porderRemoveLine('+i+')">✕</button></td></tr>';
+      }).join("")
+    + '</tbody></table>';
+}
+window.porderSubmit = function(){
+  if(!porderLines.length){ toast("Adaugă cel puțin un produs","bad"); return; }
+  var name=el("o_rname").value.trim(), addr=el("o_raddr").value.trim();
+  if(!name){ toast("Completează numele destinatarului","bad"); return; }
+  if(!addr){ toast("Completează adresa destinatarului","bad"); return; }
+  var body={
+    recipient_name:name, recipient_phone:el("o_rphone").value.trim(), recipient_address:addr,
+    recipient_city:el("o_rcity").value.trim(), recipient_county:el("o_rcounty").value.trim(), recipient_postal:el("o_rpostal").value.trim(),
+    note:el("o_note").value.trim(),
+    lines:porderLines.map(function(l){return {product_id:l.product_id, quantity:l.quantity};})
+  };
+  api("POST","/api/portal/orders",body).then(function(){ toast("Comandă trimisă"); pgo("orders"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.portalOrderView = function(id){
+  api("GET","/api/portal/orders/"+id).then(function(d){
+    var o=d.order;
+    var lines=(d.lines||[]).map(function(l){return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+' '+esc(l.unit||"")+'</td></tr>';}).join("")
+      || '<tr><td colspan=3 class="muted center">Fără produse</td></tr>';
+    var addr=[o.recipient_address,o.recipient_city,o.recipient_county,o.recipient_postal].filter(Boolean).map(esc).join(", ");
+    modal("Comanda "+esc(o.code),
+      '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span>'+porderStatusPill(o.status)+'</span><span class="muted">'+esc(String(o.created_at).slice(0,16))+'</span></div>'
+      +'<div class="card" style="padding:12px;margin-bottom:12px"><b>'+esc(o.recipient_name||"—")+'</b>'
+        +(o.recipient_phone?'<div class="muted" style="font-size:13px">📞 '+esc(o.recipient_phone)+'</div>':'')
+        +(addr?'<div class="muted" style="font-size:13px">📍 '+addr+'</div>':'')
+        +(o.note?'<div style="font-size:13px;margin-top:6px">📝 '+esc(o.note)+'</div>':'')+'</div>'
+      +'<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+lines+'</tbody></table>',
+      function(){ closeModal(); });
+    el("modalSave").textContent="Închide";
+    var cancelBtn=el("modalBg").querySelector(".ghost"); if(cancelBtn) cancelBtn.style.display="none";
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
 
 /* ---------------- App shell ---------------- */
 var NAV = [
@@ -1227,8 +1334,11 @@ VIEWS.orders = function(){
 window.loadOrders = function(){
   api("GET","/api/orders"+(orderFilter?("?type="+orderFilter):"")).then(function(d){
     var rows=d.orders.map(function(o){
+      var who = o.source==="portal"
+        ? esc(o.client_name||"client")+(o.recipient_name?(' <span class="muted">→ '+esc(o.recipient_name)+'</span>'):'')+' <span class="pill warn" style="font-size:10px">portal</span>'
+        : esc(o.partner_name||"—");
       return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
-        +'<td>'+esc(o.partner_name||"—")+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
+        +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
         +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
         +'<td class="right"><button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
     }).join("");
@@ -1251,9 +1361,18 @@ window.orderDetail = function(id){
         + '<button class="ghost sm" onclick="orderStatus('+o.id+',\\'cancelled\\')">Anulează</button>'
         + '<button class="danger sm" onclick="deleteOrder('+o.id+')">Șterge</button></div>';
     }
+    var recip='';
+    if(o.source==="portal"){
+      var addr=[o.recipient_address,o.recipient_city,o.recipient_county,o.recipient_postal].filter(Boolean).map(esc).join(", ");
+      recip='<div class="card" style="padding:12px;margin-bottom:10px;background:var(--panel-2)"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Comandă din portal · '+esc(o.client_name||"client")+'</div>'
+        +'<b>Livrare către: '+esc(o.recipient_name||"—")+'</b>'
+        +(o.recipient_phone?'<div class="muted" style="font-size:13px">📞 '+esc(o.recipient_phone)+'</div>':'')
+        +(addr?'<div class="muted" style="font-size:13px">📍 '+addr+'</div>':'')
+        +(o.note?'<div style="font-size:13px;margin-top:6px">📝 '+esc(o.note)+'</div>':'')+'</div>';
+    }
     modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
       '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
-      + lines + actions, null);
+      + recip + lines + actions, null);
     // ascunde butonul default de salvare al modalului
     var sv=el("modalSave"); if(sv) sv.style.display="none";
     if(el("od_loc")){

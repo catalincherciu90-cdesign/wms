@@ -1,5 +1,5 @@
 // Portal client — fiecare endpoint returnează DOAR datele clientului autentificat.
-import { json, csv } from '../lib/http.js';
+import { json, csv, error, readJson } from '../lib/http.js';
 
 export async function me(request, env, ctx, user) {
   const client = await env.DB.prepare('SELECT id, name, email, phone FROM clients WHERE id = ?').bind(user.client_id).first();
@@ -72,6 +72,69 @@ export async function movements(request, env, ctx, user) {
     WHERE p.client_id = ?
     ORDER BY m.created_at DESC, m.id DESC LIMIT 200`).bind(user.client_id).all();
   return json({ movements: results });
+}
+
+// Comenzile de livrare create de client (către clienții lui)
+export async function orders(request, env, ctx, user) {
+  const { results } = await env.DB.prepare(`
+    SELECT o.id, o.code, o.status, o.note, o.created_at, o.completed_at,
+           o.recipient_name, o.recipient_city,
+           (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
+           (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id) AS total_qty
+    FROM orders o
+    WHERE o.client_id = ? AND o.type = 'outbound'
+    ORDER BY o.created_at DESC, o.id DESC`).bind(user.client_id).all();
+  return json({ orders: results });
+}
+
+export async function orderGet(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare(
+    "SELECT * FROM orders WHERE id = ? AND client_id = ? AND type = 'outbound'").bind(id, user.client_id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  const { results: lines } = await env.DB.prepare(`
+    SELECT ol.quantity, pr.sku, pr.name AS product_name, pr.unit
+    FROM order_lines ol JOIN products pr ON pr.id = ol.product_id
+    WHERE ol.order_id = ? ORDER BY ol.id`).bind(id).all();
+  return json({ order, lines });
+}
+
+export async function orderCreate(request, env, ctx, user) {
+  const b = await readJson(request);
+  const lines = Array.isArray(b?.lines) ? b.lines : [];
+  if (!lines.length) return error('Adaugă cel puțin un produs', 400);
+  if (!b?.recipient_name || !b?.recipient_address) return error('Numele și adresa destinatarului sunt obligatorii', 400);
+  for (const l of lines) {
+    if (!l.product_id || !(Number(l.quantity) > 0)) return error('Fiecare linie are produs și cantitate > 0', 400);
+  }
+
+  // toate produsele trebuie să aparțină clientului
+  const ids = lines.map((l) => Number(l.product_id));
+  const placeholders = ids.map(() => '?').join(',');
+  const { results: owned } = await env.DB.prepare(
+    `SELECT id FROM products WHERE id IN (${placeholders}) AND client_id = ?`).bind(...ids, user.client_id).all();
+  const ownedSet = new Set(owned.map((r) => r.id));
+  for (const id of ids) if (!ownedSet.has(id)) return error('Un produs nu îți aparține', 403);
+
+  const res = await env.DB.prepare(
+    `INSERT INTO orders (code, type, status, note, source, client_id,
+       recipient_name, recipient_phone, recipient_address, recipient_city, recipient_county, recipient_postal)
+     VALUES (?, 'outbound', 'confirmed', ?, 'portal', ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    'TMP', b.note || null, user.client_id,
+    b.recipient_name.trim(), b.recipient_phone || null, b.recipient_address.trim(),
+    b.recipient_city || null, b.recipient_county || null, b.recipient_postal || null
+  ).run();
+  const id = res.meta.last_row_id;
+  const code = 'OUT-' + String(id).padStart(5, '0');
+  await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
+
+  await env.DB.batch(lines.map((l) =>
+    env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity) VALUES (?, ?, ?)')
+      .bind(id, Number(l.product_id), Number(l.quantity))
+  ));
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  return json({ order }, 201);
 }
 
 export async function exportCsv(request, env, ctx, user) {
