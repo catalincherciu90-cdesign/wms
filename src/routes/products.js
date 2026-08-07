@@ -111,6 +111,23 @@ export async function importProducts(request, env, ctx, user) {
   return json({ created, skipped, total: b.products.length });
 }
 
+// Reasignează în masă proprietarul (clientul) mai multor produse.
+export async function reassign(request, env, ctx, user) {
+  const b = await readJson(request);
+  const ids = Array.isArray(b?.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return error('Selectează cel puțin un produs', 400);
+  if (ids.length > 1000) return error('Prea multe produse selectate (max 1000)', 400);
+  const clientId = b.client_id ? Number(b.client_id) : null;
+  if (clientId) {
+    const c = await env.DB.prepare('SELECT id FROM clients WHERE id = ?').bind(clientId).first();
+    if (!c) return error('Client inexistent', 404);
+  }
+  const placeholders = ids.map(() => '?').join(',');
+  const res = await env.DB.prepare(`UPDATE products SET client_id = ? WHERE id IN (${placeholders})`)
+    .bind(clientId, ...ids).run();
+  return json({ ok: true, updated: res.meta.changes });
+}
+
 export async function exportCsv(request, env) {
   const { results } = await env.DB.prepare('SELECT * FROM products ORDER BY name').all();
   const rows = [['id', 'sku', 'barcode', 'name', 'category', 'unit', 'reorder_point', 'active']];

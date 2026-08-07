@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v14";
+var APP_VERSION = "v15";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -888,7 +888,23 @@ function productsView(scope, title){
   var addBtn = can("operator") ? '<button onclick="productForm()">+ Produs</button>' : '';
   var impBtn = can("operator") ? '<button class="ghost" onclick="importUI()">⬆ Import Excel</button>' : '';
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/products/export\\',\\'produse.csv\\')">Export CSV</button>';
-  setMain(topbar(title, addBtn+impBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută EAN / SKU / nume" oninput="loadProducts()" style="max-width:320px"></div><div class="card" id="ptbl">…</div>');
+  var bulk = can("operator")
+    ? '<div class="card" id="pbulk" style="display:none;padding:10px 14px;margin-bottom:12px">'
+      + '<div class="row" style="align-items:center;gap:10px">'
+      + '<b><span id="pselcount">0</span> produse selectate</b><div class="spacer" style="flex:1"></div>'
+      + '<label style="margin:0">Mută la client:</label>'
+      + '<select id="pbulk_client" style="max-width:220px"><option value="">— intern (al companiei) —</option></select>'
+      + '<button class="sm" onclick="reassignSelected()">Mută</button>'
+      + '<button class="ghost sm" onclick="pselClear()">Anulează selecția</button>'
+      + '</div></div>'
+    : '';
+  setMain(topbar(title, addBtn+impBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută EAN / SKU / nume" oninput="loadProducts()" style="max-width:320px"></div>' + bulk + '<div class="card" id="ptbl">…</div>');
+  if(can("operator")){
+    api("GET","/api/clients").then(function(d){
+      cache.clients = d.clients;
+      var sel=el("pbulk_client"); if(sel) sel.innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");
+    }).catch(function(){});
+  }
   loadProducts();
 }
 VIEWS.products = function(){ productsView("all","Toate produsele"); };
@@ -987,7 +1003,8 @@ window.loadProducts = function(){
       var ean = p.barcode || '<span class="muted">— fără EAN —</span>';
       var skuLine = (p.sku && p.sku!==p.barcode) ? '<div class="muted" style="font-size:11.5px">SKU: '+esc(p.sku)+'</div>' : '';
       var owner = p.client_name ? esc(p.client_name) : '<span class="muted">intern</span>';
-      return '<tr><td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+owner+'</td><td>'+esc(p.category||"—")+'</td>'
+      var chk = can("operator") ? '<td><input type="checkbox" class="psel" value="'+p.id+'" onclick="pselUpd()" style="width:auto"></td>' : '';
+      return '<tr>'+chk+'<td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+owner+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
@@ -996,8 +1013,34 @@ window.loadProducts = function(){
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
     }).join("");
-    el("ptbl").innerHTML = '<table><thead><tr><th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=8 class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
+    var selTh = can("operator") ? '<th style="width:34px"><input type="checkbox" onclick="pselAll(this)" style="width:auto"></th>' : '';
+    var colspan = can("operator") ? 9 : 8;
+    el("ptbl").innerHTML = '<table><thead><tr>'+selTh+'<th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan='+colspan+' class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
+    pselUpd();
   });
+};
+window.pselAll = function(cb){ var xs=document.querySelectorAll(".psel"); for(var i=0;i<xs.length;i++) xs[i].checked=cb.checked; pselUpd(); };
+window.pselClear = function(){ var xs=document.querySelectorAll(".psel"); for(var i=0;i<xs.length;i++) xs[i].checked=false; pselUpd(); };
+function pselIds(){ var xs=document.querySelectorAll(".psel:checked"); var out=[]; for(var i=0;i<xs.length;i++) out.push(Number(xs[i].value)); return out; }
+window.pselUpd = function(){
+  var n=pselIds().length, bar=el("pbulk"), c=el("pselcount");
+  if(c) c.textContent=n;
+  if(bar) bar.style.display = n>0 ? "block" : "none";
+};
+window.reassignSelected = function(){
+  var ids=pselIds();
+  if(!ids.length){ toast("Selectează cel puțin un produs","bad"); return; }
+  var sel=el("pbulk_client");
+  var clientId = sel && sel.value ? Number(sel.value) : null;
+  var clientName = sel && sel.value ? sel.options[sel.selectedIndex].text : "intern (al companiei)";
+  modal("Confirmă mutarea",
+    '<p>Muți <b>'+ids.length+'</b> produse la <b>'+esc(clientName)+'</b>?</p>',
+    function(){
+      api("POST","/api/products/reassign",{ ids:ids, client_id:clientId }).then(function(r){
+        closeModal(); toast("Am mutat "+r.updated+" produse"); loadProducts();
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv) sv.textContent="Da, mută";
 };
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
