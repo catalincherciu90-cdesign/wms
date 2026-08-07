@@ -1250,19 +1250,27 @@ VIEWS.clients = function(){
   api("GET","/api/clients").then(function(d){
     cache.clients=d.clients;
     var rows=d.clients.map(function(c){
-      return '<tr><td><b>'+esc(c.name)+'</b></td><td>'+esc(c.email||"—")+'</td><td>'+esc(c.phone||"—")+'</td>'
+      var fiscal = c.cui ? ('<b>'+esc(c.cui)+'</b>'+(c.reg_com?('<div class="muted" style="font-size:11.5px">'+esc(c.reg_com)+'</div>'):'')) : '<span class="muted">—</span>';
+      return '<tr><td><b>'+esc(c.name)+'</b>'+(c.address?('<div class="muted" style="font-size:11.5px">'+esc(c.address)+'</div>'):'')+'</td>'
+        +'<td>'+fiscal+'</td><td>'+esc(c.email||"—")+'</td><td>'+esc(c.phone||"—")+'</td>'
         +'<td class="right">'+esc(c.product_count)+'</td><td class="right">'+esc(c.user_count)+'</td>'
         +'<td class="right">'+(can("admin")?'<button class="ghost sm" onclick="clientUsers('+c.id+')">Conturi</button> <button class="ghost sm" onclick="clientForm('+c.id+')">Edit</button>':'')+'</td></tr>';
     }).join("");
-    el("cln").innerHTML='<table><thead><tr><th>Client</th><th>Email</th><th>Telefon</th><th class="right">Produse</th><th class="right">Conturi</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Niciun client</td></tr>')+'</tbody></table>';
+    el("cln").innerHTML='<table><thead><tr><th>Client</th><th>CUI / Reg. Com.</th><th>Email</th><th>Telefon</th><th class="right">Produse</th><th class="right">Conturi</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Niciun client</td></tr>')+'</tbody></table>';
   });
 };
 window.clientForm = function(id){
   var c = id ? cache.clients.find(function(x){return x.id===id;}) : {};
   modal((id?"Editează":"Adaugă")+" client",
-    field("Nume firmă","cl_name",c.name||"") + field("Email","cl_email",c.email||"","","email") + field("Telefon","cl_phone",c.phone||""),
+    field("Nume / denumire firmă","cl_name",c.name||"")
+    + '<div class="row"><div style="flex:1">'+field("CUI / CIF","cl_cui",c.cui||"","placeholder=\\'ex: RO12345678\\'")+'</div>'
+    + '<div style="flex:1">'+field("Nr. Reg. Com.","cl_reg",c.reg_com||"","placeholder=\\'ex: J40/1234/2020\\'")+'</div></div>'
+    + '<div class="field"><label>Adresă sediu</label><textarea id="cl_addr" rows="2">'+esc(c.address||"")+'</textarea></div>'
+    + '<div class="row"><div style="flex:1">'+field("Email","cl_email",c.email||"","","email")+'</div>'
+    + '<div style="flex:1">'+field("Telefon","cl_phone",c.phone||"")+'</div></div>',
     function(){
-      var body={ name:el("cl_name").value, email:el("cl_email").value, phone:el("cl_phone").value };
+      var body={ name:el("cl_name").value, email:el("cl_email").value, phone:el("cl_phone").value,
+        cui:el("cl_cui").value, reg_com:el("cl_reg").value, address:el("cl_addr").value };
       var pr = id ? api("PUT","/api/clients/"+id,body) : api("POST","/api/clients",body);
       pr.then(function(){ closeModal(); toast("Salvat"); go("clients"); }).catch(function(e){ toast(e.message,"bad"); });
     });

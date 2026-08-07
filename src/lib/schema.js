@@ -33,5 +33,11 @@ export async function ensureSchema(env) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
   }
 
+  // date de firmă pentru clienți (CUI, Nr. Reg. Com., adresă)
+  const clientCols = ['cui TEXT', 'reg_com TEXT', 'address TEXT'];
+  for (const col of clientCols) {
+    try { await env.DB.prepare('ALTER TABLE clients ADD COLUMN ' + col).run(); } catch (e) {}
+  }
+
   ready = true;
 }

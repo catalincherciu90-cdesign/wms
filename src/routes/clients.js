@@ -14,8 +14,8 @@ export async function list(request, env) {
 export async function create(request, env) {
   const b = await readJson(request);
   if (!b?.name) return error('Numele clientului e obligatoriu', 400);
-  const res = await env.DB.prepare('INSERT INTO clients (name, email, phone) VALUES (?, ?, ?)')
-    .bind(b.name.trim(), b.email || null, b.phone || null).run();
+  const res = await env.DB.prepare('INSERT INTO clients (name, email, phone, cui, reg_com, address) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(b.name.trim(), b.email || null, b.phone || null, b.cui || null, b.reg_com || null, b.address || null).run();
   const client = await env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(res.meta.last_row_id).first();
   return json({ client }, 201);
 }
@@ -26,8 +26,8 @@ export async function update(request, env, ctx, user, params) {
   const existing = await env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(id).first();
   if (!existing) return error('Client inexistent', 404);
   const m = { ...existing, ...b };
-  await env.DB.prepare('UPDATE clients SET name=?, email=?, phone=?, active=? WHERE id=?')
-    .bind(m.name, m.email || null, m.phone || null, m.active ? 1 : 0, id).run();
+  await env.DB.prepare('UPDATE clients SET name=?, email=?, phone=?, cui=?, reg_com=?, address=?, active=? WHERE id=?')
+    .bind(m.name, m.email || null, m.phone || null, m.cui || null, m.reg_com || null, m.address || null, m.active ? 1 : 0, id).run();
   const client = await env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(id).first();
   return json({ client });
 }
