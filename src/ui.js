@@ -1680,7 +1680,8 @@ function modal(title, inner, onSave){
     +'<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="ghost" onclick="closeModal()">Anulează</button><button id="modalSave">Salvează</button></div></div>';
   document.body.appendChild(bg);
   document.getElementById("modalSave").onclick=onSave;
-  bg.onclick=function(e){ if(e.target===bg) closeModal(); };
+  // Nu închidem la clic în afara ferestrei (evită pierderea accidentală a datelor).
+  // Închiderea se face doar din butonul „Anulează".
 }
 window.closeModal=function(){
   if(window._scanStream){ try{ window._scanStream.getTracks().forEach(function(t){t.stop();}); }catch(e){} window._scanStream=null; }
