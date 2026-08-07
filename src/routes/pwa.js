@@ -22,30 +22,18 @@ const MANIFEST = {
   ],
 };
 
-// Service worker: pornire offline a shell-ului; API-ul merge mereu la rețea.
+// Service worker: NU cache-uiește aplicația (ca să nu servească niciodată o versiune veche).
+// La activare șterge tot cache-ul vechi. Toate cererile merg direct la rețea.
 const SW = `
-const CACHE = 'wms-shell-v1';
-const SHELL = ['/', '/vendor/zxing.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
-});
+self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(
+    caches.keys()
+      .then((ks) => Promise.all(ks.map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET') return;
-  if (url.pathname.startsWith('/api/')) return; // API: mereu rețea
-  if (e.request.mode === 'navigate') {
-    e.respondWith(fetch(e.request).catch(() => caches.match('/')));
-    return;
-  }
-  e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request).then((resp) => {
-    const copy = resp.clone();
-    caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-    return resp;
-  }).catch(() => r)));
-});
+// Fără handler de 'fetch' care să răspundă din cache: browserul ia mereu de la rețea.
 `;
 
 function bin(b64, type) {
