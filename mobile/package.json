@@ -1,0 +1,13 @@
+{
+  "name": "wsd-wms-mobile",
+  "version": "1.0.0",
+  "description": "Aplicație Android (Capacitor) pentru operarea WMS pe terminale Zebra",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

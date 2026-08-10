@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>WSD WMS</title>
+<style>
+  :root{--brand:#2f6df6;--brand2:#1e51d6;--bg:#0f1830;--panel:#16213f;--panel2:#1e2c52;--text:#eef2fb;--muted:#9fb0d0;--border:#2b3a63;--good:#22c55e;--bad:#ef4444;--warn:#f59e0b}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font-family:system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:16px}
+  #app{min-height:100%;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+  header .back{font-size:22px;background:none;border:none;color:var(--text);padding:2px 6px}
+  header h1{font-size:17px;margin:0;flex:1}
+  header .who{font-size:11px;color:var(--muted);text-align:right;line-height:1.2}
+  main{flex:1;padding:16px;overflow:auto}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .tile{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:22px 14px;text-align:center;font-weight:700;font-size:16px}
+  .tile .ic{font-size:34px;display:block;margin-bottom:8px}
+  .tile:active{background:var(--panel2)}
+  label{display:block;font-size:13px;color:var(--muted);margin:14px 0 5px}
+  input,select{width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--text)}
+  input:focus,select:focus{outline:none;border-color:var(--brand)}
+  .scanbox{border:2px dashed var(--brand);border-radius:14px;padding:6px;background:rgba(47,109,246,.08)}
+  button.big{width:100%;font-size:18px;font-weight:800;padding:16px;border:none;border-radius:14px;background:var(--brand);color:#fff;margin-top:16px}
+  button.big:active{background:var(--brand2)}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+  button.cam{width:100%;font-size:15px;font-weight:700;padding:12px;border:none;border-radius:12px;background:var(--panel2);color:var(--text);border:1px solid var(--border);margin-top:8px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:12px}
+  .muted{color:var(--muted)} .center{text-align:center}
+  .row{display:flex;gap:10px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase}
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .pill.good{background:rgba(34,197,94,.18);color:var(--good)} .pill.bad{background:rgba(239,68,68,.18);color:var(--bad)}
+  .big-num{font-size:30px;font-weight:800}
+  .logo{height:40px;display:block;margin:0 auto 10px}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111a33;color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:50;max-width:90%;text-align:center;display:none}
+  #cam{position:fixed;inset:0;background:#000;z-index:60;display:none;flex-direction:column}
+  #cam video{flex:1;width:100%;object-fit:cover}
+  #cam .bar{padding:14px;background:#000;text-align:center}
+  .login-wrap{max-width:360px;margin:8vh auto 0}
+  .op-hint{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<div id="cam"><video id="camvid" playsinline></video><div class="bar"><button class="big ghost" onclick="closeCam()">Închide camera</button></div></div>
+
+<script>
+/* ====== Config ====== */
+var API = "https://wms.catalincherciu90.workers.dev"; // adresa serverului WMS
+var token = localStorage.getItem("wms_m_token") || "";
+var me = null;
+var LOCS = [];        // cache locații
+var scanTarget = null; // funcție care primește codul scanat pe ecranul curent
+
+/* ====== Utilitare ====== */
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function toast(m,bad){ var t=el("toast"); t.textContent=m; t.style.background=bad?"#7f1d1d":"#111a33"; t.style.display="block"; clearTimeout(window._tt); window._tt=setTimeout(function(){t.style.display="none";},2600); }
+function api(method,path,body){
+  var o={method:method,headers:{}};
+  if(token) o.headers["Authorization"]="Bearer "+token;
+  if(body){ o.headers["Content-Type"]="application/json"; o.body=JSON.stringify(body); }
+  return fetch(API+path,o).then(function(r){
+    if(r.status===401){ logout(); throw new Error("Sesiune expirată"); }
+    return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||("Eroare "+r.status)); return d; });
+  });
+}
+function logout(){ token=""; me=null; localStorage.removeItem("wms_m_token"); renderLogin(); }
+
+/* ====== Ecrane ====== */
+function shell(title, body, opts){
+  opts=opts||{};
+  var back = opts.back ? '<button class="back" onclick="'+opts.back+'">‹</button>' : '';
+  var who = me ? '<div class="who">'+esc(me.name||"")+'<br>'+esc(me.role||"")+'</div>' : '';
+  el("app").innerHTML =
+    '<header>'+back+'<h1>'+esc(title)+'</h1>'+who+'</header><main>'+body+'</main>';
+}
+
+function renderLogin(){
+  el("app").innerHTML='<main><div class="login-wrap">'
+    +'<img class="logo" src="logo.png" alt="WSD" onerror="this.style.display=\'none\'">'
+    +'<div class="center" style="font-size:22px;font-weight:800;margin-bottom:2px">WSD <span style="opacity:.7;font-weight:600">WMS</span></div>'
+    +'<div class="center muted" style="margin-bottom:18px">Autentificare operator</div>'
+    +'<label>Email</label><input id="l_email" type="email" autocomplete="username">'
+    +'<label>Parolă</label><input id="l_pass" type="password" autocomplete="current-password">'
+    +'<div id="l_msg" class="center" style="color:var(--bad);font-size:14px;margin-top:10px"></div>'
+    +'<button class="big" onclick="doLogin()">Intră în cont</button>'
+    +'</div></main>';
+}
+function doLogin(){
+  var email=el("l_email").value.trim(), pass=el("l_pass").value;
+  if(!email||!pass){ el("l_msg").textContent="Completează email și parolă"; return; }
+  api("POST","/api/auth/login",{email:email,password:pass}).then(function(d){
+    if(d.user && (d.user.kind==="client")){ el("l_msg").textContent="Acest cont e de client, nu de operator."; return; }
+    token=d.token; me=d.user; localStorage.setItem("wms_m_token",token); loadLocs(); renderHome();
+  }).catch(function(e){ el("l_msg").textContent=e.message; });
+}
+
+function loadLocs(){ api("GET","/api/locations").then(function(d){ LOCS=(d.locations||[]).filter(function(l){return l.active!==0;}); }).catch(function(){}); }
+
+function renderHome(){
+  scanTarget=function(code){ opLookup(code); };
+  shell("WSD WMS",
+    '<div class="grid">'
+    +tile("lookup","🔎","Scanează<br>& caută")
+    +tile("receive","📥","Recepție")
+    +tile("ship","📤","Expediere")
+    +tile("transfer","🔄","Transfer")
+    +'</div>'
+    +'<button class="big ghost" style="margin-top:22px" onclick="logout()">Ieșire</button>'
+    +'<div class="op-hint center" style="margin-top:10px">Scanează oricând cu laserul Zebra — te duce direct la produs.</div>');
+}
+function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
+
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); };
+
+/* ---- Scanare & caută ---- */
+function screenLookup(){
+  scanTarget=function(code){ el("s_scan").value=code; opLookup(code); };
+  shell("Scanează & caută",
+    '<div class="scanbox"><input id="s_scan" placeholder="Scanează sau tastează cod + Enter" onkeydown="if(event.key===\'Enter\'){opLookup(this.value)}"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'s_scan\').value=c;opLookup(c)})">📷 Scanează cu camera</button>'
+    +'<div id="s_res"></div>', {back:"renderHome()"});
+  focusScan("s_scan");
+}
+function opLookup(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ el("s_res") && (el("s_res").innerHTML='<div class="card center muted">Produs negăsit pentru: '+esc(code)+'</div>'); return; }
+    return api("GET","/api/inventory/stock?product_id="+p.id).then(function(d){
+      var rows=(d.stock||[]).map(function(s){return '<tr><td>'+esc(s.location_code)+'</td><td class="center"><b>'+esc(s.quantity)+'</b> '+esc(s.unit||"")+'</td></tr>';}).join("");
+      var total=(d.stock||[]).reduce(function(a,s){return a+Number(s.quantity||0);},0);
+      var host=el("s_res"); if(!host){ screenLookup(); host=el("s_res"); }
+      host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div>'
+        +'<div style="font-size:18px;font-weight:800;margin:2px 0 8px">'+esc(p.name)+'</div>'
+        +'<div class="big-num">'+total+' <span style="font-size:15px" class="muted">'+esc(p.unit||"buc")+' total</span></div>'
+        +'<table style="margin-top:10px"><thead><tr><th>Locație</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Fără stoc</td></tr>')+'</tbody></table></div>';
+    });
+  }).catch(function(e){ toast(e.message,true); });
+}
+
+/* ---- Recepție / Expediere ---- */
+function screenMove(kind){
+  var title = kind==="receive" ? "Recepție (intrare)" : "Expediere (ieșire)";
+  window._mv={kind:kind, product:null};
+  scanTarget=function(code){ mvScan(code); };
+  shell(title,
+    '<div class="scanbox"><input id="m_scan" placeholder="Scanează produsul + Enter" onkeydown="if(event.key===\'Enter\'){mvScan(this.value)}"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'m_scan\').value=c;mvScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="m_prod"></div>'
+    +'<div id="m_form" style="display:none">'
+    +'<label>Locație</label><select id="m_loc">'+locOptions()+'</select>'
+    +'<label>Cantitate</label><input id="m_qty" type="number" inputmode="numeric" min="1" value="1">'
+    +'<button class="big" onclick="mvSubmit()">'+(kind==="receive"?"Confirmă recepția":"Confirmă expedierea")+'</button>'
+    +'</div>', {back:"renderHome()"});
+  focusScan("m_scan");
+}
+function mvScan(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ el("m_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("m_form").style.display="none"; return; }
+    window._mv.product=p;
+    el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
+    el("m_form").style.display="block";
+    el("m_qty").focus(); el("m_qty").select();
+  }).catch(function(e){ toast(e.message,true); });
+}
+function mvSubmit(){
+  var mv=window._mv; if(!mv||!mv.product){ toast("Scanează întâi un produs",true); return; }
+  var loc=Number(el("m_loc").value), qty=Number(el("m_qty").value);
+  if(!loc){ toast("Alege locația",true); return; }
+  if(!(qty>0)){ toast("Cantitate invalidă",true); return; }
+  var path = mv.kind==="receive" ? "/api/inventory/receive" : "/api/inventory/ship";
+  api("POST",path,{product_id:mv.product.id, location_id:loc, quantity:qty}).then(function(){
+    toast((mv.kind==="receive"?"Recepționat: ":"Expediat: ")+qty+" × "+mv.product.name);
+    screenMove(mv.kind); // reset pentru următorul scan
+  }).catch(function(e){ toast(e.message,true); });
+}
+
+/* ---- Transfer ---- */
+function screenTransfer(){
+  window._tr={product:null};
+  scanTarget=function(code){ trScan(code); };
+  shell("Transfer între locații",
+    '<div class="scanbox"><input id="t_scan" placeholder="Scanează produsul + Enter" onkeydown="if(event.key===\'Enter\'){trScan(this.value)}"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'t_scan\').value=c;trScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="t_prod"></div>'
+    +'<div id="t_form" style="display:none">'
+    +'<label>Din locația</label><select id="t_from">'+locOptions()+'</select>'
+    +'<label>În locația</label><select id="t_to">'+locOptions()+'</select>'
+    +'<label>Cantitate</label><input id="t_qty" type="number" inputmode="numeric" min="1" value="1">'
+    +'<button class="big" onclick="trSubmit()">Confirmă transferul</button>'
+    +'</div>', {back:"renderHome()"});
+  focusScan("t_scan");
+}
+function trScan(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ el("t_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("t_form").style.display="none"; return; }
+    window._tr.product=p;
+    el("t_prod").innerHTML='<div class="card"><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
+    el("t_form").style.display="block";
+  }).catch(function(e){ toast(e.message,true); });
+}
+function trSubmit(){
+  var tr=window._tr; if(!tr||!tr.product){ toast("Scanează întâi un produs",true); return; }
+  var from=Number(el("t_from").value), to=Number(el("t_to").value), qty=Number(el("t_qty").value);
+  if(!from||!to){ toast("Alege locațiile",true); return; }
+  if(from===to){ toast("Locațiile trebuie să difere",true); return; }
+  if(!(qty>0)){ toast("Cantitate invalidă",true); return; }
+  api("POST","/api/inventory/transfer",{product_id:tr.product.id, from_location_id:from, to_location_id:to, quantity:qty}).then(function(){
+    toast("Transferat: "+qty+" × "+tr.product.name); screenTransfer();
+  }).catch(function(e){ toast(e.message,true); });
+}
+
+/* ---- Comun ---- */
+function locOptions(){ return '<option value="">— alege —</option>'+LOCS.map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); }
+function resolveProduct(code){
+  return api("GET","/api/products?q="+encodeURIComponent(code)).then(function(d){
+    var list=d.products||[];
+    var exact=list.filter(function(p){ return p.barcode===code || p.sku===code; });
+    return (exact[0]||list[0]||null);
+  });
+}
+function focusScan(id){ setTimeout(function(){ var e=el(id); if(e) e.focus(); },120); }
+
+/* ====== Scanner laser Zebra (DataWedge, mod Keystroke) ====== */
+/* Scanerul "tastează" codul rapid + Enter. Dacă un câmp e focusat, intră direct.
+   Dacă nu, prindem global și trimitem la ecranul curent (scanTarget). */
+(function(){
+  var buf="", last=0;
+  document.addEventListener("keydown",function(e){
+    var a=document.activeElement;
+    var inField=a && (a.tagName==="INPUT"||a.tagName==="SELECT"||a.tagName==="TEXTAREA");
+    if(inField) return; // câmpul primește scanul; are propriul handler de Enter
+    var now=Date.now(); if(now-last>120) buf=""; last=now;
+    if(e.key==="Enter"){ var c=buf.trim(); buf=""; if(c.length>=2 && scanTarget) scanTarget(c); return; }
+    if(e.key && e.key.length===1) buf+=e.key;
+  },true);
+})();
+
+/* ====== Cameră (ZXing încărcat de pe server) ====== */
+var _zx=null, _stream=null, _camCb=null;
+function ensureZX(){ if(window.ZXing) return Promise.resolve(); return new Promise(function(res,rej){ var s=document.createElement("script"); s.src=API+"/vendor/zxing.js"; s.onload=res; s.onerror=function(){rej(new Error("Nu pot încărca scanner-ul camerei (offline?)"));}; document.head.appendChild(s); }); }
+function openCam(cb){
+  _camCb=cb;
+  ensureZX().then(function(){
+    el("cam").style.display="flex";
+    _zx=new ZXing.BrowserMultiFormatReader();
+    return _zx.decodeFromVideoDevice(null, "camvid", function(result,err){
+      if(result){ var t=result.getText(); closeCam(); if(_camCb) _camCb(t); }
+    });
+  }).catch(function(e){ toast(e.message,true); });
+}
+function closeCam(){ try{ if(_zx) _zx.reset(); }catch(e){} el("cam").style.display="none"; }
+
+/* ====== Boot ====== */
+if(token){
+  api("GET","/api/auth/me").then(function(d){ me=d.user; if(me.kind==="client"){ logout(); return; } loadLocs(); renderHome(); })
+    .catch(function(){ logout(); });
+} else { renderLogin(); }
+</script>
+</body>
+</html>

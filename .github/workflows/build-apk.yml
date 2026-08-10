@@ -1,0 +1,81 @@
+name: Build Android APK (WSD WMS)
+
+# Compilează APK-ul nativ (Capacitor) în cloud — mediul GitHub are Android SDK.
+# Se declanșează la modificări în mobile/ sau manual (Actions → Run workflow).
+
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # necesar pentru a atașa APK-ul la un Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalează dependențele
+        working-directory: mobile
+        run: npm install
+
+      - name: Adaugă platforma Android
+        working-directory: mobile
+        run: npx cap add android
+
+      - name: Permisiune cameră în manifest
+        working-directory: mobile
+        run: |
+          MF=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <application#' "$MF"
+          echo "--- manifest ---"; grep -n "uses-permission" "$MF" || true
+
+      - name: Sincronizează
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Compilează APK (debug, semnat pentru sideload)
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Redenumește APK-ul
+        run: |
+          mkdir -p out
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk out/wsd-wms.apk
+
+      - name: Încarcă APK-ul ca artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsd-wms-apk
+          path: out/wsd-wms.apk
+
+      - name: Publică în Release (apk-latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: WSD WMS — APK (ultima versiune)
+          body: APK generat automat din mobile/. Instalează prin sideload pe terminalul Zebra.
+          files: out/wsd-wms.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
