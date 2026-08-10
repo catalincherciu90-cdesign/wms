@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v17';
+const APP_VERSION = 'v18';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -165,6 +165,17 @@ export default {
     if (path === '/sw.js') return pwa.sw();
     if (path === '/icon-192.png') return pwa.icon192();
     if (path === '/icon-512.png') return pwa.icon512();
+
+    // Digital Asset Links pentru APK (TWA) — leagă APK-ul de site ca să ascundă bara de adrese.
+    // Setează TWA_PACKAGE și TWA_FINGERPRINT (SHA-256 din PWABuilder) ca variabile în Cloudflare.
+    if (path === '/.well-known/assetlinks.json') {
+      const pkg = env.TWA_PACKAGE || 'ro.wsd.wms';
+      const fp = env.TWA_FINGERPRINT || '';
+      const body = fp
+        ? JSON.stringify([{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: fp.split(',').map((s) => s.trim()).filter(Boolean) } }])
+        : '[]';
+      return new Response(body, { headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders } });
+    }
 
     // Health check
     if (path === '/health') return json({ ok: true, service: 'wms', version: APP_VERSION, ts: new Date().toISOString() });

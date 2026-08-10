@@ -4,9 +4,9 @@ import { corsHeaders } from '../lib/http.js';
 import { ICON_512, ICON_192 } from '../icons.js';
 
 const MANIFEST = {
-  name: 'WMS — Gestiune Depozit',
-  short_name: 'WMS',
-  description: 'Gestiune depozit: recepție, expediere, transfer, scanare coduri de bare.',
+  name: 'WSD Logistics — WMS',
+  short_name: 'WSD WMS',
+  description: 'Gestiune depozit: recepție, expediere, transfer, scanare coduri de bare (Zebra).',
   start_url: '/',
   scope: '/',
   display: 'standalone',

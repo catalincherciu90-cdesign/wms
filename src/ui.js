@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v17";
+var APP_VERSION = "v18";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1789,6 +1789,24 @@ window.closeModal=function(){
   if(window._zxingReader){ try{ window._zxingReader.reset(); }catch(e){} window._zxingReader=null; }
   var m=el("modalBg"); if(m) m.remove();
 };
+
+/* ---------------- Scanner hardware Zebra (DataWedge / keyboard-wedge) ---------------- */
+// Scanner-ul laser Zebra (mod Keystroke) "tastează" codul rapid + Enter.
+// Dacă un câmp e focusat, codul intră direct în el (recepție/expediere/produs).
+// Dacă NU e focusat niciun câmp, prindem scanarea global și căutăm produsul/locația.
+(function(){
+  var buf="", lastKey=0;
+  document.addEventListener("keydown", function(e){
+    if(!me || me.kind==="client") return; // doar staff (portalul e doar de vizualizare)
+    var a=document.activeElement;
+    if(a && (a.tagName==="INPUT"||a.tagName==="TEXTAREA"||a.tagName==="SELECT"||a.isContentEditable)) return; // câmpul primește scanul direct
+    var now=Date.now();
+    if(now-lastKey>120) buf=""; // pauză mare = tastare umană, resetăm
+    lastKey=now;
+    if(e.key==="Enter"){ var code=buf.trim(); buf=""; if(code.length>=3) handleScanResult(code); return; }
+    if(e.key && e.key.length===1) buf+=e.key;
+  }, true);
+})();
 
 /* ---------------- Boot ---------------- */
 window.onhashchange=function(){ if(me && me.kind!=="client") handleHash(); };
