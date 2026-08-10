@@ -231,7 +231,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v18";
+var APP_VERSION = "v19";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -787,6 +787,7 @@ function renderApp(){
     + '<div style="padding:10px 12px 14px"><img src="/assets/logo.png" alt="WSD Logistics" style="width:100%;max-width:150px;display:block"></div>'
     + nav
     + '<button class="ghost sm" style="margin:8px 6px 2px" onclick="scanCamera(handleScanResult)">📷 Scanează</button>'
+    + '<a class="ghost sm" href="/instalare" target="_blank" style="margin:2px 6px;text-align:center;text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:var(--text);font-weight:600;font-size:12.5px;display:block">📲 Instalare Zebra (QR)</a>'
     + '<div style="flex:1"></div>'
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'

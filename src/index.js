@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -165,6 +165,9 @@ export default {
     if (path === '/sw.js') return pwa.sw();
     if (path === '/icon-192.png') return pwa.icon192();
     if (path === '/icon-512.png') return pwa.icon512();
+
+    // Pagină de instalare cu QR (de scanat cu Zebra)
+    if (path === '/instalare' || path === '/install') return pwa.installPage(env, url);
 
     // Digital Asset Links pentru APK (TWA) — leagă APK-ul de site ca să ascundă bara de adrese.
     // Setează TWA_PACKAGE și TWA_FINGERPRINT (SHA-256 din PWABuilder) ca variabile în Cloudflare.
