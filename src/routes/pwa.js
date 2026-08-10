@@ -65,7 +65,8 @@ function qrSvg(data) {
 // Pagină publică de instalare: QR de scanat cu Zebra pentru a descărca/deschide aplicația.
 export function installPage(env, url) {
   const appUrl = url.origin;
-  const apkUrl = env.APK_URL || '';          // link direct către APK (dacă e configurat)
+  // Link direct către APK-ul generat automat de GitHub Actions (repo public). Se poate suprascrie cu env APK_URL.
+  const apkUrl = env.APK_URL || 'https://github.com/catalincherciu90-cdesign/wms/releases/download/apk-latest/wsd-wms.apk';
   const target = apkUrl || appUrl;           // QR-ul principal
   const hasApk = !!apkUrl;
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
