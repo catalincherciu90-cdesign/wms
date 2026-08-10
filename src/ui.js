@@ -44,6 +44,7 @@ export function renderUI() {
   .pill.warn{background:rgba(224,144,42,.16);color:var(--warn)} .pill.mut{background:var(--panel-2);color:var(--muted)}
   .row{display:flex;gap:14px;flex-wrap:wrap} .grid{display:grid;gap:14px}
   .field{margin-bottom:12px}
+  .fhint{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4}
   /* Login */
   #login{min-height:100vh;display:grid;grid-template-columns:1.1fr .9fr}
   .login-hero{position:relative;display:flex;align-items:center;padding:48px;color:#fff;overflow:hidden;
@@ -231,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v20";
+var APP_VERSION = "v21";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -281,8 +282,8 @@ window.renderLogin = function(err){
     + '<div class="login-form"><form class="card" onsubmit="return doLogin(event)">'
     + '<img src="/assets/logo.png" alt="WSD Logistics" style="height:52px;margin-bottom:14px">'
     + '<div class="muted" style="margin-bottom:20px">Autentificare în cont</div>'
-    + '<div class="field"><label>Email</label><input id="li_email" type="email" autofocus required></div>'
-    + '<div class="field"><label>Parolă</label><input id="li_pass" type="password" required></div>'
+    + '<div class="field"><label>Email</label><input id="li_email" type="email" autofocus required>'+fhint("Emailul contului tău (ex: nume@wsd.ro).")+'</div>'
+    + '<div class="field"><label>Parolă</label><input id="li_pass" type="password" required>'+fhint("Parola contului; nu o partaja cu nimeni.")+'</div>'
     + (err?'<div class="pill bad" style="margin-bottom:12px">'+esc(err)+'</div>':'')
     + '<button style="width:100%" type="submit">Intră în cont</button>'
     + '<div class="center" style="margin-top:14px;font-size:12.5px"><a href="#" onclick="renderLanding();return false">← Înapoi la site</a></div>'
@@ -676,11 +677,11 @@ function portalOrderNew(){
   setMain(topbar("Comandă nouă de livrare", '<button class="ghost" onclick="pgo(\\'orders\\')">← Înapoi</button>')
     + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start">'
     + '<div class="card" style="padding:20px"><h2>Destinatar (clientul tău)</h2>'
-      + field("Nume / firmă destinatar","o_rname","")
-      + field("Telefon","o_rphone","")
-      + '<div class="field"><label>Adresă</label><textarea id="o_raddr" rows="2"></textarea></div>'
-      + '<div class="row"><div style="flex:1">'+field("Oraș","o_rcity","")+'</div><div style="flex:1">'+field("Județ","o_rcounty","")+'</div></div>'
-      + field("Cod poștal","o_rpostal","")
+      + field("Nume / firmă destinatar","o_rname","","","text","Numele sau firma clientului tău final.")
+      + field("Telefon","o_rphone","","","text","Telefonul destinatarului pentru livrare.")
+      + '<div class="field"><label>Adresă</label><textarea id="o_raddr" rows="2"></textarea>'+fhint("Strada și numărul de livrare.")+'</div>'
+      + '<div class="row"><div style="flex:1">'+field("Oraș","o_rcity","","","text","Ex: Cluj-Napoca.")+'</div><div style="flex:1">'+field("Județ","o_rcounty","","","text","Ex: Cluj.")+'</div></div>'
+      + field("Cod poștal","o_rpostal","","","text","Ex: 400123.")
       + '<div class="field"><label>Observații (opțional)</label><textarea id="o_note" rows="2" placeholder="Ex: livrare în intervalul 9-17, sună înainte..."></textarea></div>'
     + '</div>'
     + '<div class="card" style="padding:20px"><h2>Produse de livrat</h2>'
@@ -944,8 +945,8 @@ window.importUI = function(){
   _impRows=[];
   modal("Import produse din Excel / CSV",
     '<div class="muted" style="margin-bottom:10px;font-size:12.5px">Coloane recunoscute (prima linie = antet): <b>cod_bare (EAN)</b>, <b>nume</b>, categorie, um, prag, sku (opțional). EAN-ul e codul principal.</div>'
-    + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv"></div>'
-    + '<div class="field"><label>Atribuie toate unui client (opțional)</label><select id="imp_client"><option value="">— intern (al companiei) —</option></select></div>'
+    + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv">'+fhint("Alege fișierul cu produse. Trebuie să aibă coloane EAN și Nume.")+'</div>'
+    + '<div class="field"><label>Atribuie toate unui client (opțional)</label><select id="imp_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Clientul căruia îi atribui produsele importate.")+'</div>'
     + '<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadTemplate()">⬇ Descarcă șablon</button></div>'
     + '<div id="imp_preview" class="muted">Alege un fișier ca să vezi previzualizarea.</div>',
     function(){ importDoImport(); });
@@ -1079,12 +1080,12 @@ window.deleteSelected = function(){
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",
-    '<div class="field"><label>Cod de bare (EAN) — cod principal</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează EAN-ul" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div><div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
-    + field("SKU (opțional — auto din EAN)","p_sku",p.sku||"",id?"disabled":"")
-    + field("Nume","p_name",p.name||"")
-    + field("Categorie","p_category",p.category||"")
-    + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select></div>'
-    + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number")+'</div></div>',
+    '<div class="field"><label>Cod de bare (EAN) — cod principal</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează EAN-ul" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div>'+fhint("Codul de bare principal (EAN), scanat de pe ambalaj.")+'<div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
+    + field("SKU (opțional — auto din EAN)","p_sku",p.sku||"",id?"disabled":"","text","Cod intern opțional; dacă îl lași gol, se ia din EAN.")
+    + field("Nume","p_name",p.name||"","","text","Denumirea clară a produsului (ex: Detergent lichid 2L).")
+    + field("Categorie","p_category",p.category||"","","text","Categoria produsului (ex: Alimente, Cosmetice).")
+    + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Cui aparține marfa: un client sau intern al firmei.")+'</div>'
+    + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc","","text","Unitatea de măsură (ex: buc, kg, cutie).")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number","Sub acest stoc primești alertă de reaprovizionare.")+'</div></div>',
     function(){
       var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
@@ -1116,8 +1117,8 @@ VIEWS.locations = function(){
 window.locationForm = function(id){
   var l = id ? cache.locations.find(function(x){return x.id===id;}) : {};
   modal((id?"Editează":"Adaugă")+" locație",
-    field("Cod (ex: A-01-03)","l_code",l.code||"",id?"disabled":"") + field("Nume","l_name",l.name||"") + field("Zonă","l_zone",l.zone||"")
-    + field("Capacitate (nr. spații / paleți)","l_cap",l.capacity||0,"","number"),
+    field("Cod (ex: A-01-03)","l_code",l.code||"",id?"disabled":"","text","Codul locației: zonă-raft-nivel (ex: A-01-03).") + field("Nume","l_name",l.name||"","","text","Nume descriptiv opțional al locației.") + field("Zonă","l_zone",l.zone||"","","text","Zona din depozit (ex: A, Frig, Retur).")
+    + field("Capacitate (nr. spații / paleți)","l_cap",l.capacity||0,"","number","Câte spații sau paleți încap aici (ex: 4)."),
     function(){
       var body={ code:el("l_code").value, name:el("l_name").value, zone:el("l_zone").value, capacity:Number(el("l_cap").value)||0 };
       var pr = id ? api("PUT","/api/locations/"+id,body) : api("POST","/api/locations",body);
@@ -1163,13 +1164,13 @@ VIEWS.stock = function(){
 function opForm(title, type){
   setMain(topbar(title) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
-    + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><div class="row"><input id="op_scan" style="flex:1" placeholder="Scanează sau tastează, apoi Enter" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'op_scan\\').value=t;opScan();})">📷</button></div></div>'
-    + '<div class="field"><label>Produs</label><select id="op_prod"></select></div>'
+    + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><div class="row"><input id="op_scan" style="flex:1" placeholder="Scanează sau tastează, apoi Enter" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'op_scan\\').value=t;opScan();})">📷</button></div>'+fhint("Scanează codul (laser sau 📷), apoi Enter — găsește produsul automat.")+'</div>'
+    + '<div class="field"><label>Produs</label><select id="op_prod"></select>'+fhint("Se completează după scanare; sau alege manual din listă.")+'</div>'
     + (type==="transfer"
-        ? '<div class="row"><div style="flex:1"><label>Din locația</label><select id="op_from"></select></div><div style="flex:1"><label>În locația</label><select id="op_to"></select></div></div>'
-        : '<div class="field"><label>Locație</label><select id="op_loc"></select></div>')
-    + '<div class="row"><div style="flex:1"><label>Cantitate</label><input id="op_qty" type="number" min="1" value="1"></div><div style="flex:1"><label>Referință (opțional)</label><input id="op_ref"></div></div>'
-    + '<div class="field"><label>Notă</label><input id="op_note"></div>'
+        ? '<div class="row"><div style="flex:1"><label>Din locația</label><select id="op_from"></select>'+fhint("Locația de unde iei marfa (sursă).")+'</div><div style="flex:1"><label>În locația</label><select id="op_to"></select>'+fhint("Locația unde muți marfa (destinație).")+'</div></div>'
+        : '<div class="field"><label>Locație</label><select id="op_loc"></select>'+fhint(type==="receive"?"Locația în care așezi marfa primită.":"Din ce locație scoți marfa.")+'</div>')
+    + '<div class="row"><div style="flex:1"><label>Cantitate</label><input id="op_qty" type="number" min="1" value="1">'+fhint("Numărul de bucăți "+(type==="receive"?"primite.":type==="ship"?"expediate.":"mutate."))+'</div><div style="flex:1"><label>Referință (opțional)</label><input id="op_ref">'+fhint("Ex: nr. aviz sau factură.")+'</div></div>'
+    + '<div class="field"><label>Notă</label><input id="op_note">'+fhint("Observație opțională despre operațiune.")+'</div>'
     + '<button onclick="submitOp(\\''+type+'\\')">'+esc(title)+'</button>'
     + '</div>');
   Promise.all([api("GET","/api/products"),api("GET","/api/locations")]).then(function(r){
@@ -1241,8 +1242,8 @@ window.userForm = function(id){
     + ["admin","operator","viewer"].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+r+'</option>';}).join("")
     + '</select></div>';
   modal((id?"Editează":"Adaugă")+" utilizator",
-    field("Nume","u_name",u.name||"") + field("Email","u_email",u.email||"",id?"disabled":"","email") + roleSel
-    + field(id?"Parolă nouă (opțional)":"Parolă","u_pass","","","password"),
+    field("Nume","u_name",u.name||"","","text","Numele angajatului care folosește aplicația.") + field("Email","u_email",u.email||"",id?"disabled":"","email","Emailul cu care angajatul se conectează.") + roleSel + fhint("viewer = doar citește · operator = operează stocul · admin = tot.")
+    + field(id?"Parolă nouă (opțional)":"Parolă","u_pass","","","password",id?"Completează doar dacă vrei să schimbi parola.":"Parola inițială a angajatului."),
     function(){
       var body={ name:el("u_name").value, email:el("u_email").value, role:el("u_role").value, password:el("u_pass").value||undefined };
       var pr = id ? api("PUT","/api/users/"+id,body) : api("POST","/api/users",body);
@@ -1269,10 +1270,10 @@ window.palletForm = function(){
   palLines=[{product_id:"",quantity:1}];
   setMain(topbar("Palet nou")
     + '<div class="card" style="padding:20px;max-width:640px"><div id="plmsg"></div>'
-    + '<div class="row"><div style="flex:1">'+field("Cod palet","pl_code","")+'</div>'
-    + '<div style="flex:1"><label>Client (proprietar)</label><select id="pl_client"><option value="">— fără —</option></select></div></div>'
-    + '<div class="field"><label>Locație (spațiu)</label><select id="pl_loc"><option value="">— neplasat (draft) —</option></select></div>'
-    + '<h2 style="margin-top:8px">Produse pe palet</h2><div id="pl_lines"></div>'
+    + '<div class="row"><div style="flex:1">'+field("Cod palet","pl_code","","","text","Codul unic al paletului (ex: PAL-000123).")+'</div>'
+    + '<div style="flex:1"><label>Client (proprietar)</label><select id="pl_client"><option value="">— fără —</option></select>'+fhint("Clientul care deține marfa de pe palet.")+'</div></div>'
+    + '<div class="field"><label>Locație (spațiu)</label><select id="pl_loc"><option value="">— neplasat (draft) —</option></select>'+fhint("Spațiul unde stă paletul (ex: A-01-03).")+'</div>'
+    + '<h2 style="margin-top:8px">Produse pe palet</h2>'+fhint("Adaugă produsele și cantitățile aflate pe palet.")+'<div id="pl_lines"></div>'
     + '<button class="ghost sm" onclick="palAddLine()" style="margin-top:8px">+ Adaugă produs</button>'
     + '<div style="margin-top:16px"><button onclick="palSubmit()">Creează paletul</button></div></div>');
   Promise.all([api("GET","/api/products"),api("GET","/api/clients"),api("GET","/api/locations")]).then(function(r){
@@ -1349,12 +1350,12 @@ VIEWS.clients = function(){
 window.clientForm = function(id){
   var c = id ? cache.clients.find(function(x){return x.id===id;}) : {};
   modal((id?"Editează":"Adaugă")+" client",
-    field("Nume / denumire firmă","cl_name",c.name||"")
-    + '<div class="row"><div style="flex:1">'+field("CUI / CIF","cl_cui",c.cui||"","placeholder=\\'ex: RO12345678\\'")+'</div>'
-    + '<div style="flex:1">'+field("Nr. Reg. Com.","cl_reg",c.reg_com||"","placeholder=\\'ex: J40/1234/2020\\'")+'</div></div>'
-    + '<div class="field"><label>Adresă sediu</label><textarea id="cl_addr" rows="2">'+esc(c.address||"")+'</textarea></div>'
-    + '<div class="row"><div style="flex:1">'+field("Email","cl_email",c.email||"","","email")+'</div>'
-    + '<div style="flex:1">'+field("Telefon","cl_phone",c.phone||"")+'</div></div>',
+    field("Nume / denumire firmă","cl_name",c.name||"","","text","Denumirea completă a firmei client.")
+    + '<div class="row"><div style="flex:1">'+field("CUI / CIF","cl_cui",c.cui||"","placeholder=\\'ex: RO12345678\\'","text","Codul fiscal (CUI) al firmei.")+'</div>'
+    + '<div style="flex:1">'+field("Nr. Reg. Com.","cl_reg",c.reg_com||"","placeholder=\\'ex: J40/1234/2020\\'","text","Nr. Reg. Comerțului (ex: J40/1234/2020).")+'</div></div>'
+    + '<div class="field"><label>Adresă sediu</label><textarea id="cl_addr" rows="2">'+esc(c.address||"")+'</textarea>'+fhint("Adresa sediului social al firmei.")+'</div>'
+    + '<div class="row"><div style="flex:1">'+field("Email","cl_email",c.email||"","","email","Emailul oficial de contact al firmei.")+'</div>'
+    + '<div style="flex:1">'+field("Telefon","cl_phone",c.phone||"","","text","Telefonul de contact al firmei.")+'</div></div>',
     function(){
       var body={ name:el("cl_name").value, email:el("cl_email").value, phone:el("cl_phone").value,
         cui:el("cl_cui").value, reg_com:el("cl_reg").value, address:el("cl_addr").value };
@@ -1378,7 +1379,7 @@ window.clientUsers = function(id){
   modal("Conturi portal — "+esc(c?c.name:""),
     '<div id="cu_list" class="muted">Se încarcă…</div>'
     + '<h2 style="margin:16px 0 8px;font-size:14px">Adaugă cont nou</h2>'
-    + field("Nume persoană","cu_name","") + field("Email (login)","cu_email","","","email") + field("Parolă","cu_pass","","","password"),
+    + field("Nume persoană","cu_name","","","text","Numele persoanei care va folosi contul.") + field("Email (login)","cu_email","","","email","Emailul cu care clientul se conectează în portal.") + field("Parolă","cu_pass","","","password","Parola pe care i-o dai clientului la acces."),
     function(){
       var body={ name:el("cu_name").value, email:el("cu_email").value, password:el("cu_pass").value };
       api("POST","/api/clients/"+id+"/users",body).then(function(){ toast("Cont creat"); clientUsers(id); }).catch(function(e){ toast(e.message,"bad"); });
@@ -1424,8 +1425,9 @@ window.partnerForm = function(id){
     +'<option value="supplier"'+(p.type==="supplier"?' selected':'')+'>Furnizor</option>'
     +'<option value="customer"'+(p.type==="customer"?' selected':'')+'>Client</option></select></div>';
   modal((id?"Editează":"Adaugă")+" partener",
-    typeSel + field("Nume","pt_name",p.name||"") + field("Email","pt_email",p.email||"","","email")
-    + field("Telefon","pt_phone",p.phone||"") + field("Adresă","pt_addr",p.address||""),
+    typeSel + fhint("Alege dacă e furnizor (de la care primești) sau client (către care livrezi).")
+    + field("Nume","pt_name",p.name||"","","text","Numele partenerului sau al firmei.") + field("Email","pt_email",p.email||"","","email","Emailul de contact al partenerului.")
+    + field("Telefon","pt_phone",p.phone||"","","text","Numărul de telefon de contact.") + field("Adresă","pt_addr",p.address||"","","text","Adresa partenerului."),
     function(){
       var body={ type:el("pt_type").value, name:el("pt_name").value, email:el("pt_email").value, phone:el("pt_phone").value, address:el("pt_addr").value };
       var pr = id ? api("PUT","/api/partners/"+id,body) : api("POST","/api/partners",body);
@@ -1511,10 +1513,10 @@ window.orderForm = function(){
   orderLines=[{product_id:"",quantity:1}];
   setMain(topbar("Comandă nouă")
     + '<div class="card" style="padding:20px;max-width:640px"><div id="ofmsg"></div>'
-    + '<div class="row"><div style="flex:1"><label>Tip</label><select id="of_type" onchange="ofLoadPartners()"><option value="inbound">Intrare (de la furnizor)</option><option value="outbound">Ieșire (către client)</option></select></div>'
-    + '<div style="flex:1"><label>Partener</label><select id="of_partner"></select></div></div>'
-    + '<div class="field" style="margin-top:12px"><label>Notă</label><input id="of_note"></div>'
-    + '<h2 style="margin-top:8px">Linii comandă</h2><div id="of_lines"></div>'
+    + '<div class="row"><div style="flex:1"><label>Tip</label><select id="of_type" onchange="ofLoadPartners()"><option value="inbound">Intrare (de la furnizor)</option><option value="outbound">Ieșire (către client)</option></select>'+fhint("Intrare = primești marfă. Ieșire = trimiți marfă.")+'</div>'
+    + '<div style="flex:1"><label>Partener</label><select id="of_partner"></select>'+fhint("Furnizorul (la intrare) sau clientul (la ieșire).")+'</div></div>'
+    + '<div class="field" style="margin-top:12px"><label>Notă</label><input id="of_note">'+fhint("Observație internă despre comandă (opțional).")+'</div>'
+    + '<h2 style="margin-top:8px">Linii comandă</h2>'+fhint("Adaugă produsele și cantitățile din comandă.")+'<div id="of_lines"></div>'
     + '<button class="ghost sm" onclick="ofAddLine()" style="margin-top:8px">+ Adaugă linie</button>'
     + '<div style="margin-top:16px"><button onclick="ofSubmit()">Creează comanda</button></div></div>');
   Promise.all([api("GET","/api/products"),ofLoadPartners()]).then(function(r){ cache.ofProducts=r[0].products.filter(function(p){return p.active;}); ofRenderLines(); });
@@ -1762,7 +1764,8 @@ window.productView = function(query){
 };
 
 /* ---------------- UI helpers ---------------- */
-function field(label,id,val,attr,type){ return '<div class="field"><label>'+esc(label)+'</label><input id="'+id+'" type="'+(type||"text")+'" value="'+esc(val)+'" '+(attr||"")+'></div>'; }
+function field(label,id,val,attr,type,hint){ return '<div class="field"><label>'+esc(label)+'</label><input id="'+id+'" type="'+(type||"text")+'" value="'+esc(val)+'" '+(attr||"")+'>'+(hint?'<div class="fhint">'+esc(hint)+'</div>':'')+'</div>'; }
+function fhint(t){ return '<div class="fhint">'+esc(t)+'</div>'; }
 function filterTab(varName,value,label){
   var active=(window[varName]||"")===value;
   var viewName=varName.replace("Filter","")+"s";
