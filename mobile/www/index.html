@@ -136,7 +136,7 @@ window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="rec
 function screenLookup(){
   scanTarget=function(code){ el("s_scan").value=code; opLookup(code); };
   shell("Scanează & caută",
-    '<div class="scanbox"><input id="s_scan" placeholder="Scanează codul (fără Enter)"></div>'
+    '<div class="scanbox"><input id="s_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează codul (fără Enter)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'s_scan\').value=c;opLookup(c)})">📷 Scanează cu camera</button>'
     +'<div id="s_res"></div>', {back:"renderHome()"});
   wireScan("s_scan", opLookup);
@@ -164,7 +164,7 @@ function screenMove(kind){
   window._mv={kind:kind, product:null};
   scanTarget=function(code){ mvScan(code); };
   shell(title,
-    '<div class="scanbox"><input id="m_scan" placeholder="Scanează produsul (fără Enter)"></div>'
+    '<div class="scanbox"><input id="m_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul (fără Enter)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'m_scan\').value=c;mvScan(c)})">📷 Scanează cu camera</button>'
     +'<div id="m_prod"></div>'
     +'<div id="m_form" style="display:none">'
@@ -203,7 +203,7 @@ function screenTransfer(){
   window._tr={product:null};
   scanTarget=function(code){ trScan(code); };
   shell("Transfer între locații",
-    '<div class="scanbox"><input id="t_scan" placeholder="Scanează produsul (fără Enter)"></div>'
+    '<div class="scanbox"><input id="t_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul (fără Enter)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'t_scan\').value=c;trScan(c)})">📷 Scanează cu camera</button>'
     +'<div id="t_prod"></div>'
     +'<div id="t_form" style="display:none">'
