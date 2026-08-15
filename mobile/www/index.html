@@ -248,19 +248,19 @@ function resolveProduct(code){
    dar acceptă și Enter. Dedupe ca să nu tragă de două ori. */
 function wireScan(id, fn){
   var inp=el(id); if(!inp) return;
-  var timer=null, lastKeyT=0, lastGap=999, lastFired="", lastFiredT=0;
+  var timer=null, lastFired="", lastFiredT=0;
   function fire(){
     var v=inp.value.trim(); if(!v || v.length<2) return;
     var now=Date.now();
-    if(v===lastFired && now-lastFiredT<500) return; // evită dublarea (rafală + Enter)
+    if(v===lastFired && now-lastFiredT<600) return; // evită dublarea (rafală + Enter)
     lastFired=v; lastFiredT=now; inp.value=""; fn(v);
   }
-  inp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); if(timer) clearTimeout(timer); fire(); } });
+  // Enter (dacă DataWedge îl trimite) → declanșează imediat
+  inp.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.keyCode===13){ e.preventDefault(); if(timer) clearTimeout(timer); fire(); } });
+  // Fără Enter: câmp dedicat scanării → declanșează după o scurtă pauză, indiferent de viteză
   inp.addEventListener("input", function(){
-    var now=Date.now(); lastGap=now-lastKeyT; lastKeyT=now;
     if(timer) clearTimeout(timer);
-    // declanșare la 110ms de liniște DOAR dacă ultimul caracter a venit rapid (scanner, nu tastat de om)
-    timer=setTimeout(function(){ if(lastGap<70) fire(); }, 110);
+    timer=setTimeout(fire, 140);
   });
   setTimeout(function(){ inp.focus(); }, 120);
 }
