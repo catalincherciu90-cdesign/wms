@@ -124,10 +124,10 @@ window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="rec
 function screenLookup(){
   scanTarget=function(code){ el("s_scan").value=code; opLookup(code); };
   shell("Scanează & caută",
-    '<div class="scanbox"><input id="s_scan" placeholder="Scanează sau tastează cod + Enter" onkeydown="if(event.key===\'Enter\'){opLookup(this.value)}"></div>'
+    '<div class="scanbox"><input id="s_scan" placeholder="Scanează codul (fără Enter)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'s_scan\').value=c;opLookup(c)})">📷 Scanează cu camera</button>'
     +'<div id="s_res"></div>', {back:"renderHome()"});
-  focusScan("s_scan");
+  wireScan("s_scan", opLookup);
 }
 function opLookup(code){
   code=(code||"").trim(); if(!code) return;
@@ -151,7 +151,7 @@ function screenMove(kind){
   window._mv={kind:kind, product:null};
   scanTarget=function(code){ mvScan(code); };
   shell(title,
-    '<div class="scanbox"><input id="m_scan" placeholder="Scanează produsul + Enter" onkeydown="if(event.key===\'Enter\'){mvScan(this.value)}"></div>'
+    '<div class="scanbox"><input id="m_scan" placeholder="Scanează produsul (fără Enter)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'m_scan\').value=c;mvScan(c)})">📷 Scanează cu camera</button>'
     +'<div id="m_prod"></div>'
     +'<div id="m_form" style="display:none">'
@@ -159,7 +159,7 @@ function screenMove(kind){
     +'<label>Cantitate</label><input id="m_qty" type="number" inputmode="numeric" min="1" value="1">'
     +'<button class="big" onclick="mvSubmit()">'+(kind==="receive"?"Confirmă recepția":"Confirmă expedierea")+'</button>'
     +'</div>', {back:"renderHome()"});
-  focusScan("m_scan");
+  wireScan("m_scan", mvScan);
 }
 function mvScan(code){
   code=(code||"").trim(); if(!code) return;
@@ -188,7 +188,7 @@ function screenTransfer(){
   window._tr={product:null};
   scanTarget=function(code){ trScan(code); };
   shell("Transfer între locații",
-    '<div class="scanbox"><input id="t_scan" placeholder="Scanează produsul + Enter" onkeydown="if(event.key===\'Enter\'){trScan(this.value)}"></div>'
+    '<div class="scanbox"><input id="t_scan" placeholder="Scanează produsul (fără Enter)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'t_scan\').value=c;trScan(c)})">📷 Scanează cu camera</button>'
     +'<div id="t_prod"></div>'
     +'<div id="t_form" style="display:none">'
@@ -197,7 +197,7 @@ function screenTransfer(){
     +'<label>Cantitate</label><input id="t_qty" type="number" inputmode="numeric" min="1" value="1">'
     +'<button class="big" onclick="trSubmit()">Confirmă transferul</button>'
     +'</div>', {back:"renderHome()"});
-  focusScan("t_scan");
+  wireScan("t_scan", trScan);
 }
 function trScan(code){
   code=(code||"").trim(); if(!code) return;
@@ -228,20 +228,41 @@ function resolveProduct(code){
     return (exact[0]||list[0]||null);
   });
 }
-function focusScan(id){ setTimeout(function(){ var e=el(id); if(e) e.focus(); },120); }
+/* Leagă un câmp de scanare: declanșează AUTOMAT după rafala de scanare (fără Enter),
+   dar acceptă și Enter. Dedupe ca să nu tragă de două ori. */
+function wireScan(id, fn){
+  var inp=el(id); if(!inp) return;
+  var timer=null, lastKeyT=0, lastGap=999, lastFired="", lastFiredT=0;
+  function fire(){
+    var v=inp.value.trim(); if(!v || v.length<2) return;
+    var now=Date.now();
+    if(v===lastFired && now-lastFiredT<500) return; // evită dublarea (rafală + Enter)
+    lastFired=v; lastFiredT=now; inp.value=""; fn(v);
+  }
+  inp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); if(timer) clearTimeout(timer); fire(); } });
+  inp.addEventListener("input", function(){
+    var now=Date.now(); lastGap=now-lastKeyT; lastKeyT=now;
+    if(timer) clearTimeout(timer);
+    // declanșare la 110ms de liniște DOAR dacă ultimul caracter a venit rapid (scanner, nu tastat de om)
+    timer=setTimeout(function(){ if(lastGap<70) fire(); }, 110);
+  });
+  setTimeout(function(){ inp.focus(); }, 120);
+}
 
-/* ====== Scanner laser Zebra (DataWedge, mod Keystroke) ====== */
-/* Scanerul "tastează" codul rapid + Enter. Dacă un câmp e focusat, intră direct.
-   Dacă nu, prindem global și trimitem la ecranul curent (scanTarget). */
+/* ====== Scanner laser Zebra (DataWedge) — captură globală, FĂRĂ Enter ====== */
+/* Când niciun câmp nu e focusat, prindem rafala de la scaner și o trimitem la ecranul curent.
+   Se declanșează la pauza de după scanare (nu e nevoie de Enter); Enter tot merge. */
 (function(){
-  var buf="", last=0;
+  var buf="", last=0, timer=null;
+  function flush(){ var c=buf.trim(); buf=""; if(c.length>=2 && scanTarget) scanTarget(c); }
   document.addEventListener("keydown",function(e){
     var a=document.activeElement;
     var inField=a && (a.tagName==="INPUT"||a.tagName==="SELECT"||a.tagName==="TEXTAREA");
-    if(inField) return; // câmpul primește scanul; are propriul handler de Enter
+    if(inField) return; // câmpul focusat are propriul wireScan
     var now=Date.now(); if(now-last>120) buf=""; last=now;
-    if(e.key==="Enter"){ var c=buf.trim(); buf=""; if(c.length>=2 && scanTarget) scanTarget(c); return; }
-    if(e.key && e.key.length===1) buf+=e.key;
+    if(timer) clearTimeout(timer);
+    if(e.key==="Enter"){ flush(); return; }
+    if(e.key && e.key.length===1){ buf+=e.key; timer=setTimeout(flush,110); }
   },true);
 })();
 
