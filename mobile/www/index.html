@@ -120,6 +120,7 @@ function renderHome(){
   scanTarget=function(code){ opLookup(code); };
   shell("WSD WMS",
     '<div class="grid">'
+    +tile("orders","📋","Comenzi<br>de pregătit")
     +tile("lookup","🔎","Scanează<br>& caută")
     +tile("receive","📥","Recepție")
     +tile("ship","📤","Expediere")
@@ -130,7 +131,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -234,6 +235,78 @@ function trSubmit(){
     feedback(true); toast("Transferat: "+qty+" × "+tr.product.name); screenTransfer();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Comenzi de pregătit (picking scanat) ---- */
+function ordStatus(s){ if(s==="completed")return '<span class="pill good">expediată</span>'; if(s==="cancelled")return '<span class="pill bad">anulată</span>'; return '<span class="pill" style="background:#3a3f1a;color:#f0c651">de pregătit</span>'; }
+function screenOrders(){
+  scanTarget=null;
+  shell("Comenzi de pregătit",'<div id="ord_list" class="muted center" style="padding:20px">Se încarcă…</div>',{back:"renderHome()"});
+  api("GET","/api/orders?type=outbound").then(function(d){
+    var list=(d.orders||[]).filter(function(o){ return o.status!=="completed" && o.status!=="cancelled"; });
+    if(!list.length){ el("ord_list").innerHTML='<div class="card center muted">Nicio comandă de pregătit.</div>'; return; }
+    el("ord_list").innerHTML=list.map(function(o){
+      var who = o.source==="portal" ? (esc(o.client_name||"client")+(o.recipient_name?(' → '+esc(o.recipient_name)):'')) : esc(o.partner_name||"—");
+      return '<div class="card" onclick="screenPick('+o.id+')" style="margin-bottom:10px;cursor:pointer">'
+        +'<div class="row" style="justify-content:space-between;align-items:center"><b>'+esc(o.code)+'</b>'+ordStatus(o.status)+'</div>'
+        +'<div class="muted" style="font-size:13px;margin-top:4px">'+who+'</div>'
+        +'<div class="muted" style="font-size:12.5px;margin-top:2px">'+esc(o.line_count)+' produse · '+esc(o.total_qty)+' buc.</div></div>';
+    }).join("");
+  }).catch(function(e){ el("ord_list").innerHTML='<div class="card center" style="color:#f88">'+esc(e.message)+'</div>'; });
+}
+var _pick=null;
+window.screenPick=function(id){
+  api("GET","/api/orders/"+id).then(function(d){
+    _pick={ id:id, order:d.order, lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0}; }) };
+    scanTarget=function(code){ pickScan(code); };
+    var recip = d.order.source==="portal" ? ('<div class="muted" style="font-size:13px;margin-bottom:8px">Livrare: <b>'+esc(d.order.recipient_name||"—")+'</b>'+(d.order.recipient_address?(', '+esc(d.order.recipient_address)):'')+(d.order.recipient_city?(', '+esc(d.order.recipient_city)):'')+'</div>') : '';
+    shell("Picking "+esc(d.order.code),
+      recip
+      +'<div class="scanbox"><input id="pk_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul de cules"></div>'
+      +'<button class="cam" onclick="openCam(function(c){pickScan(c)})">📷 Scanează cu camera</button>'
+      +'<div id="pk_lines" style="margin-top:12px"></div>'
+      +'<div id="pk_done" style="margin-top:14px"></div>'
+    , {back:"screenOrders()"});
+    pickRender(); wireScan("pk_scan", pickScan);
+  }).catch(function(e){ toast(e.message,true); });
+};
+function pickRender(){
+  var all=true;
+  var rows=_pick.lines.map(function(l){
+    var ok=l.done>=l.need; if(!ok) all=false;
+    return '<div class="card" style="margin-bottom:8px;border-left:4px solid '+(ok?"#22c55e":"#f0c651")+'">'
+      +'<div class="row" style="justify-content:space-between;align-items:center">'
+      +'<div><b>'+esc(l.name)+'</b><div class="muted" style="font-size:12px">'+esc(l.sku||"")+'</div></div>'
+      +'<div style="text-align:right"><b style="font-size:20px;color:'+(ok?"#22c55e":"#eef2fb")+'">'+l.done+'</b><span class="muted"> / '+l.need+' '+esc(l.unit||"")+'</span></div>'
+      +'</div></div>';
+  }).join("");
+  el("pk_lines").innerHTML=rows;
+  var host=el("pk_done"); if(!host) return;
+  if(all){
+    host.innerHTML='<div class="card center" style="background:rgba(34,197,94,.12);margin-bottom:12px"><b>Tot culese ✓</b></div>'
+      +'<label>Expediază din locația</label><select id="pk_loc">'+locOptions()+'</select>'
+      +'<button class="big" onclick="completePick()">Finalizează &amp; expediază</button>';
+  } else { host.innerHTML=''; }
+}
+function pickScan(code){
+  code=(code||"").trim(); if(!code||!_pick) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ feedback(false); toast("Produs negăsit",true); return; }
+    var line=_pick.lines.find(function(l){ return l.product_id===p.id; });
+    if(!line){ feedback(false); toast("Nu e în această comandă: "+p.name,true); return; }
+    if(line.done>=line.need){ feedback(false); toast("Deja complet: "+line.name,true); return; }
+    line.done++; feedback(true);
+    if(line.done>=line.need) toast("✓ "+line.name+" complet"); else toast(line.name+": "+line.done+"/"+line.need);
+    pickRender();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+}
+window.completePick=function(){
+  if(!_pick) return;
+  var loc=el("pk_loc")?Number(el("pk_loc").value):0;
+  if(!loc){ toast("Alege locația de expediere",true); return; }
+  api("POST","/api/orders/"+_pick.id+"/complete",{location_id:loc}).then(function(){
+    feedback(true); toast("Comandă expediată ✓"); _pick=null; screenOrders();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Comun ---- */
 function locOptions(){ return '<option value="">— alege —</option>'+LOCS.map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); }
