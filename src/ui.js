@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v21";
+var APP_VERSION = "v22";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -630,10 +630,14 @@ function portalStock(){
   api("GET","/api/portal/products").then(function(d){
     var rows=d.products.map(function(p){
       var locs=(p.locations||[]).map(function(l){return esc(l.location)+': '+esc(l.qty);}).join(" · ")||'<span class="muted">—</span>';
-      return '<tr><td><b>'+esc(p.barcode||p.sku)+'</b></td><td>'+esc(p.name)+'</td><td>'+esc(p.category||"—")+'</td>'
-        +'<td class="right"><b>'+esc(p.total)+'</b> '+esc(p.unit||"")+'</td><td style="font-size:12.5px">'+locs+'</td></tr>';
+      var resv=Number(p.reserved||0), avail=Number(p.available!=null?p.available:(p.total-resv));
+      return '<tr><td><b>'+esc(p.barcode||p.sku)+'</b></td><td>'+esc(p.name)+'</td>'
+        +'<td class="right">'+esc(p.total)+' '+esc(p.unit||"")+'</td>'
+        +'<td class="right">'+(resv>0?'<span class="pill warn">'+resv+'</span>':'<span class="muted">0</span>')+'</td>'
+        +'<td class="right"><b>'+avail+'</b></td>'
+        +'<td style="font-size:12px">'+locs+'</td></tr>';
     }).join("");
-    el("pstock").innerHTML='<table><thead><tr><th>EAN</th><th>Produs</th><th>Categorie</th><th class="right">Total</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
+    el("pstock").innerHTML='<table><thead><tr><th>EAN</th><th>Produs</th><th class="right">În stoc</th><th class="right">Rezervat</th><th class="right">Disponibil</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
   });
 }
 function portalMovements(){
@@ -837,10 +841,11 @@ VIEWS.dashboard = function(){
   setMain(topbar("Dashboard") + '<div id="dash">Se încarcă…</div>');
   api("GET","/api/dashboard").then(function(d){
     var k=d.kpis;
-    var kpis = '<div class="kpis" style="grid-template-columns:repeat(5,1fr)">'
+    var kpis = '<div class="kpis" style="grid-template-columns:repeat(6,1fr)">'
       + kpi(k.products,"Produse active")
       + kpi(k.locations,"Locații")
       + kpi(k.total_units,"Unități în stoc")
+      + kpi(k.reserved||0,"Rezervat (comenzi)")
       + kpi(k.open_orders||0,"Comenzi deschise")
       + kpi(k.low_stock,"Sub prag stoc", k.low_stock>0?"bad":"good")
       + '</div>';
@@ -1148,10 +1153,15 @@ VIEWS.stock = function(){
   });
   api("GET","/api/inventory/summary").then(function(d){
     var rows=d.summary.map(function(s){
-      return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.name)+'</td><td class="right">'+esc(s.total)+' '+esc(s.unit)+'</td>'
-        +'<td>'+(s.low?'<span class="pill bad">sub prag</span>':'<span class="pill good">ok</span>')+'</td></tr>';
+      var resv=Number(s.reserved||0), avail=Number(s.available!=null?s.available:(s.total-resv));
+      var resvCell = resv>0 ? '<span class="pill warn">'+resv+'</span>' : '<span class="muted">0</span>';
+      return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.name)+'</td>'
+        +'<td class="right">'+esc(s.total)+' '+esc(s.unit)+'</td>'
+        +'<td class="right">'+resvCell+'</td>'
+        +'<td class="right"><b>'+avail+'</b></td>'
+        +'<td>'+(s.low?'<span class="pill bad">sub prag</span>':(avail<=0&&s.total>0?'<span class="pill warn">tot rezervat</span>':'<span class="pill good">ok</span>'))+'</td></tr>';
     }).join("");
-    el("sumtbl").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Total</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan=4 class="muted center">Fără stoc</td></tr>')+'</tbody></table>';
+    el("sumtbl").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">În stoc</th><th class="right">Rezervat</th><th class="right">Disponibil</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Fără stoc</td></tr>')+'</tbody></table>';
   });
   api("GET","/api/inventory/stock").then(function(d){
     var rows=d.stock.map(function(s){

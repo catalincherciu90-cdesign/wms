@@ -25,12 +25,15 @@ export async function summary(request, env) {
   const { results } = await env.DB.prepare(`
     SELECT p.id AS product_id, p.sku, p.name, p.unit, p.reorder_point,
            COALESCE(SUM(i.quantity), 0) AS total,
+           (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id = ol.order_id
+              WHERE ol.product_id = p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved,
            CASE WHEN COALESCE(SUM(i.quantity),0) <= p.reorder_point THEN 1 ELSE 0 END AS low
     FROM products p
     LEFT JOIN inventory i ON i.product_id = p.id
     WHERE p.active = 1
     GROUP BY p.id
     ORDER BY p.name`).all();
+  for (const r of results) r.available = (r.total || 0) - (r.reserved || 0);
   return json({ summary: results });
 }
 

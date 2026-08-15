@@ -2,10 +2,11 @@
 import { json } from '../lib/http.js';
 
 export async function stats(request, env) {
-  const [products, locations, totalUnits, lowStock, openOrders, moves7, byCategory, recentOrders, lowList] = await Promise.all([
+  const [products, locations, totalUnits, reserved, lowStock, openOrders, moves7, byCategory, recentOrders, lowList] = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1').first(),
     env.DB.prepare('SELECT COUNT(*) AS n FROM locations WHERE active = 1').first(),
     env.DB.prepare('SELECT COALESCE(SUM(quantity),0) AS n FROM inventory').first(),
+    env.DB.prepare("SELECT COALESCE(SUM(ol.quantity),0) AS n FROM order_lines ol JOIN orders o ON o.id = ol.order_id WHERE o.type='outbound' AND o.status NOT IN ('completed','cancelled')").first(),
     env.DB.prepare(`
       SELECT COUNT(*) AS n FROM (
         SELECT p.id FROM products p
@@ -43,6 +44,7 @@ export async function stats(request, env) {
       products: products.n,
       locations: locations.n,
       total_units: totalUnits.n,
+      reserved: reserved.n,
       low_stock: lowStock.n,
       open_orders: openOrders.n,
     },

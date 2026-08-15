@@ -23,10 +23,13 @@ export async function summary(request, env, ctx, user) {
 export async function products(request, env, ctx, user) {
   const { results } = await env.DB.prepare(`
     SELECT p.id, p.sku, p.name, p.category, p.unit, p.barcode,
-           COALESCE(SUM(i.quantity), 0) AS total
+           COALESCE(SUM(i.quantity), 0) AS total,
+           (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id = ol.order_id
+              WHERE ol.product_id = p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved
     FROM products p LEFT JOIN inventory i ON i.product_id = p.id
     WHERE p.client_id = ? AND p.active = 1
     GROUP BY p.id ORDER BY p.name`).bind(user.client_id).all();
+  for (const r of results) r.available = (r.total || 0) - (r.reserved || 0);
 
   const { results: locs } = await env.DB.prepare(`
     SELECT i.product_id, l.code AS location_code, i.quantity
