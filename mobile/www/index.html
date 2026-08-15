@@ -62,6 +62,18 @@ var scanTarget = null; // funcție care primește codul scanat pe ecranul curent
 function el(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
 function toast(m,bad){ var t=el("toast"); t.textContent=m; t.style.background=bad?"#7f1d1d":"#111a33"; t.style.display="block"; clearTimeout(window._tt); window._tt=setTimeout(function(){t.style.display="none";},2600); }
+/* Feedback la scanare: sunet (beep) + vibrație. ok=true → scurt/înalt; ok=false → grav/dublu. */
+function feedback(ok){
+  try{
+    var AC=window.AudioContext||window.webkitAudioContext;
+    var ctx=window._ac||(window._ac=new AC()); if(ctx.state==="suspended") ctx.resume();
+    var o=ctx.createOscillator(), g=ctx.createGain();
+    o.type="square"; o.frequency.value=ok?920:200; g.gain.value=0.06;
+    o.connect(g); g.connect(ctx.destination); o.start();
+    setTimeout(function(){ try{o.stop();}catch(e){} }, ok?90:220);
+  }catch(e){}
+  try{ if(navigator.vibrate) navigator.vibrate(ok?55:[70,60,70]); }catch(e){}
+}
 function api(method,path,body){
   var o={method:method,headers:{}};
   if(token) o.headers["Authorization"]="Bearer "+token;
@@ -132,7 +144,8 @@ function screenLookup(){
 function opLookup(code){
   code=(code||"").trim(); if(!code) return;
   resolveProduct(code).then(function(p){
-    if(!p){ el("s_res") && (el("s_res").innerHTML='<div class="card center muted">Produs negăsit pentru: '+esc(code)+'</div>'); return; }
+    if(!p){ feedback(false); el("s_res") && (el("s_res").innerHTML='<div class="card center muted">Produs negăsit pentru: '+esc(code)+'</div>'); return; }
+    feedback(true);
     return api("GET","/api/inventory/stock?product_id="+p.id).then(function(d){
       var rows=(d.stock||[]).map(function(s){return '<tr><td>'+esc(s.location_code)+'</td><td class="center"><b>'+esc(s.quantity)+'</b> '+esc(s.unit||"")+'</td></tr>';}).join("");
       var total=(d.stock||[]).reduce(function(a,s){return a+Number(s.quantity||0);},0);
@@ -164,7 +177,8 @@ function screenMove(kind){
 function mvScan(code){
   code=(code||"").trim(); if(!code) return;
   resolveProduct(code).then(function(p){
-    if(!p){ el("m_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("m_form").style.display="none"; return; }
+    if(!p){ feedback(false); el("m_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("m_form").style.display="none"; return; }
+    feedback(true);
     window._mv.product=p;
     el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
     el("m_form").style.display="block";
@@ -178,9 +192,10 @@ function mvSubmit(){
   if(!(qty>0)){ toast("Cantitate invalidă",true); return; }
   var path = mv.kind==="receive" ? "/api/inventory/receive" : "/api/inventory/ship";
   api("POST",path,{product_id:mv.product.id, location_id:loc, quantity:qty}).then(function(){
+    feedback(true);
     toast((mv.kind==="receive"?"Recepționat: ":"Expediat: ")+qty+" × "+mv.product.name);
     screenMove(mv.kind); // reset pentru următorul scan
-  }).catch(function(e){ toast(e.message,true); });
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
 
 /* ---- Transfer ---- */
@@ -202,7 +217,8 @@ function screenTransfer(){
 function trScan(code){
   code=(code||"").trim(); if(!code) return;
   resolveProduct(code).then(function(p){
-    if(!p){ el("t_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("t_form").style.display="none"; return; }
+    if(!p){ feedback(false); el("t_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("t_form").style.display="none"; return; }
+    feedback(true);
     window._tr.product=p;
     el("t_prod").innerHTML='<div class="card"><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
     el("t_form").style.display="block";
@@ -215,8 +231,8 @@ function trSubmit(){
   if(from===to){ toast("Locațiile trebuie să difere",true); return; }
   if(!(qty>0)){ toast("Cantitate invalidă",true); return; }
   api("POST","/api/inventory/transfer",{product_id:tr.product.id, from_location_id:from, to_location_id:to, quantity:qty}).then(function(){
-    toast("Transferat: "+qty+" × "+tr.product.name); screenTransfer();
-  }).catch(function(e){ toast(e.message,true); });
+    feedback(true); toast("Transferat: "+qty+" × "+tr.product.name); screenTransfer();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
 
 /* ---- Comun ---- */
