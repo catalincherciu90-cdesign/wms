@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v23";
+var APP_VERSION = "v24";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -949,14 +949,16 @@ var _impRows=[];
 window.importUI = function(){
   _impRows=[];
   modal("Import produse din Excel / CSV",
-    '<div class="muted" style="margin-bottom:10px;font-size:12.5px">Coloane recunoscute (prima linie = antet): <b>cod_bare (EAN)</b>, <b>nume</b>, categorie, um, prag, sku (opțional). EAN-ul e codul principal.</div>'
-    + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv">'+fhint("Alege fișierul cu produse. Trebuie să aibă coloane EAN și Nume.")+'</div>'
+    '<div class="muted" style="margin-bottom:10px;font-size:12.5px">Coloane recunoscute (prima linie = antet): <b>cod_bare (EAN)</b>, <b>nume</b>, categorie, um, prag, sku, <b>cantitate</b> (opțional). EAN-ul e codul principal.</div>'
+    + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv">'+fhint("Alege fișierul cu produse. Trebuie să aibă coloane EAN și Nume. Opțional: coloană «cantitate» pentru stoc de deschidere.")+'</div>'
     + '<div class="field"><label>Atribuie toate unui client (opțional)</label><select id="imp_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Clientul căruia îi atribui produsele importate.")+'</div>'
+    + '<div class="field"><label>Locație pentru stoc de deschidere (opțional)</label><select id="imp_loc"><option value="">— fără stoc (doar catalog) —</option></select>'+fhint("Dacă fișierul are coloana «cantitate» și alegi o locație, se încarcă și stocul aici. Altfel se importă doar catalogul.")+'</div>'
     + '<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadTemplate()">⬇ Descarcă șablon</button></div>'
     + '<div id="imp_preview" class="muted">Alege un fișier ca să vezi previzualizarea.</div>',
     function(){ importDoImport(); });
   var sv=el("modalSave"); if(sv){ sv.textContent="Importă"; sv.disabled=true; }
   api("GET","/api/clients").then(function(d){ if(el("imp_client")) el("imp_client").innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
+  api("GET","/api/locations").then(function(d){ if(el("imp_loc")) el("imp_loc").innerHTML='<option value="">— fără stoc (doar catalog) —</option>'+(d.locations||[]).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); }).catch(function(){});
   if(el("imp_file")) el("imp_file").onchange=importParseFile;
 };
 function impGet(row, keys){ for(var k in row){ if(keys.indexOf(String(k).toLowerCase().trim())>=0) return row[k]; } return ""; }
@@ -969,7 +971,8 @@ function mapRow(r){
     name: String(impGet(r,["nume","name","denumire","produs","descriere"])).trim(),
     category: String(impGet(r,["categorie","category"])).trim(),
     unit: String(impGet(r,["um","unit","unitate","unitate de masura"])).trim() || "buc",
-    reorder_point: Number(impGet(r,["prag","reorder","reorder_point","stoc minim","prag reorder"]))||0
+    reorder_point: Number(impGet(r,["prag","reorder","reorder_point","stoc minim","prag reorder"]))||0,
+    quantity: Math.round(Number(String(impGet(r,["cantitate","cant","qty","quantity","stoc","stoc initial","stoc curent","stoc de deschidere"])).replace(",","."))) || 0
   };
 }
 window.importParseFile = function(){
@@ -982,11 +985,15 @@ window.importParseFile = function(){
         var wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
         var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
         _impRows=rows.map(mapRow).filter(function(r){ return (r.barcode||r.sku) && r.name; });
-        var head=_impRows.slice(0,5).map(function(r){ return '<tr><td><b>'+esc(r.barcode||r.sku)+'</b></td><td>'+esc(r.name)+'</td><td>'+esc(r.category)+'</td></tr>'; }).join("");
+        var head=_impRows.slice(0,5).map(function(r){ return '<tr><td><b>'+esc(r.barcode||r.sku)+'</b></td><td>'+esc(r.name)+'</td><td>'+esc(r.category)+'</td><td style="text-align:right">'+(r.quantity||0)+'</td></tr>'; }).join("");
         if(!_impRows.length){ el("imp_preview").innerHTML='<div class="pill bad">Niciun rând valid — verifică să existe coloanele «cod_bare» (EAN) și «nume»</div>'; var s=el("modalSave"); if(s) s.disabled=true; return; }
-        el("imp_preview").innerHTML='<div style="margin-bottom:6px"><b>'+_impRows.length+'</b> produse valide (din '+rows.length+' rânduri)</div>'
-          +'<div style="max-height:200px;overflow:auto"><table><thead><tr><th>EAN</th><th>Nume</th><th>Categorie</th></tr></thead><tbody>'+head+'</tbody></table></div>'
-          +(_impRows.length>5?'<div class="muted" style="margin-top:4px">…și încă '+(_impRows.length-5)+'</div>':'');
+        var withQty=_impRows.filter(function(r){return r.quantity>0;}).length;
+        var totQty=_impRows.reduce(function(a,r){return a+(r.quantity||0);},0);
+        el("imp_preview").innerHTML='<div style="margin-bottom:6px"><b>'+_impRows.length+'</b> produse valide (din '+rows.length+' rânduri)'
+          +(withQty?(' · <b>'+withQty+'</b> cu cantitate (total '+totQty+' buc)'):'')+'</div>'
+          +'<div style="max-height:200px;overflow:auto"><table><thead><tr><th>EAN</th><th>Nume</th><th>Categorie</th><th style="text-align:right">Cant.</th></tr></thead><tbody>'+head+'</tbody></table></div>'
+          +(_impRows.length>5?'<div class="muted" style="margin-top:4px">…și încă '+(_impRows.length-5)+'</div>':'')
+          +(withQty?'<div class="muted" style="margin-top:6px;font-size:12px">💡 Ca să se încarce și stocul, alege o <b>locație</b> mai sus. Fără locație se importă doar catalogul.</div>':'');
         var s2=el("modalSave"); if(s2) s2.disabled=false;
       }catch(err){ el("imp_preview").innerHTML='<div class="pill bad">Nu am putut citi fișierul</div>'; }
     };
@@ -997,12 +1004,12 @@ window.importDoImport = function(){
   if(!_impRows.length) return;
   var sv=el("modalSave"); if(sv) sv.disabled=true;
   toast("Se importă "+_impRows.length+" produse…");
-  api("POST","/api/products/import",{ products:_impRows, client_id: el("imp_client").value?Number(el("imp_client").value):null })
-    .then(function(d){ closeModal(); toast("Importat: "+d.created+" adăugate · "+d.skipped+" sărite"); loadProducts(); })
+  api("POST","/api/products/import",{ products:_impRows, client_id: el("imp_client").value?Number(el("imp_client").value):null, location_id: (el("imp_loc")&&el("imp_loc").value)?Number(el("imp_loc").value):null })
+    .then(function(d){ closeModal(); toast("Importat: "+d.created+" adăugate · "+d.skipped+" sărite"+(d.stock_loaded?(" · stoc încărcat pentru "+d.stock_loaded+" produse"):"")); loadProducts(); })
     .catch(function(e){ var s=el("modalSave"); if(s) s.disabled=false; toast(e.message,"bad"); });
 };
 window.downloadTemplate = function(){
-  var csv="cod_bare,nume,categorie,um,prag,sku\\r\\n5941234567890,Exemplu produs,Ambalaje,buc,10,\\r\\n";
+  var csv="cod_bare,nume,categorie,um,prag,sku,cantitate\\r\\n5941234567890,Exemplu produs,Ambalaje,buc,10,,25\\r\\n";
   var blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
   a.href=url; a.download="sablon-produse.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 };

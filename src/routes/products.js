@@ -77,11 +77,20 @@ export async function remove(request, env, ctx, user, params) {
 }
 
 // Import în masă (din Excel/CSV parsat în client -> listă de produse)
+// Opțional: dacă vine `location_id` și rândurile au `quantity` > 0, se încarcă
+// și stoc de deschidere (inventar + mișcare de tip inbound, referință „import").
 export async function importProducts(request, env, ctx, user) {
   const b = await readJson(request);
   if (!Array.isArray(b?.products) || !b.products.length) return error('Lista de produse e goală', 400);
   if (b.products.length > 3000) return error('Prea multe rânduri (max 3000)', 400);
   const clientId = b.client_id ? Number(b.client_id) : null;
+  const locationId = b.location_id ? Number(b.location_id) : null;
+
+  // Locația (dacă e cerută încărcarea de stoc) trebuie să existe.
+  if (locationId) {
+    const loc = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(locationId).first();
+    if (!loc) return error('Locație inexistentă pentru stoc', 404);
+  }
 
   const valid = [];
   let skipped = 0;
@@ -90,12 +99,14 @@ export async function importProducts(request, env, ctx, user) {
     const sku = (p.sku ?? '').toString().trim() || barcode; // SKU auto din EAN
     const name = (p.name ?? '').toString().trim();
     if (!sku || !name) { skipped++; continue; }
+    const quantity = Math.round(Number(p.quantity) || 0);
     valid.push({
       sku, name,
       barcode: barcode || null,
       category: (p.category ?? '').toString().trim() || null,
       unit: (p.unit ?? '').toString().trim() || 'buc',
       reorder_point: Number(p.reorder_point) || 0,
+      quantity: quantity > 0 ? quantity : 0,
     });
   }
 
@@ -108,7 +119,43 @@ export async function importProducts(request, env, ctx, user) {
     ));
     for (const r of res) { if (r.meta && r.meta.changes > 0) created++; else skipped++; }
   }
-  return json({ created, skipped, total: b.products.length });
+
+  // Încărcare stoc de deschidere (opțional).
+  let stockLoaded = 0;
+  if (locationId) {
+    // Rezolvă id-ul produsului după SKU (unic) pentru rândurile cu cantitate.
+    const withQty = valid.filter((p) => p.quantity > 0);
+    if (withQty.length) {
+      const idBySku = {};
+      const skus = withQty.map((p) => p.sku);
+      for (let i = 0; i < skus.length; i += 100) {
+        const chunk = skus.slice(i, i + 100);
+        const ph = chunk.map(() => '?').join(',');
+        const { results } = await env.DB.prepare(`SELECT id, sku FROM products WHERE sku IN (${ph})`).bind(...chunk).all();
+        for (const r of results) idBySku[r.sku] = r.id;
+      }
+      const ops = [];
+      for (const p of withQty) {
+        const pid = idBySku[p.sku];
+        if (!pid) continue;
+        ops.push(env.DB.prepare(`
+          INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?)
+          ON CONFLICT(product_id, location_id)
+          DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')`)
+          .bind(pid, locationId, p.quantity));
+        ops.push(env.DB.prepare(`
+          INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id)
+          VALUES (?, ?, 'inbound', ?, 'import', 'stoc de deschidere (import)', ?)`)
+          .bind(pid, locationId, p.quantity, user?.sub || null));
+        stockLoaded++;
+      }
+      for (let i = 0; i < ops.length; i += 100) {
+        await env.DB.batch(ops.slice(i, i + 100));
+      }
+    }
+  }
+
+  return json({ created, skipped, total: b.products.length, stock_loaded: stockLoaded });
 }
 
 // Reasignează în masă proprietarul (clientul) mai multor produse.
