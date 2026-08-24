@@ -1,6 +1,8 @@
 // Servește biblioteci client împachetate în Worker (fără CDN)
 import zxingSrc from '../vendor/zxing.txt';
 import xlsxSrc from '../vendor/xlsx.txt';
+import pdfSrc from '../vendor/pdf.txt';
+import pdfWorkerSrc from '../vendor/pdfworker.txt';
 import loginBg from '../vendor/login-bg.png';
 import siteHero from '../vendor/site-hero.png';
 import site1 from '../vendor/site-1.png';
@@ -22,6 +24,8 @@ function js(src) {
 
 export function zxing() { return js(zxingSrc); }
 export function xlsx() { return js(xlsxSrc); }
+export function pdf() { return js(pdfSrc); }
+export function pdfworker() { return js(pdfWorkerSrc); }
 export function image(name) {
   const data = IMAGES[name];
   if (!data) return new Response('Not found', { status: 404, headers: corsHeaders });

@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -158,6 +158,8 @@ export default {
     // Biblioteci client servite de Worker
     if (path === '/vendor/zxing.js') return vendor.zxing();
     if (path === '/vendor/xlsx.js') return vendor.xlsx();
+    if (path === '/vendor/pdf.js') return vendor.pdf();
+    if (path === '/vendor/pdf.worker.js') return vendor.pdfworker();
     if (path.startsWith('/assets/') && path.endsWith('.png')) return vendor.image(path.slice(8, -4));
 
     // PWA (instalabil pe Android / bază pentru APK)

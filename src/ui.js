@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v22";
+var APP_VERSION = "v23";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1172,7 +1172,8 @@ VIEWS.stock = function(){
 };
 
 function opForm(title, type){
-  setMain(topbar(title) + '<div class="card" style="padding:20px;max-width:520px">'
+  var avizBtn = type==="receive" ? '<button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>' : '';
+  setMain(topbar(title, avizBtn) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
     + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><div class="row"><input id="op_scan" style="flex:1" placeholder="Scanează sau tastează, apoi Enter" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'op_scan\\').value=t;opScan();})">📷</button></div>'+fhint("Scanează codul (laser sau 📷), apoi Enter — găsește produsul automat.")+'</div>'
     + '<div class="field"><label>Produs</label><select id="op_prod"></select>'+fhint("Se completează după scanare; sau alege manual din listă.")+'</div>'
@@ -1219,6 +1220,112 @@ window.submitOp = function(type){
   else { path="/api/inventory/"+(type==="receive"?"receive":"ship"); body.location_id=Number(el("op_loc").value); }
   api("POST",path,body).then(function(){ toast("Operațiune înregistrată"); el("op_qty").value=1; el("op_ref").value=""; el("op_note").value=""; })
     .catch(function(e){ el("opmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
+};
+
+/* ---- Recepție din aviz/factură PDF (citire EAN + cantități, fără stocare fișier) ---- */
+function ensurePdfjs(){
+  if(window._pdfjs) return Promise.resolve(window._pdfjs);
+  return import("/vendor/pdf.js").then(function(m){
+    if(m.GlobalWorkerOptions) m.GlobalWorkerOptions.workerSrc="/vendor/pdf.worker.js";
+    window._pdfjs=m; return m;
+  });
+}
+function eanOK(c){
+  if(!/^\\d+$/.test(c)) return false;
+  if(c.length!==8 && c.length!==13) return false;
+  var s=0,f=3;
+  for(var i=c.length-2;i>=0;i--){ s+=(c.charCodeAt(i)-48)*f; f=(f===3?1:3); }
+  return ((10-(s%10))%10)===(c.charCodeAt(c.length-1)-48);
+}
+function pdfLines(buf){
+  return ensurePdfjs().then(function(pdfjs){
+    return pdfjs.getDocument({data:buf}).promise.then(function(doc){
+      var lines=[], seq=Promise.resolve();
+      function page(n){ return doc.getPage(n).then(function(pg){ return pg.getTextContent().then(function(tc){
+        var rows={};
+        tc.items.forEach(function(it){ var y=Math.round(it.transform[5]); (rows[y]=rows[y]||[]).push({x:it.transform[4],s:it.str}); });
+        Object.keys(rows).sort(function(a,b){return b-a;}).forEach(function(y){
+          lines.push(rows[y].sort(function(a,b){return a.x-b.x;}).map(function(o){return o.s;}).join(" "));
+        });
+      }); }); }
+      for(var n=1;n<=doc.numPages;n++){ (function(nn){ seq=seq.then(function(){return page(nn);}); })(n); }
+      return seq.then(function(){ return lines; });
+    });
+  });
+}
+function avizExtract(lines){
+  var byEan={};
+  lines.forEach(function(line){
+    var all=line.match(/\\d{6,14}/g)||[];
+    var eans=all.filter(function(x){ return (x.length===8||x.length===13)&&eanOK(x); });
+    if(!eans.length) return;
+    var ean=eans[0];
+    var rest=line.split(ean).join(" ");
+    var toks=rest.split(/\\s+/).filter(function(t){ return /^\\d{1,5}$/.test(t); }).map(Number).filter(function(n){ return n>0; });
+    byEan[ean]=(byEan[ean]||0)+(toks.length?toks[0]:1);
+  });
+  return byEan;
+}
+window._avizRows=[];
+window.avizUI=function(){
+  modal("Recepție din aviz PDF",
+    '<div class="field"><label>Fișier aviz / factură (PDF)</label><input id="av_file" type="file" accept="application/pdf,.pdf">'+fhint("Citim codurile EAN și cantitățile din PDF. Fișierul NU se salvează.")+'</div>'
+    +'<div class="field"><label>Locația de recepție</label><select id="av_loc"></select>'+fhint("Unde așezi marfa primită.")+'</div>'
+    +field("Referință","av_ref","","","text","Ex: nr. aviz / factură.")
+    +'<div id="av_status" class="muted" style="font-size:12.5px;margin:8px 0"></div>'
+    +'<div id="av_res" style="max-height:44vh;overflow:auto"></div>',
+    function(){ avizReceiveAll(); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Recepționează"; sv.disabled=true; }
+  api("GET","/api/locations").then(function(d){ if(el("av_loc")) el("av_loc").innerHTML=(d.locations||[]).filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); });
+  el("av_file").onchange=avizParse;
+};
+function avizParse(){
+  var f=el("av_file").files[0]; if(!f) return;
+  if(!el("av_ref").value) el("av_ref").value=f.name.replace(/\\.pdf$/i,"");
+  el("av_status").textContent="Se citește PDF-ul…";
+  f.arrayBuffer().then(function(buf){ return pdfLines(buf); }).then(function(lines){
+    var byEan=avizExtract(lines);
+    var eans=Object.keys(byEan);
+    if(!eans.length){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Nu am găsit coduri EAN valide în PDF.</span>'; el("av_res").innerHTML=''; return; }
+    return api("GET","/api/products").then(function(d){
+      var map={}; (d.products||[]).forEach(function(p){ if(p.barcode) map[String(p.barcode)]=p; });
+      window._avizRows=eans.map(function(e){ return {ean:e, product:map[e]||null, qty:byEan[e]}; });
+      avizRender();
+    });
+  }).catch(function(e){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Eroare la citirea PDF: '+esc(e.message)+'</span>'; });
+}
+function avizRender(){
+  var rows=window._avizRows||[];
+  var matched=rows.filter(function(r){return r.product;});
+  el("av_status").innerHTML='Găsite <b>'+rows.length+'</b> coduri · potrivite cu produse: <b>'+matched.length+'</b>';
+  var html='<table><thead><tr><th></th><th>Produs</th><th>EAN</th><th class="right">Cant.</th></tr></thead><tbody>';
+  rows.forEach(function(r,i){
+    if(r.product){
+      html+='<tr><td><input type="checkbox" class="avchk" data-i="'+i+'" checked style="width:auto"></td><td>'+esc(r.product.name)+'</td><td class="muted" style="font-size:12px">'+esc(r.ean)+'</td>'
+        +'<td class="right"><input type="number" min="1" value="'+esc(r.qty)+'" class="avqty" data-i="'+i+'" style="width:72px"></td></tr>';
+    } else {
+      html+='<tr style="opacity:.55"><td>—</td><td class="muted">necunoscut (adaugă produsul)</td><td class="muted" style="font-size:12px">'+esc(r.ean)+'</td><td class="right muted">'+esc(r.qty)+'</td></tr>';
+    }
+  });
+  html+='</tbody></table>';
+  if(!matched.length) html+='<div class="muted" style="margin-top:8px;font-size:12.5px">Niciun cod nu se potrivește cu produsele tale. Adaugă întâi produsele cu aceste EAN-uri, apoi reîncarcă avizul.</div>';
+  el("av_res").innerHTML=html;
+  var sv=el("modalSave"); if(sv) sv.disabled = matched.length===0;
+}
+window.avizReceiveAll=function(){
+  var loc=el("av_loc")?Number(el("av_loc").value):0; if(!loc){ toast("Alege locația","bad"); return; }
+  var ref=el("av_ref")?el("av_ref").value:"";
+  var items=[];
+  Array.prototype.forEach.call(document.querySelectorAll(".avchk:checked"), function(c){
+    var i=Number(c.getAttribute("data-i")); var r=window._avizRows[i];
+    var qEl=document.querySelector('.avqty[data-i="'+i+'"]'); var qty=qEl?Number(qEl.value):r.qty;
+    if(r&&r.product&&qty>0) items.push({product_id:r.product.id, quantity:qty});
+  });
+  if(!items.length){ toast("Selectează cel puțin un produs","bad"); return; }
+  var sv=el("modalSave"); if(sv) sv.disabled=true;
+  var done=0, fail=0, seq=Promise.resolve();
+  items.forEach(function(it){ seq=seq.then(function(){ return api("POST","/api/inventory/receive",{product_id:it.product_id, location_id:loc, quantity:it.quantity, reference:ref}).then(function(){done++;}).catch(function(){fail++;}); }); });
+  seq.then(function(){ closeModal(); toast("Recepționat din aviz: "+done+" produse"+(fail?(" · "+fail+" eșuate"):"")); });
 };
 
 VIEWS.movements = function(){
