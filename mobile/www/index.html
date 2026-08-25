@@ -74,6 +74,46 @@ function feedback(ok){
   }catch(e){}
   try{ if(navigator.vibrate) navigator.vibrate(ok?55:[70,60,70]); }catch(e){}
 }
+/* Alertă „comandă nouă": chime ascendent (3 note) + vibrație puternică. Distinct de beep-ul de scan. */
+function newOrderChime(){
+  try{
+    var AC=window.AudioContext||window.webkitAudioContext;
+    var ctx=window._ac||(window._ac=new AC()); if(ctx.state==="suspended") ctx.resume();
+    var notes=[784,988,1319]; // Sol–Si–Mi ascendent
+    for(var i=0;i<notes.length;i++){
+      var t0=ctx.currentTime+i*0.17;
+      var o=ctx.createOscillator(), g=ctx.createGain();
+      o.type="sine"; o.frequency.value=notes[i];
+      g.gain.setValueAtTime(0.0001,t0);
+      g.gain.exponentialRampToValueAtTime(0.14,t0+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+0.16);
+      o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0+0.18);
+    }
+  }catch(e){}
+  try{ if(navigator.vibrate) navigator.vibrate([200,100,200,100,300]); }catch(e){}
+}
+/* Deblochează audio după un gest (login) — ca sunetul să meargă și când alerta vine din poll. */
+function primeAudio(){ try{ var AC=window.AudioContext||window.webkitAudioContext; window._ac=window._ac||new AC(); if(window._ac.state==="suspended") window._ac.resume(); }catch(e){} }
+
+/* Verificare periodică: alertă când apare o comandă nouă de livrare (ex. plasată de client din portal). */
+var _lastOrderId = Number(localStorage.getItem("wms_m_lastorder")||0) || 0;
+function ordPollTick(){
+  if(!token || !me || me.kind==="client") return;
+  api("GET","/api/orders?type=outbound").then(function(d){
+    var orders=(d.orders||[]); if(!orders.length) return;
+    var maxId=orders.reduce(function(m,o){ return Math.max(m, Number(o.id)||0); }, 0);
+    if(_lastOrderId===0){ _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId)); return; } // prima rulare = referință, fără alertă
+    var fresh=orders.filter(function(o){ return Number(o.id)>_lastOrderId && o.status!=="completed" && o.status!=="cancelled"; });
+    if(fresh.length){
+      _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId));
+      newOrderChime();
+      toast(fresh.length===1 ? ("Comandă nouă: "+esc(fresh[0].code)) : (fresh.length+" comenzi noi de pregătit"));
+      if(el("ord_list")) screenOrders(); // dacă suntem pe lista de comenzi, o reîmprospătăm
+    } else if(maxId>_lastOrderId){ _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId)); }
+  }).catch(function(){});
+}
+function startOrdPoll(){ stopOrdPoll(); ordPollTick(); window._ordPoll=setInterval(ordPollTick, 20000); }
+function stopOrdPoll(){ if(window._ordPoll){ clearInterval(window._ordPoll); window._ordPoll=null; } }
 function api(method,path,body){
   var o={method:method,headers:{}};
   if(token) o.headers["Authorization"]="Bearer "+token;
@@ -83,7 +123,7 @@ function api(method,path,body){
     return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||("Eroare "+r.status)); return d; });
   });
 }
-function logout(){ token=""; me=null; localStorage.removeItem("wms_m_token"); renderLogin(); }
+function logout(){ stopOrdPoll(); token=""; me=null; localStorage.removeItem("wms_m_token"); renderLogin(); }
 
 /* ====== Ecrane ====== */
 function shell(title, body, opts){
@@ -110,7 +150,7 @@ function doLogin(){
   if(!email||!pass){ el("l_msg").textContent="Completează email și parolă"; return; }
   api("POST","/api/auth/login",{email:email,password:pass}).then(function(d){
     if(d.user && (d.user.kind==="client")){ el("l_msg").textContent="Acest cont e de client, nu de operator."; return; }
-    token=d.token; me=d.user; localStorage.setItem("wms_m_token",token); loadLocs(); renderHome();
+    token=d.token; me=d.user; localStorage.setItem("wms_m_token",token); primeAudio(); loadLocs(); renderHome(); startOrdPoll();
   }).catch(function(e){ el("l_msg").textContent=e.message; });
 }
 
@@ -372,7 +412,7 @@ function closeCam(){ try{ if(_zx) _zx.reset(); }catch(e){} el("cam").style.displ
 
 /* ====== Boot ====== */
 if(token){
-  api("GET","/api/auth/me").then(function(d){ me=d.user; if(me.kind==="client"){ logout(); return; } loadLocs(); renderHome(); })
+  api("GET","/api/auth/me").then(function(d){ me=d.user; if(me.kind==="client"){ logout(); return; } loadLocs(); renderHome(); startOrdPoll(); })
     .catch(function(){ logout(); });
 } else { renderLogin(); }
 </script>
