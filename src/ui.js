@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v26";
+var APP_VERSION = "v27";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -775,7 +775,7 @@ var NAV = [
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
-  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"] ] },
+  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"] ] },
   ["orders","Comenzi","viewer"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
@@ -1904,6 +1904,122 @@ window.productView = function(query){
       el("pv_mov").innerHTML = rows.length ? '<table><tbody>'+rows.map(function(m){return '<tr><td class="muted">'+esc(String(m.created_at).slice(0,16))+'</td><td>'+esc(m.location_code)+'</td><td class="right">'+(m.quantity>0?'<span class="pill good">+'+m.quantity+'</span>':'<span class="pill bad">'+m.quantity+'</span>')+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Nicio mișcare</div>';
     });
   });
+};
+
+/* ---------------- Etichete (produse / locații / paleți) ---------------- */
+var _lblType="products", _lblItems=[], _lblSel={};
+VIEWS.labels = function(){
+  _lblSel={};
+  setMain(topbar("Etichete")
+    + '<div class="card" style="padding:18px">'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+    +   '<button class="sm" id="lb_tp" onclick="lblType(\\'products\\')">Produse</button>'
+    +   '<button class="sm ghost" id="lb_tl" onclick="lblType(\\'locations\\')">Locații</button>'
+    +   '<button class="sm ghost" id="lb_tpa" onclick="lblType(\\'pallets\\')">Paleți</button>'
+    + '</div>'
+    + '<div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">'
+    +   '<div><label>Format cod</label><select id="lb_fmt"><option value="barcode">Cod de bare (Code128)</option><option value="qr">Cod QR</option></select>'+fhint("Code128 = pentru scanner laser Zebra. QR = pentru cameră.")+'</div>'
+    +   '<div style="width:120px"><label>Copii/etichetă</label><input id="lb_copies" type="number" min="1" value="1"></div>'
+    +   '<div style="width:110px"><label>Coloane</label><input id="lb_cols" type="number" min="1" max="6" value="3"></div>'
+    +   '<div style="flex:1;min-width:180px"><label>Caută</label><input id="lb_q" placeholder="nume / cod" oninput="lblRenderList()"></div>'
+    + '</div>'
+    + '<div class="row" style="gap:8px;margin:12px 0;align-items:center"><button class="sm ghost" onclick="lblAll()">Bifează tot</button><button class="sm ghost" onclick="lblNone()">Golește</button><span id="lb_count" class="muted"></span></div>'
+    + '<div id="lb_list" style="max-height:320px;overflow:auto">Se încarcă…</div>'
+    + '<button class="big" style="margin-top:12px" onclick="lblGenerate()">Generează etichete</button>'
+    + '</div>'
+    + '<div id="lb_out"></div>');
+  lblLoad();
+};
+window.lblType=function(t){
+  _lblType=t; _lblSel={};
+  el("lb_tp").className="sm"+(t==="products"?"":" ghost");
+  el("lb_tl").className="sm"+(t==="locations"?"":" ghost");
+  el("lb_tpa").className="sm"+(t==="pallets"?"":" ghost");
+  if(el("lb_fmt")) el("lb_fmt").value = (t==="products") ? "barcode" : "qr";
+  lblLoad();
+};
+function lblLoad(){
+  var url = _lblType==="products" ? "/api/products" : (_lblType==="locations" ? "/api/locations" : "/api/pallets");
+  if(el("lb_list")) el("lb_list").innerHTML='<div class="muted">Se încarcă…</div>';
+  api("GET",url).then(function(d){
+    var raw = d.products||d.locations||d.pallets||[];
+    _lblItems = raw.map(function(x){
+      if(_lblType==="products") return {id:x.id, code:String(x.barcode||x.sku||""), title:x.name||"", sub:String(x.sku||x.barcode||"")};
+      if(_lblType==="locations") return {id:x.id, code:String(x.code||""), title:String(x.code||""), sub:String(x.name||x.zone||"")};
+      return {id:x.id, code:String(x.code||""), title:String(x.code||""), sub:String(x.client_name||x.status||"")};
+    }).filter(function(x){ return x.code; });
+    lblRenderList();
+  }).catch(function(e){ if(el("lb_list")) el("lb_list").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+}
+function lblFiltered(){
+  var q=((el("lb_q")&&el("lb_q").value)||"").toLowerCase().trim();
+  return _lblItems.filter(function(x){ return !q || (x.title+" "+x.code+" "+x.sub).toLowerCase().indexOf(q)>=0; });
+}
+window.lblRenderList=function(){
+  var list=lblFiltered();
+  if(!el("lb_list")) return;
+  el("lb_list").innerHTML = list.length ? '<table><tbody>'+list.map(function(x){
+    return '<tr><td style="width:30px"><input type="checkbox" '+(_lblSel[x.id]?"checked":"")+' onchange="lblToggle('+x.id+')"></td>'
+      +'<td><b>'+esc(x.code)+'</b></td><td>'+esc(x.title)+'</td><td class="muted">'+esc(x.sub)+'</td></tr>';
+  }).join("")+'</tbody></table>' : '<div class="muted">Nimic găsit.</div>';
+  lblCount();
+};
+window.lblToggle=function(id){ if(_lblSel[id]) delete _lblSel[id]; else _lblSel[id]=true; lblCount(); };
+window.lblAll=function(){ lblFiltered().forEach(function(x){ _lblSel[x.id]=true; }); lblRenderList(); };
+window.lblNone=function(){ _lblSel={}; lblRenderList(); };
+function lblCount(){ var c=el("lb_count"); if(c) c.textContent=Object.keys(_lblSel).length+" selectate"; }
+function lblSelectedItems(){ return _lblItems.filter(function(x){ return _lblSel[x.id]; }); }
+function lblBarcodeURL(code){ var c=document.createElement("canvas"); drawBarcode(c,String(code)); return c.toDataURL(); }
+function lblCell(inner,x){
+  return '<div class="lblcell" style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;background:#fff;break-inside:avoid;page-break-inside:avoid">'
+    + inner
+    + '<div style="font-weight:700;font-size:12px;margin-top:4px;color:#000">'+esc(x.title)+'</div>'
+    + (x.sub?'<div style="font-size:10px;color:#555">'+esc(x.sub)+'</div>':'')
+    + '</div>';
+}
+window.lblGenerate=function(){
+  var items=lblSelectedItems();
+  if(!items.length){ toast("Selectează cel puțin un element","bad"); return; }
+  var copies=Math.max(1,Number(el("lb_copies").value)||1);
+  var cols=Math.min(6,Math.max(1,Number(el("lb_cols").value)||3));
+  var fmt=el("lb_fmt").value;
+  var expanded=[]; items.forEach(function(x){ for(var i=0;i<copies;i++) expanded.push(x); });
+  el("lb_out").innerHTML='<div class="card" style="padding:16px;margin-top:14px"><div class="muted">Se generează '+expanded.length+' etichete…</div></div>';
+  function renderGrid(cells){
+    el("lb_out").innerHTML='<div class="card" style="padding:16px;margin-top:14px">'
+      + '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><b>'+expanded.length+' etichete</b>'
+      + '<button class="sm" onclick="lblPrint()">🖨 Printează</button></div>'
+      + '<div style="background:#fff;padding:10px;border-radius:8px"><div id="lbl_sheet" style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:8px">'+cells.join("")+'</div></div></div>';
+  }
+  if(fmt==="qr"){
+    var uniq={}; expanded.forEach(function(x){ uniq[x.code]=1; });
+    var codes=Object.keys(uniq), svgMap={};
+    Promise.all(codes.map(function(code){
+      return fetch(API+"/api/qr?data="+encodeURIComponent(code),{headers:token?{Authorization:"Bearer "+token}:{}})
+        .then(function(r){ return r.text(); }).then(function(s){ svgMap[code]=s; }).catch(function(){ svgMap[code]=""; });
+    })).then(function(){
+      var cells=expanded.map(function(x){
+        var svg=(svgMap[x.code]||"").replace("<svg",'<svg style="width:120px;height:120px" ');
+        return lblCell('<div>'+svg+'</div>',x);
+      });
+      renderGrid(cells);
+    });
+  } else {
+    var cells=expanded.map(function(x){ return lblCell('<img src="'+lblBarcodeURL(x.code)+'" style="max-width:100%;height:auto">',x); });
+    renderGrid(cells);
+  }
+};
+window.lblPrint=function(){
+  var sheet=el("lbl_sheet"); if(!sheet){ toast("Generează întâi etichetele","bad"); return; }
+  var cols=Math.min(6,Math.max(1,Number(el("lb_cols").value)||3));
+  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi","bad"); return; }
+  w.document.write('<html><head><title>Etichete</title><style>'
+    + '*{box-sizing:border-box} body{margin:8px;font-family:Arial,Helvetica,sans-serif;color:#000}'
+    + '.grid{display:grid;grid-template-columns:repeat('+cols+',1fr);gap:6px}'
+    + 'img,svg{max-width:100%;height:auto}'
+    + '</style></head><body><div class="grid">'+sheet.innerHTML+'</div>'
+    + '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt></body></html>');
+  w.document.close();
 };
 
 /* ---------------- UI helpers ---------------- */
