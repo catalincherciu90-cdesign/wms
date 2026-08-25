@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v29";
+var APP_VERSION = "v30";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1270,6 +1270,38 @@ function pdfLines(buf){
     });
   });
 }
+// Încearcă să extragă denumirea produsului din linia avizului (după eliminarea
+// EAN-ului, cantităților, prețurilor și unităților). Rezultat = sugestie, editabilă.
+var _avizUnits={buc:1,"buc.":1,bucata:1,bucati:1,kg:1,g:1,gr:1,l:1,ml:1,cl:1,set:1,seturi:1,cutie:1,cutii:1,pac:1,pachet:1,pachete:1,rola:1,role:1,mp:1,ron:1,lei:1,eur:1,tva:1,cod:1,nr:1,um:1};
+function avizClean(t){ return t.toLowerCase().replace(/[.,;:]+$/,""); }
+function avizName(line, ean){
+  var rest=line.split(ean).join(" ");
+  var toks=rest.split(/\\s+/).filter(Boolean);
+  if(toks.length && /^\\d{1,4}$/.test(toks[0])) toks=toks.slice(1); // elimină nr. de rând
+  function hasLetter(t){ return /[A-Za-zĂÂÎȘȚăâîșț]/.test(t); }
+  function isNum(t){ return /^\\d+([.,]\\d+)?$/.test(t); }
+  function clean(t){ return avizClean(t); }
+  var keep=toks.map(function(t,idx){
+    var low=clean(t);
+    if(_avizUnits[low]) return false;
+    if(hasLetter(t)) return true; // cuvânt (poate conține și cifre: „500ml")
+    if(isNum(t)){ // număr izolat: îl păstrăm doar dacă e lipit de un cuvânt (ex. „500 ML", „7 capse")
+      var nx=toks[idx+1]?clean(toks[idx+1]):"";
+      if(nx && hasLetter(nx) && !_avizUnits[nx]) return true;
+    }
+    return false;
+  });
+  var bestS=-1,bestLen=0,curS=-1,curLen=0;
+  for(var i=0;i<toks.length;i++){
+    if(keep[i]){ if(curS<0){curS=i;curLen=0;} curLen++; if(curLen>bestLen){bestLen=curLen;bestS=curS;} }
+    else { curS=-1; curLen=0; }
+  }
+  if(bestLen<=0) return "";
+  var name=toks.slice(bestS,bestS+bestLen).join(" ").replace(/\\s+/g," ").trim();
+  name=name.replace(/^[-–—•.\\s]+/,"").replace(/[-–—•.\\s]+$/,"").trim();
+  if(name.length>80) name=name.slice(0,80).trim();
+  return name;
+}
 function avizExtract(lines){
   var byEan={};
   lines.forEach(function(line){
@@ -1278,8 +1310,15 @@ function avizExtract(lines){
     if(!eans.length) return;
     var ean=eans[0];
     var rest=line.split(ean).join(" ");
-    var toks=rest.split(/\\s+/).filter(function(t){ return /^\\d{1,5}$/.test(t); }).map(Number).filter(function(n){ return n>0; });
-    byEan[ean]=(byEan[ean]||0)+(toks.length?toks[0]:1);
+    var rtoks=rest.split(/\\s+/).filter(Boolean);
+    if(rtoks.length && /^\\d{1,4}$/.test(rtoks[0])) rtoks=rtoks.slice(1); // ignoră nr. de rând
+    var qty=null;
+    for(var u=0;u<rtoks.length-1;u++){ if(_avizUnits[avizClean(rtoks[u])] && /^\\d{1,5}$/.test(rtoks[u+1])){ qty=Number(rtoks[u+1]); break; } } // cantitate după unitate (buc 5)
+    if(qty===null){ for(var q=0;q<rtoks.length;q++){ if(/^\\d{1,5}$/.test(rtoks[q])){ qty=Number(rtoks[q]); break; } } }
+    if(!(qty>0)) qty=1;
+    var rec=byEan[ean]||(byEan[ean]={qty:0,name:""});
+    rec.qty+=qty;
+    if(!rec.name){ var nm=avizName(line,ean); if(nm) rec.name=nm; }
   });
   return byEan;
 }
@@ -1308,7 +1347,7 @@ function avizParse(){
     if(!eans.length){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Nu am găsit coduri EAN valide în PDF.</span>'; el("av_res").innerHTML=''; return; }
     return api("GET","/api/products").then(function(d){
       var map={}; (d.products||[]).forEach(function(p){ if(p.barcode) map[String(p.barcode)]=p; });
-      window._avizRows=eans.map(function(e){ return {ean:e, product:map[e]||null, qty:byEan[e]}; });
+      window._avizRows=eans.map(function(e){ return {ean:e, product:map[e]||null, qty:byEan[e].qty, name:byEan[e].name||""}; });
       avizRender();
     });
   }).catch(function(e){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Eroare la citirea PDF: '+esc(e.message)+'</span>'; });
@@ -1324,8 +1363,8 @@ function avizRender(){
       html+='<tr><td><input type="checkbox" class="avchk" data-i="'+i+'" checked style="width:auto"></td><td>'+esc(r.product.name)+'</td><td class="muted" style="font-size:12px">'+esc(r.ean)+'</td>'
         +'<td class="right"><input type="number" min="1" value="'+esc(r.qty)+'" class="avqty" data-i="'+i+'" style="width:72px"></td></tr>';
     } else {
-      html+='<tr><td><input type="checkbox" class="avnew" data-i="'+i+'" style="width:auto" title="Adaugă produs nou"></td>'
-        +'<td><input type="text" class="avname" data-i="'+i+'" placeholder="Nume produs nou…" style="width:100%"></td>'
+      html+='<tr><td><input type="checkbox" class="avnew" data-i="'+i+'"'+(r.name?" checked":"")+' style="width:auto" title="Adaugă produs nou"></td>'
+        +'<td><input type="text" class="avname" data-i="'+i+'" value="'+esc(r.name||"")+'" placeholder="Nume produs nou…" style="width:100%"></td>'
         +'<td class="muted" style="font-size:12px">'+esc(r.ean)+' <span class="pill warn" style="font-size:10px">nou</span></td>'
         +'<td class="right"><input type="number" min="1" value="'+esc(r.qty)+'" class="avqty" data-i="'+i+'" style="width:72px"></td></tr>';
     }
