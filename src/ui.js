@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v28";
+var APP_VERSION = "v29";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1288,12 +1288,14 @@ window.avizUI=function(){
   modal("Recepție din aviz PDF",
     '<div class="field"><label>Fișier aviz / factură (PDF)</label><input id="av_file" type="file" accept="application/pdf,.pdf">'+fhint("Citim codurile EAN și cantitățile din PDF. Fișierul NU se salvează.")+'</div>'
     +'<div class="field"><label>Locația de recepție</label><select id="av_loc"></select>'+fhint("Unde așezi marfa primită.")+'</div>'
+    +'<div class="field"><label>Client pentru produsele noi (opțional)</label><select id="av_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Marfa nouă (EAN necunoscut) se adaugă ca produs al acestui client.")+'</div>'
     +field("Referință","av_ref","","","text","Ex: nr. aviz / factură.")
     +'<div id="av_status" class="muted" style="font-size:12.5px;margin:8px 0"></div>'
     +'<div id="av_res" style="max-height:44vh;overflow:auto"></div>',
     function(){ avizReceiveAll(); });
   var sv=el("modalSave"); if(sv){ sv.textContent="Recepționează"; sv.disabled=true; }
   api("GET","/api/locations").then(function(d){ if(el("av_loc")) el("av_loc").innerHTML=(d.locations||[]).filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); });
+  api("GET","/api/clients").then(function(d){ if(el("av_client")) el("av_client").innerHTML='<option value="">— intern (al companiei) —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
   el("av_file").onchange=avizParse;
 };
 function avizParse(){
@@ -1314,35 +1316,62 @@ function avizParse(){
 function avizRender(){
   var rows=window._avizRows||[];
   var matched=rows.filter(function(r){return r.product;});
-  el("av_status").innerHTML='Găsite <b>'+rows.length+'</b> coduri · potrivite cu produse: <b>'+matched.length+'</b>';
+  var unknown=rows.length-matched.length;
+  el("av_status").innerHTML='Găsite <b>'+rows.length+'</b> coduri · potrivite: <b>'+matched.length+'</b>'+(unknown?(' · noi (de adăugat): <b>'+unknown+'</b>'):'');
   var html='<table><thead><tr><th></th><th>Produs</th><th>EAN</th><th class="right">Cant.</th></tr></thead><tbody>';
   rows.forEach(function(r,i){
     if(r.product){
       html+='<tr><td><input type="checkbox" class="avchk" data-i="'+i+'" checked style="width:auto"></td><td>'+esc(r.product.name)+'</td><td class="muted" style="font-size:12px">'+esc(r.ean)+'</td>'
         +'<td class="right"><input type="number" min="1" value="'+esc(r.qty)+'" class="avqty" data-i="'+i+'" style="width:72px"></td></tr>';
     } else {
-      html+='<tr style="opacity:.55"><td>—</td><td class="muted">necunoscut (adaugă produsul)</td><td class="muted" style="font-size:12px">'+esc(r.ean)+'</td><td class="right muted">'+esc(r.qty)+'</td></tr>';
+      html+='<tr><td><input type="checkbox" class="avnew" data-i="'+i+'" style="width:auto" title="Adaugă produs nou"></td>'
+        +'<td><input type="text" class="avname" data-i="'+i+'" placeholder="Nume produs nou…" style="width:100%"></td>'
+        +'<td class="muted" style="font-size:12px">'+esc(r.ean)+' <span class="pill warn" style="font-size:10px">nou</span></td>'
+        +'<td class="right"><input type="number" min="1" value="'+esc(r.qty)+'" class="avqty" data-i="'+i+'" style="width:72px"></td></tr>';
     }
   });
   html+='</tbody></table>';
-  if(!matched.length) html+='<div class="muted" style="margin-top:8px;font-size:12.5px">Niciun cod nu se potrivește cu produsele tale. Adaugă întâi produsele cu aceste EAN-uri, apoi reîncarcă avizul.</div>';
+  if(unknown) html+='<div class="muted" style="margin-top:8px;font-size:12.5px">💡 Marfă nouă? Bifează rândurile «nou», dă-le un nume și alege clientul mai sus — se adaugă în catalog și se recepționează automat.</div>';
   el("av_res").innerHTML=html;
-  var sv=el("modalSave"); if(sv) sv.disabled = matched.length===0;
+  var sv=el("modalSave"); if(sv) sv.disabled = rows.length===0;
 }
 window.avizReceiveAll=function(){
   var loc=el("av_loc")?Number(el("av_loc").value):0; if(!loc){ toast("Alege locația","bad"); return; }
   var ref=el("av_ref")?el("av_ref").value:"";
+  var clientId=(el("av_client")&&el("av_client").value)?Number(el("av_client").value):null;
+  function qtyOf(i,fallback){ var qEl=document.querySelector('.avqty[data-i="'+i+'"]'); return qEl?Number(qEl.value):fallback; }
+
+  // produse existente bifate
   var items=[];
   Array.prototype.forEach.call(document.querySelectorAll(".avchk:checked"), function(c){
-    var i=Number(c.getAttribute("data-i")); var r=window._avizRows[i];
-    var qEl=document.querySelector('.avqty[data-i="'+i+'"]'); var qty=qEl?Number(qEl.value):r.qty;
+    var i=Number(c.getAttribute("data-i")); var r=window._avizRows[i]; var qty=qtyOf(i,r.qty);
     if(r&&r.product&&qty>0) items.push({product_id:r.product.id, quantity:qty});
   });
-  if(!items.length){ toast("Selectează cel puțin un produs","bad"); return; }
+  // produse noi bifate (creare + recepție)
+  var news=[], missingName=false;
+  Array.prototype.forEach.call(document.querySelectorAll(".avnew:checked"), function(c){
+    var i=Number(c.getAttribute("data-i")); var r=window._avizRows[i];
+    var nEl=document.querySelector('.avname[data-i="'+i+'"]'); var name=nEl?nEl.value.trim():"";
+    var qty=qtyOf(i,r.qty);
+    if(!name){ missingName=true; return; }
+    if(qty>0) news.push({ean:r.ean, name:name, quantity:qty});
+  });
+  if(missingName){ toast("Completează numele produselor noi bifate","bad"); return; }
+  if(!items.length && !news.length){ toast("Selectează cel puțin un produs","bad"); return; }
+
   var sv=el("modalSave"); if(sv) sv.disabled=true;
-  var done=0, fail=0, seq=Promise.resolve();
-  items.forEach(function(it){ seq=seq.then(function(){ return api("POST","/api/inventory/receive",{product_id:it.product_id, location_id:loc, quantity:it.quantity, reference:ref}).then(function(){done++;}).catch(function(){fail++;}); }); });
-  seq.then(function(){ closeModal(); toast("Recepționat din aviz: "+done+" produse"+(fail?(" · "+fail+" eșuate"):"")); });
+  var done=0, fail=0, created=0, seq=Promise.resolve();
+  // întâi creăm și recepționăm produsele noi
+  news.forEach(function(it){ seq=seq.then(function(){
+    return api("POST","/api/products",{barcode:it.ean, name:it.name, unit:"buc", client_id:clientId})
+      .then(function(res){ created++; return api("POST","/api/inventory/receive",{product_id:res.product.id, location_id:loc, quantity:it.quantity, reference:ref}).then(function(){done++;}); })
+      .catch(function(){ fail++; });
+  }); });
+  // apoi produsele existente
+  items.forEach(function(it){ seq=seq.then(function(){
+    return api("POST","/api/inventory/receive",{product_id:it.product_id, location_id:loc, quantity:it.quantity, reference:ref}).then(function(){done++;}).catch(function(){fail++;});
+  }); });
+  seq.then(function(){ closeModal(); toast("Recepționat din aviz: "+done+" produse"+(created?(" · adăugate noi: "+created):"")+(fail?(" · "+fail+" eșuate"):"")); });
 };
 
 VIEWS.movements = function(){
