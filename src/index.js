@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -25,7 +25,7 @@ import { ensureSchema } from './lib/schema.js';
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
   ['POST', '/api/auth/login', auth.login, null],
-  ['GET', '/api/auth/me', auth.me, 'viewer'],
+  ['GET', '/api/auth/me', auth.me, 'authed'],
 
   ['GET', '/api/dashboard', dashboard.stats, 'viewer'],
 
@@ -142,6 +142,8 @@ export default {
           if (!user) return error('Neautentificat', 401);
           if (role === 'client') {
             if (user.kind !== 'client') return error('Doar conturi de client', 403);
+          } else if (role === 'authed') {
+            // orice utilizator autentificat (staff SAU client) — ex. /api/auth/me la boot
           } else {
             // rutele de staff nu sunt accesibile conturilor de client
             if (user.kind === 'client' || !hasRole(user, role)) return error('Permisiuni insuficiente', 403);

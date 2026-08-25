@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v25";
+var APP_VERSION = "v26";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1923,11 +1923,12 @@ window.downloadCsv = function(path, filename){
   }).catch(function(e){ toast(e.message,"bad"); });
 };
 function modal(title, inner, onSave){
+  if(window.closeModal) window.closeModal(); // un singur modal odată — evită id-uri duplicate (modal peste modal) care blocau închiderea
   var bg=document.createElement("div"); bg.className="modal-bg"; bg.id="modalBg";
   bg.innerHTML='<div class="card modal"><h2>'+esc(title)+'</h2><div id="modalBody">'+inner+'</div>'
     +'<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="ghost" onclick="closeModal()">Anulează</button><button id="modalSave">Salvează</button></div></div>';
   document.body.appendChild(bg);
-  document.getElementById("modalSave").onclick=onSave;
+  bg.querySelector("#modalSave").onclick=onSave; // leagă butonul din modalul NOU, nu din altul rămas în DOM
   // Nu închidem la clic în afara ferestrei (evită pierderea accidentală a datelor).
   // Închiderea se face doar din butonul „Anulează".
 }
