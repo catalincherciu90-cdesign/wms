@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v24";
+var APP_VERSION = "v25";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -752,11 +752,21 @@ window.portalOrderView = function(id){
         +(o.recipient_phone?'<div class="muted" style="font-size:13px">📞 '+esc(o.recipient_phone)+'</div>':'')
         +(addr?'<div class="muted" style="font-size:13px">📍 '+addr+'</div>':'')
         +(o.note?'<div style="font-size:13px;margin-top:6px">📝 '+esc(o.note)+'</div>':'')+'</div>'
-      +'<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+lines+'</tbody></table>',
+      +'<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+lines+'</tbody></table>'
+      +((o.status!=="completed"&&o.status!=="cancelled")?'<div class="row" style="margin-top:14px"><button class="danger" onclick="porderCancel('+o.id+',\\''+o.code+'\\')">Anulează comanda</button></div>':''),
       function(){ closeModal(); });
     el("modalSave").textContent="Închide";
     var cancelBtn=el("modalBg").querySelector(".ghost"); if(cancelBtn) cancelBtn.style.display="none";
   }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.porderCancel = function(id, code){
+  modal("Anulează comanda "+esc(code||("#"+id)),
+    '<p>Sigur vrei să anulezi comanda <b>'+esc(code||("#"+id))+'</b>?</p>'
+    +'<p class="muted" style="font-size:13px">Comanda rămâne în listă cu statusul «Anulată», iar stocul rezervat se eliberează.</p>',
+    function(){
+      api("POST","/api/portal/orders/"+id+"/cancel",{}).then(function(){ closeModal(); toast("Comandă anulată"); pgo("orders"); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, anulează comanda"; sv.className="danger"; sv.style.display=""; }
 };
 
 /* ---------------- App shell ---------------- */
@@ -1596,7 +1606,7 @@ window.orderDetail = function(id){
         + '<button onclick="completeOrder('+o.id+')">'+(o.type==="inbound"?"Recepționează":"Expediază (picking)")+'</button></div></div>'
         + '<div class="row" style="margin-top:8px">'
         + (o.status==="draft"?'<button class="ghost sm" onclick="orderStatus('+o.id+',\\'confirmed\\')">Confirmă</button>':'')
-        + '<button class="ghost sm" onclick="orderStatus('+o.id+',\\'cancelled\\')">Anulează</button>'
+        + '<button class="ghost sm" onclick="orderCancel('+o.id+',\\''+o.code+'\\')">Anulează</button>'
         + '<button class="danger sm" onclick="deleteOrder('+o.id+')">Șterge</button></div>';
     }
     var recip='';
@@ -1628,6 +1638,15 @@ window.completeOrder = function(id){
 };
 window.orderStatus = function(id,status){
   api("PUT","/api/orders/"+id+"/status",{status:status}).then(function(){ closeModal(); toast("Actualizat"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.orderCancel = function(id, code){
+  modal("Anulează comanda "+esc(code||("#"+id)),
+    '<p>Sigur anulezi comanda <b>'+esc(code||("#"+id))+'</b>?</p>'
+    +'<p class="muted" style="font-size:13px">Comanda rămâne în listă cu statusul «Anulată», iar stocul rezervat se eliberează. Nu se scade stoc fizic.</p>',
+    function(){
+      api("PUT","/api/orders/"+id+"/status",{status:"cancelled"}).then(function(){ closeModal(); toast("Comandă anulată"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, anulează"; sv.className="danger"; sv.style.display=""; }
 };
 window.deleteOrder = function(id){
   api("DELETE","/api/orders/"+id).then(function(){ closeModal(); toast("Ștearsă"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });

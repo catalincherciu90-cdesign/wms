@@ -102,6 +102,20 @@ export async function orderGet(request, env, ctx, user, params) {
   return json({ order, lines });
 }
 
+// Clientul își anulează propria comandă (doar dacă nu e deja expediată/anulată).
+// Nu atinge stocul fizic (nu s-a scăzut încă) — rezervarea se eliberează automat,
+// fiindcă e calculată din comenzile deschise.
+export async function orderCancel(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare(
+    "SELECT id, status FROM orders WHERE id = ? AND client_id = ? AND type = 'outbound'").bind(id, user.client_id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.status === 'completed') return error('Comanda e deja expediată și nu mai poate fi anulată', 400);
+  if (order.status === 'cancelled') return error('Comanda e deja anulată', 400);
+  await env.DB.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").bind(id).run();
+  return json({ ok: true, status: 'cancelled' });
+}
+
 export async function orderCreate(request, env, ctx, user) {
   const b = await readJson(request);
   const lines = Array.isArray(b?.lines) ? b.lines : [];
