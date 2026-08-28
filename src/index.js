@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -58,6 +58,7 @@ const routes = [
   ['PUT', '/api/users/:id', users.update, 'admin'],
 
   ['GET', '/api/admin/backup.sql', admin.backupSql, 'admin'],
+  ['POST', '/api/admin/backup-push', admin.backupPush, 'admin'],
 
   ['GET', '/api/partners', partners.list, 'viewer'],
   ['POST', '/api/partners', partners.create, 'operator'],
@@ -197,5 +198,13 @@ export default {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store, no-cache, must-revalidate',
     } });
+  },
+
+  // Backup automat programat (Cron Trigger — vezi wrangler.toml [triggers]).
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      try { await ensureSchema(env); } catch (e) { /* schema poate exista deja */ }
+      await admin.scheduledBackup(env);
+    })());
   },
 };

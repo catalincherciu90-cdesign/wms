@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v31";
+var APP_VERSION = "v32";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1430,8 +1430,11 @@ VIEWS.users = function(){
   setMain(topbar("Utilizatori", '<button onclick="userForm()">+ Utilizator</button>') + '<div class="card" id="utbl">…</div>'
     + '<div class="card" style="padding:18px;margin-top:16px">'
     + '<h2 style="margin:0 0 4px">💾 Backup bază de date</h2>'
-    + '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Descarcă toată baza (produse, stoc, comenzi, clienți, mișcări…) ca fișier <b>.sql</b> compatibil MySQL/MariaDB. În phpMyAdmin: alege baza ta → tab <b>Import</b> → încarcă fișierul. Recomandat periodic (ex. zilnic).</p>'
-    + '<button onclick="downloadBackup()">⬇ Descarcă backup (.sql)</button>'
+    + '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Descarcă toată baza (produse, stoc, comenzi, clienți, mișcări…) ca fișier <b>.sql</b> compatibil MySQL/MariaDB. În phpMyAdmin: alege baza ta → tab <b>Import</b> → încarcă fișierul.</p>'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap"><button onclick="downloadBackup()">⬇ Descarcă backup (.sql)</button>'
+    + '<button class="ghost" onclick="pushBackup()">☁ Trimite backup pe server</button></div>'
+    + '<div class="muted" style="margin-top:8px;font-size:12px">Trimiterea pe server salvează backup-ul direct în MySQL-ul tău (wsdlogistics.ro). Rulează și <b>automat zilnic</b>.</div>'
+    + '<div id="bk_res" style="margin-top:8px"></div>'
     + '</div>');
   api("GET","/api/users").then(function(d){
     cache.users=d.users;
@@ -2158,6 +2161,19 @@ window.downloadBackup = function(){
   var d=new Date().toISOString().slice(0,10);
   toast("Se generează backup-ul…");
   downloadCsv("/api/admin/backup.sql","wms-backup-"+d+".sql");
+};
+window.pushBackup = function(){
+  var r=el("bk_res"); if(r) r.innerHTML='<span class="muted">Se trimite backup pe server…</span>';
+  toast("Se trimite backup pe server…");
+  api("POST","/api/admin/backup-push",{}).then(function(d){
+    var st=(d.server&&d.server.statements)?(" · "+d.server.statements+" instrucțiuni"):"";
+    var kb=d.bytes?(" · "+Math.round(d.bytes/1024)+" KB"):"";
+    if(r) r.innerHTML='<span class="pill good">Backup trimis pe server ✓'+st+kb+'</span>';
+    toast("Backup trimis pe server ✓");
+  }).catch(function(e){
+    if(r) r.innerHTML='<span class="pill bad">Eșuat: '+esc(e.message)+'</span>';
+    toast("Backup eșuat","bad");
+  });
 };
 window.downloadCsv = function(path, filename){
   fetch(API+path,{ headers: token?{Authorization:"Bearer "+token}:{} }).then(function(r){

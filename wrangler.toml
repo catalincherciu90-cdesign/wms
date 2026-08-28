@@ -13,6 +13,10 @@ database_id = "547695ef-25a7-410e-b256-354650edd00f"
 [observability]
 enabled = true
 
+# Backup automat zilnic la 02:00 UTC (~05:00 România). Apelează handler-ul `scheduled`.
+[triggers]
+crons = ["0 2 * * *"]
+
 # Permite importul fișierelor .txt din src/vendor ca string (ex: biblioteca ZXing)
 [[rules]]
 type = "Text"

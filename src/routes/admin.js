@@ -1,7 +1,11 @@
-// Backup bază de date → dump SQL compatibil MySQL/MariaDB (pentru import în phpMyAdmin).
-// Cloudflare Workers nu se poate conecta direct la MySQL, așa că generăm un fișier .sql
-// pe care utilizatorul îl importă în phpMyAdmin (tab Import).
-import { corsHeaders } from '../lib/http.js';
+// Backup bază de date → dump SQL compatibil MySQL/MariaDB.
+// - descărcabil (pentru import manual în phpMyAdmin)
+// - trimis automat la un receptor PHP pe serverul clientului (backup.php)
+import { json, error, corsHeaders } from '../lib/http.js';
+
+// Config implicit (se poate suprascrie cu variabile în Cloudflare: BACKUP_URL, BACKUP_TOKEN)
+const BACKUP_URL_DEFAULT = 'https://wsdlogistics.ro/backup-wms-cdesign.php';
+const BACKUP_TOKEN_DEFAULT = 'k9Qm2vX7pL4wZ8rT1nJ6bH3yD5sF0aG-wsdBackup-Ee2cU8oInR4t';
 
 // Ordinea contează la restore (părinți înainte de copii). Whitelist fix de tabele.
 const TABLES = [
@@ -28,8 +32,8 @@ function sqlValue(v) {
   return "'" + s + "'";
 }
 
-export async function backupSql(request, env, ctx, user) {
-  const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+// Generează dump-ul SQL complet (string).
+export async function generateBackupSql(env) {
   let out = '';
   out += '-- WMS WSD Logistics — backup baza de date\n';
   out += '-- Generat: ' + new Date().toISOString() + '\n';
@@ -61,7 +65,6 @@ export async function backupSql(request, env, ctx, user) {
     create += '\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n';
     out += create;
 
-    // Date
     const colNames = cols.map((c) => c.name);
     const colList = colNames.map((n) => '`' + n + '`').join(', ');
     let rowsRes;
@@ -80,7 +83,13 @@ export async function backupSql(request, env, ctx, user) {
   }
 
   out += 'SET FOREIGN_KEY_CHECKS = 1;\n';
+  return out;
+}
 
+// Descărcare directă (.sql) — pentru import manual în phpMyAdmin.
+export async function backupSql(request, env, ctx, user) {
+  const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  const out = await generateBackupSql(env);
   return new Response(out, {
     headers: {
       'Content-Type': 'application/sql; charset=utf-8',
@@ -89,4 +98,41 @@ export async function backupSql(request, env, ctx, user) {
       ...corsHeaders,
     },
   });
+}
+
+// Trimite backup-ul către receptorul PHP de pe serverul clientului.
+async function pushToServer(env) {
+  const url = env.BACKUP_URL || BACKUP_URL_DEFAULT;
+  const token = env.BACKUP_TOKEN || BACKUP_TOKEN_DEFAULT;
+  if (!url || !token) return { ok: false, error: 'Backup extern neconfigurat (lipsă URL sau token).' };
+  const sql = await generateBackupSql(env);
+  let resp, text;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-Backup-Token': token, 'Content-Type': 'application/sql; charset=utf-8' },
+      body: sql,
+    });
+    text = await resp.text();
+  } catch (e) {
+    return { ok: false, error: 'Nu am putut contacta serverul de backup: ' + (e?.message || e) };
+  }
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch (e) { /* răspuns non-JSON */ }
+  if (!resp.ok || (parsed && parsed.ok === false)) {
+    return { ok: false, error: 'Serverul de backup a răspuns cu eroare (HTTP ' + resp.status + ').', server: parsed || text.slice(0, 300) };
+  }
+  return { ok: true, bytes: sql.length, server: parsed || text.slice(0, 200) };
+}
+
+// Endpoint manual: buton „Trimite backup pe server".
+export async function backupPush(request, env, ctx, user) {
+  const r = await pushToServer(env);
+  if (!r.ok) return json(r, 502);
+  return json(r);
+}
+
+// Apelat din cron (scheduled) — backup automat.
+export async function scheduledBackup(env) {
+  try { return await pushToServer(env); } catch (e) { return { ok: false, error: String(e) }; }
 }
