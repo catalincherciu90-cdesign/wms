@@ -165,13 +165,14 @@ function renderHome(){
     +tile("receive","📥","Recepție")
     +tile("ship","📤","Expediere")
     +tile("transfer","🔄","Transfer")
+    +tile("inventory","🧮","Inventar")
     +'</div>'
     +'<button class="big ghost" style="margin-top:22px" onclick="logout()">Ieșire</button>'
     +'<div class="op-hint center" style="margin-top:10px">Scanează oricând cu laserul Zebra — te duce direct la produs.</div>');
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -275,6 +276,90 @@ function trSubmit(){
     feedback(true); toast("Transferat: "+qty+" × "+tr.product.name); screenTransfer();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Inventar (numărare fizică pe locație) ---- */
+function screenInventory(){
+  scanTarget=null;
+  shell("Inventar — alege locația",
+    '<div class="card"><label>Locație de numărat</label><select id="iv_loc">'+locOptions()+'</select>'
+    +'<div class="muted" style="font-size:12.5px;margin:8px 0">Poți și scana codul locației (dacă are etichetă).</div>'
+    +'<div class="scanbox" style="margin-bottom:8px"><input id="iv_locscan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează codul locației (opțional)"></div>'
+    +'<button class="big" onclick="invStart()">Începe inventarul</button></div>', {back:"renderHome()"});
+  wireScan("iv_locscan", function(code){
+    var m=LOCS.filter(function(l){ return String(l.code)===String(code); })[0];
+    if(m){ el("iv_loc").value=m.id; feedback(true); toast("Locație: "+m.code); }
+    else { feedback(false); toast("Locație negăsită: "+code,true); }
+  });
+}
+window.invStart=function(){
+  var loc=Number(el("iv_loc").value);
+  if(!loc){ toast("Alege locația",true); return; }
+  var lc=(LOCS.filter(function(l){return l.id===loc;})[0]||{}).code||("#"+loc);
+  window._inv={ locId:loc, locCode:lc, sys:{}, counted:{} };
+  shell("Inventar · "+esc(lc),
+    '<div class="scanbox"><input id="iv_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsele (fără Enter)"></div>'
+    +'<button class="cam" onclick="openCam(function(c){invScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="iv_sum" class="muted" style="margin:10px 0;font-size:12.5px">Se încarcă stocul locației…</div>'
+    +'<div id="iv_list"></div>'
+    +'<button class="big" style="margin-top:14px" onclick="invFinish()">Finalizează inventarul</button>', {back:"screenInventory()"});
+  scanTarget=function(code){ invScan(code); };
+  // Încarcă stocul din sistem pentru locația aleasă
+  api("GET","/api/inventory/stock").then(function(d){
+    (d.stock||[]).forEach(function(s){ if(Number(s.location_id)===loc) window._inv.sys[s.product_id]={qty:Number(s.quantity)||0, name:s.product_name, sku:s.sku, unit:s.unit}; });
+    invRender();
+  }).catch(function(){ invRender(); });
+  wireScan("iv_scan", invScan);
+};
+function invScan(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ feedback(false); toast("Produs negăsit: "+code,true); return; }
+    feedback(true);
+    var inv=window._inv; if(!inv) return;
+    var c=inv.counted[p.id]||{qty:0, name:p.name, sku:p.barcode||p.sku, unit:p.unit};
+    c.qty+=1; inv.counted[p.id]=c;
+    invRender();
+  }).catch(function(e){ toast(e.message,true); });
+}
+window.invSetCount=function(pid, val){
+  var inv=window._inv; if(!inv||!inv.counted[pid]) return;
+  var n=Math.max(0, Math.round(Number(val)||0)); inv.counted[pid].qty=n; invRender();
+};
+function invRender(){
+  var inv=window._inv; if(!inv) return;
+  var ids=Object.keys(inv.counted);
+  var diffs=0;
+  var rows=ids.map(function(pid){
+    var c=inv.counted[pid]; var sysQ=(inv.sys[pid]&&inv.sys[pid].qty)||0; var d=c.qty-sysQ;
+    if(d!==0) diffs++;
+    var badge = d===0 ? '<span class="pill good">OK</span>' : (d>0?'<span class="pill" style="background:#14352a;color:#4ade80">+'+d+'</span>':'<span class="pill bad">'+d+'</span>');
+    return '<div class="card" style="margin-bottom:8px"><div style="font-weight:800">'+esc(c.name)+'</div>'
+      +'<div class="muted" style="font-size:12px;margin-bottom:6px">'+esc(c.sku||"")+'</div>'
+      +'<div class="row" style="align-items:center;gap:10px">'
+      +'<div>Numărat <input type="number" inputmode="numeric" min="0" value="'+c.qty+'" style="width:80px" onchange="invSetCount('+pid+',this.value)"></div>'
+      +'<div class="muted">sistem: '+sysQ+' '+esc(c.unit||"")+'</div>'+badge+'</div></div>';
+  }).join("");
+  var s=el("iv_sum"); if(s) s.innerHTML='Scanate: <b>'+ids.length+'</b> · diferențe: <b>'+diffs+'</b>';
+  var L=el("iv_list"); if(L) L.innerHTML = rows || '<div class="card center muted">Scanează primul produs.</div>';
+}
+window.invFinish=function(){
+  var inv=window._inv; if(!inv){ return; }
+  var ids=Object.keys(inv.counted);
+  if(!ids.length){ toast("Nu ai scanat niciun produs",true); return; }
+  var ops=[];
+  ids.forEach(function(pid){
+    var c=inv.counted[pid]; var sysQ=(inv.sys[pid]&&inv.sys[pid].qty)||0; var d=c.qty-sysQ;
+    if(d!==0) ops.push({product_id:Number(pid), delta:d});
+  });
+  if(!ops.length){ toast("Nicio diferență — stocul e corect ✓"); feedback(true); renderHome(); return; }
+  if(!confirm("Aplici "+ops.length+" ajustări de stoc în locația "+inv.locCode+"?")) return;
+  var done=0, fail=0, seq=Promise.resolve();
+  ops.forEach(function(o){ seq=seq.then(function(){
+    return api("POST","/api/inventory/adjust",{product_id:o.product_id, location_id:inv.locId, delta:o.delta, reference:"INVENTAR", note:"inventar "+inv.locCode})
+      .then(function(){done++;}).catch(function(){fail++;});
+  }); });
+  seq.then(function(){ feedback(true); toast("Inventar aplicat: "+done+" ajustări"+(fail?(" · "+fail+" eșuate"):"")); renderHome(); });
+};
 
 /* ---- Comenzi de pregătit (picking scanat) ---- */
 function ordStatus(s){ if(s==="completed")return '<span class="pill good">expediată</span>'; if(s==="cancelled")return '<span class="pill bad">anulată</span>'; return '<span class="pill" style="background:#3a3f1a;color:#f0c651">de pregătit</span>'; }
