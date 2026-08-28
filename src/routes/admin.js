@@ -214,12 +214,35 @@ async function setSetting(env, key, value) {
 // Intervale permise (ore). 0 = oprit.
 const ALLOWED_INTERVALS = [0, 1, 6, 12, 24, 168];
 
+// Înregistrează un backup în istoric (păstrează ultimele 200).
+async function logBackup(env, kind, r) {
+  try {
+    const status = (r && r.ok) ? 'ok' : 'fail';
+    const bytes = (r && r.bytes) || 0;
+    const statements = (r && r.server && r.server.statements) || 0;
+    const note = (r && r.ok) ? '' : String((r && r.error) || '').slice(0, 500);
+    await env.DB.prepare('INSERT INTO backup_log (kind, status, bytes, statements, note) VALUES (?, ?, ?, ?, ?)')
+      .bind(kind, status, bytes, statements, note).run();
+    await env.DB.prepare('DELETE FROM backup_log WHERE id NOT IN (SELECT id FROM backup_log ORDER BY id DESC LIMIT 200)').run();
+  } catch (e) { /* istoricul e best-effort */ }
+}
+
+export async function backupLog(request, env, ctx, user) {
+  let results = [];
+  try {
+    const r = await env.DB.prepare('SELECT id, created_at, kind, status, bytes, statements, note FROM backup_log ORDER BY id DESC LIMIT 50').all();
+    results = (r && r.results) || [];
+  } catch (e) {}
+  return json({ log: results });
+}
+
 // Endpoint manual: buton „Trimite backup pe server".
 export async function backupPush(request, env, ctx, user) {
   const r = await pushToServer(env);
   await setSetting(env, 'backup_last_run', new Date().toISOString());
   await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
   await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
+  await logBackup(env, 'manual', r);
   if (!r.ok) return json(r, 502);
   return json(r);
 }
@@ -263,6 +286,7 @@ export async function scheduledBackup(env) {
     await setSetting(env, 'backup_last_run', new Date().toISOString());
     await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
     await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
+    await logBackup(env, 'auto', r);
     return r;
   } catch (e) { return { ok: false, error: String(e) }; }
 }

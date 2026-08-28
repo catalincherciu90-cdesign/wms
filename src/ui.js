@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v36";
+var APP_VERSION = "v37";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1457,8 +1457,14 @@ VIEWS.users = function(){
     + '</div>'
     + '<div class="muted" style="margin-top:6px;font-size:11.5px">Se trimite automat pe serverul tău (wsdlogistics.ro) la intervalul ales. Verificarea se face din oră în oră.</div>'
     + '</div>'
+    + '<div style="margin-top:14px;border-top:1px solid var(--line,#e4e8f0);padding-top:12px">'
+    + '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><h2 style="margin:0;font-size:15px">🕘 Istoric backup</h2>'
+    + '<button class="ghost sm" onclick="loadBackupLog()">↻ Reîmprospătează</button></div>'
+    + '<div id="bk_log" class="muted">Se încarcă…</div>'
+    + '</div>'
     + '</div>');
   loadBackupSettings();
+  loadBackupLog();
   api("GET","/api/users").then(function(d){
     cache.users=d.users;
     var rows=d.users.map(function(u){
@@ -2238,6 +2244,22 @@ window.loadBackupSettings = function(){
     if(el("bk_status")) el("bk_status").innerHTML=bkFmtStatus(d);
   }).catch(function(){});
 };
+window.loadBackupLog = function(){
+  if(!el("bk_log")) return;
+  api("GET","/api/admin/backup-log").then(function(d){
+    var log=d.log||[];
+    if(!log.length){ el("bk_log").innerHTML='<div class="muted" style="font-size:12px">Niciun backup încă.</div>'; return; }
+    var rows=log.map(function(x){
+      var when=String(x.created_at||"").slice(0,16).replace("T"," ");
+      var kind=x.kind==="auto"?'<span class="pill mut">automat</span>':'<span class="pill mut">manual</span>';
+      var st=x.status==="ok"?'<span class="pill good">OK</span>':'<span class="pill bad">eșuat</span>';
+      var sz=x.bytes?(Math.round(x.bytes/1024)+" KB"):"—";
+      var note=(x.status!=="ok"&&x.note)?('<div class="muted" style="font-size:11px">'+esc(x.note)+'</div>'):"";
+      return '<tr><td class="muted">'+esc(when)+'</td><td>'+kind+'</td><td>'+st+note+'</td><td class="right">'+sz+'</td></tr>';
+    }).join("");
+    el("bk_log").innerHTML='<div style="max-height:260px;overflow:auto"><table><thead><tr><th>Data</th><th>Tip</th><th>Status</th><th class="right">Mărime</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }).catch(function(){ if(el("bk_log")) el("bk_log").innerHTML='<div class="muted" style="font-size:12px">Nu am putut încărca istoricul.</div>'; });
+};
 window.saveBackupSettings = function(){
   var h=el("bk_interval")?Number(el("bk_interval").value):0;
   api("PUT","/api/admin/backup-settings",{interval_hours:h}).then(function(){
@@ -2251,10 +2273,10 @@ window.pushBackup = function(){
     var st=(d.server&&d.server.statements)?(" · "+d.server.statements+" instrucțiuni"):"";
     var kb=d.bytes?(" · "+Math.round(d.bytes/1024)+" KB"):"";
     if(r) r.innerHTML='<span class="pill good">Backup trimis pe server ✓'+st+kb+'</span>';
-    toast("Backup trimis pe server ✓"); loadBackupSettings();
+    toast("Backup trimis pe server ✓"); loadBackupSettings(); loadBackupLog();
   }).catch(function(e){
     if(r) r.innerHTML='<span class="pill bad">Eșuat: '+esc(e.message)+'</span>';
-    toast("Backup eșuat","bad"); loadBackupSettings();
+    toast("Backup eșuat","bad"); loadBackupSettings(); loadBackupLog();
   });
 };
 window.downloadCsv = function(path, filename){
