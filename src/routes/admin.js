@@ -41,6 +41,11 @@ export async function generateBackupSql(env) {
   out += 'SET NAMES utf8mb4;\n';
   out += 'SET FOREIGN_KEY_CHECKS = 0;\n\n';
 
+  // Prefix pentru tabele: baza de destinație poate fi partajată cu altă aplicație,
+  // așa că scriem în `wms_<tabel>` ca să NU atingem tabele existente (ex. webmail).
+  const PREFIX = (env.BACKUP_TABLE_PREFIX !== undefined && env.BACKUP_TABLE_PREFIX !== null)
+    ? env.BACKUP_TABLE_PREFIX : 'wms_';
+
   for (const t of TABLES) {
     let info;
     try {
@@ -49,9 +54,10 @@ export async function generateBackupSql(env) {
     const cols = (info && info.results) || [];
     if (!cols.length) continue;
 
+    const tt = PREFIX + t; // numele în MySQL (cu prefix)
     out += '-- ------------------------------------------------------\n';
-    out += '-- Tabel: ' + t + '\n';
-    out += 'DROP TABLE IF EXISTS `' + t + '`;\n';
+    out += '-- Tabel: ' + tt + ' (sursa: ' + t + ')\n';
+    out += 'DROP TABLE IF EXISTS `' + tt + '`;\n';
 
     const defs = cols.map((c) => {
       let d = '`' + c.name + '` ' + mysqlType(c.type);
@@ -60,7 +66,7 @@ export async function generateBackupSql(env) {
       return d;
     });
     const pks = cols.filter((c) => c.pk).map((c) => '`' + c.name + '`');
-    let create = 'CREATE TABLE `' + t + '` (\n  ' + defs.join(',\n  ');
+    let create = 'CREATE TABLE `' + tt + '` (\n  ' + defs.join(',\n  ');
     if (pks.length) create += ',\n  PRIMARY KEY (' + pks.join(', ') + ')';
     create += '\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n';
     out += create;
@@ -76,7 +82,7 @@ export async function generateBackupSql(env) {
       for (let i = 0; i < rows.length; i += 50) {
         const chunk = rows.slice(i, i + 50);
         const values = chunk.map((r) => '(' + colNames.map((n) => sqlValue(r[n])).join(', ') + ')').join(',\n  ');
-        out += 'INSERT INTO `' + t + '` (' + colList + ') VALUES\n  ' + values + ';\n';
+        out += 'INSERT INTO `' + tt + '` (' + colList + ') VALUES\n  ' + values + ';\n';
       }
     }
     out += '\n';
