@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v37";
+var APP_VERSION = "v38";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -780,7 +780,8 @@ var NAV = [
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
   ["reports","Rapoarte","viewer"],
-  ["users","Utilizatori","admin"]
+  ["users","Utilizatori","admin"],
+  ["backup","Backup","admin"]
 ];
 
 function navLink(item){
@@ -1426,9 +1427,9 @@ VIEWS.movements = function(){
   });
 };
 
-VIEWS.users = function(){
-  setMain(topbar("Utilizatori", '<button onclick="userForm()">+ Utilizator</button>') + '<div class="card" id="utbl">…</div>'
-    + '<div class="card" style="padding:18px;margin-top:16px">'
+VIEWS.backup = function(){
+  setMain(topbar("Backup & Restaurare")
+    + '<div class="card" style="padding:18px">'
     + '<h2 style="margin:0 0 4px">💾 Backup bază de date</h2>'
     + '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Descarcă toată baza (produse, stoc, comenzi, clienți, mișcări…) ca fișier <b>.sql</b> compatibil MySQL/MariaDB. În phpMyAdmin: alege baza ta → tab <b>Import</b> → încarcă fișierul.</p>'
     + '<div class="row" style="gap:8px;flex-wrap:wrap"><button onclick="downloadBackup()">⬇ Backup MySQL (.sql)</button>'
@@ -1436,13 +1437,6 @@ VIEWS.users = function(){
     + '<button class="ghost" onclick="pushBackup()">☁ Trimite backup pe server</button></div>'
     + '<div class="muted" style="margin-top:6px;font-size:11.5px">.sql = pentru phpMyAdmin/MySQL · .json = pentru <b>restaurare în WMS</b> (păstrează-l la loc sigur).</div>'
     + '<div id="bk_res" style="margin-top:8px"></div>'
-    + '<div style="margin-top:14px;border-top:1px solid var(--line,#e4e8f0);padding-top:12px">'
-    + '<h2 style="margin:0 0 4px;font-size:15px">♻️ Restaurare din snapshot</h2>'
-    + '<p class="muted" style="margin:0 0 8px;font-size:12px">Reîncarcă baza WMS dintr-un fișier snapshot <b>.json</b> descărcat anterior. <b>Înlocuiește datele curente.</b></p>'
-    + '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><input id="rs_file" type="file" accept="application/json,.json">'
-    + '<button class="danger" onclick="restoreConfirm()">♻️ Restaurează</button></div>'
-    + '<div id="rs_res" style="margin-top:8px"></div>'
-    + '</div>'
     + '<div style="margin-top:14px;border-top:1px solid var(--line,#e4e8f0);padding-top:12px">'
     + '<div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">'
     +   '<div><label>Backup automat — la cât timp?</label><select id="bk_interval" onchange="saveBackupSettings()">'
@@ -1457,14 +1451,25 @@ VIEWS.users = function(){
     + '</div>'
     + '<div class="muted" style="margin-top:6px;font-size:11.5px">Se trimite automat pe serverul tău (wsdlogistics.ro) la intervalul ales. Verificarea se face din oră în oră.</div>'
     + '</div>'
-    + '<div style="margin-top:14px;border-top:1px solid var(--line,#e4e8f0);padding-top:12px">'
-    + '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><h2 style="margin:0;font-size:15px">🕘 Istoric backup</h2>'
+    + '</div>'
+    + '<div class="card" style="padding:18px;margin-top:16px">'
+    + '<h2 style="margin:0 0 4px;font-size:16px">♻️ Restaurare din snapshot</h2>'
+    + '<p class="muted" style="margin:0 0 8px;font-size:12px">Reîncarcă baza WMS dintr-un fișier snapshot <b>.json</b> descărcat anterior. <b>Înlocuiește datele curente.</b></p>'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><input id="rs_file" type="file" accept="application/json,.json">'
+    + '<button class="danger" onclick="restoreConfirm()">♻️ Restaurează</button></div>'
+    + '<div id="rs_res" style="margin-top:8px"></div>'
+    + '</div>'
+    + '<div class="card" style="padding:18px;margin-top:16px">'
+    + '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><h2 style="margin:0;font-size:16px">🕘 Istoric backup</h2>'
     + '<button class="ghost sm" onclick="loadBackupLog()">↻ Reîmprospătează</button></div>'
     + '<div id="bk_log" class="muted">Se încarcă…</div>'
-    + '</div>'
     + '</div>');
   loadBackupSettings();
   loadBackupLog();
+};
+
+VIEWS.users = function(){
+  setMain(topbar("Utilizatori", '<button onclick="userForm()">+ Utilizator</button>') + '<div class="card" id="utbl">…</div>');
   api("GET","/api/users").then(function(d){
     cache.users=d.users;
     var rows=d.users.map(function(u){
