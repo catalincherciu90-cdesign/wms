@@ -120,7 +120,8 @@ async function pushToServer(env) {
   let parsed = null;
   try { parsed = JSON.parse(text); } catch (e) { /* răspuns non-JSON */ }
   if (!resp.ok || (parsed && parsed.ok === false)) {
-    return { ok: false, error: 'Serverul de backup a răspuns cu eroare (HTTP ' + resp.status + ').', server: parsed || text.slice(0, 300) };
+    const detail = (parsed && parsed.error) ? parsed.error : (text ? text.slice(0, 400) : '(fără detalii)');
+    return { ok: false, error: 'Server backup (HTTP ' + resp.status + '): ' + detail, status: resp.status, server: parsed || text.slice(0, 400) };
   }
   return { ok: true, bytes: sql.length, server: parsed || text.slice(0, 200) };
 }
