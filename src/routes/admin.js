@@ -132,6 +132,72 @@ async function pushToServer(env) {
   return { ok: true, bytes: sql.length, server: parsed || text.slice(0, 200) };
 }
 
+// ── Snapshot JSON + Restaurare (în baza WMS / D1) ──────────────────────────
+// Descarcă un snapshot complet (JSON) — formatul potrivit pentru RESTAURARE în WMS.
+export async function backupJson(request, env, ctx, user) {
+  const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  const tables = {};
+  for (const t of TABLES) {
+    try {
+      const r = await env.DB.prepare('SELECT * FROM ' + t).all();
+      tables[t] = (r && r.results) || [];
+    } catch (e) { tables[t] = []; }
+  }
+  const body = JSON.stringify({ app: 'wms', version: 1, generated: new Date().toISOString(), tables });
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="wms-snapshot-' + ts + '.json"',
+      'Cache-Control': 'no-store',
+      ...corsHeaders,
+    },
+  });
+}
+
+// Restaurează baza WMS dintr-un snapshot JSON. ATENȚIE: înlocuiește datele curente.
+export async function restore(request, env, ctx, user) {
+  let body;
+  try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'Fișier invalid (nu e JSON).' }, 400); }
+  const tables = body && body.tables;
+  if (!tables || typeof tables !== 'object') return json({ ok: false, error: 'Snapshot invalid (lipsește secțiunea „tables").' }, 400);
+
+  // Golește tabelele (copiii înainte de părinți)
+  for (let i = TABLES.length - 1; i >= 0; i--) {
+    try { await env.DB.prepare('DELETE FROM ' + TABLES[i]).run(); } catch (e) { /* tabel inexistent */ }
+  }
+
+  const summary = {};
+  // Inserează (părinții înainte de copii)
+  for (const t of TABLES) {
+    const rows = Array.isArray(tables[t]) ? tables[t] : [];
+    if (!rows.length) { summary[t] = 0; continue; }
+    let cols = [];
+    try {
+      const info = await env.DB.prepare('PRAGMA table_info(' + t + ')').all();
+      cols = ((info && info.results) || []).map((c) => c.name);
+    } catch (e) {}
+    if (!cols.length) { summary[t] = 0; continue; }
+
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += 50) {
+      const chunk = rows.slice(i, i + 50);
+      const stmts = [];
+      for (const row of chunk) {
+        if (!row || typeof row !== 'object') continue;
+        const use = cols.filter((c) => Object.prototype.hasOwnProperty.call(row, c));
+        if (!use.length) continue;
+        const ph = use.map(() => '?').join(', ');
+        const colSql = use.map((c) => '"' + c + '"').join(', ');
+        stmts.push(env.DB.prepare('INSERT INTO ' + t + ' (' + colSql + ') VALUES (' + ph + ')').bind(...use.map((c) => row[c])));
+      }
+      if (!stmts.length) continue;
+      try { await env.DB.batch(stmts); inserted += stmts.length; } catch (e) { /* sar peste chunk-ul cu probleme */ }
+    }
+    summary[t] = inserted;
+  }
+  return json({ ok: true, restored: summary });
+}
+
 // ── Setări (tabela settings) ───────────────────────────────────────────────
 async function getSetting(env, key, def) {
   try {

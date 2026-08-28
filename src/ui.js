@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v35";
+var APP_VERSION = "v36";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1431,9 +1431,18 @@ VIEWS.users = function(){
     + '<div class="card" style="padding:18px;margin-top:16px">'
     + '<h2 style="margin:0 0 4px">💾 Backup bază de date</h2>'
     + '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Descarcă toată baza (produse, stoc, comenzi, clienți, mișcări…) ca fișier <b>.sql</b> compatibil MySQL/MariaDB. În phpMyAdmin: alege baza ta → tab <b>Import</b> → încarcă fișierul.</p>'
-    + '<div class="row" style="gap:8px;flex-wrap:wrap"><button onclick="downloadBackup()">⬇ Descarcă backup (.sql)</button>'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap"><button onclick="downloadBackup()">⬇ Backup MySQL (.sql)</button>'
+    + '<button class="ghost" onclick="downloadSnapshot()">⬇ Snapshot restaurabil (.json)</button>'
     + '<button class="ghost" onclick="pushBackup()">☁ Trimite backup pe server</button></div>'
+    + '<div class="muted" style="margin-top:6px;font-size:11.5px">.sql = pentru phpMyAdmin/MySQL · .json = pentru <b>restaurare în WMS</b> (păstrează-l la loc sigur).</div>'
     + '<div id="bk_res" style="margin-top:8px"></div>'
+    + '<div style="margin-top:14px;border-top:1px solid var(--line,#e4e8f0);padding-top:12px">'
+    + '<h2 style="margin:0 0 4px;font-size:15px">♻️ Restaurare din snapshot</h2>'
+    + '<p class="muted" style="margin:0 0 8px;font-size:12px">Reîncarcă baza WMS dintr-un fișier snapshot <b>.json</b> descărcat anterior. <b>Înlocuiește datele curente.</b></p>'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><input id="rs_file" type="file" accept="application/json,.json">'
+    + '<button class="danger" onclick="restoreConfirm()">♻️ Restaurează</button></div>'
+    + '<div id="rs_res" style="margin-top:8px"></div>'
+    + '</div>'
     + '<div style="margin-top:14px;border-top:1px solid var(--line,#e4e8f0);padding-top:12px">'
     + '<div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">'
     +   '<div><label>Backup automat — la cât timp?</label><select id="bk_interval" onchange="saveBackupSettings()">'
@@ -2175,6 +2184,42 @@ window.downloadBackup = function(){
   var d=new Date().toISOString().slice(0,10);
   toast("Se generează backup-ul…");
   downloadCsv("/api/admin/backup.sql","wms-backup-"+d+".sql");
+};
+window.downloadSnapshot = function(){
+  var d=new Date().toISOString().slice(0,10);
+  toast("Se generează snapshot-ul…");
+  downloadCsv("/api/admin/backup.json","wms-snapshot-"+d+".json");
+};
+window.restoreConfirm = function(){
+  var f=el("rs_file") && el("rs_file").files[0];
+  if(!f){ toast("Alege un fișier snapshot (.json)","bad"); return; }
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var data;
+    try{ data=JSON.parse(e.target.result); }catch(err){ toast("Fișier invalid (nu e JSON)","bad"); return; }
+    if(!data || !data.tables){ toast("Snapshot invalid (lipsă «tables»)","bad"); return; }
+    var counts=Object.keys(data.tables).map(function(t){ return {t:t, n:(data.tables[t]||[]).length}; }).filter(function(x){return x.n>0;});
+    var total=counts.reduce(function(a,x){return a+x.n;},0);
+    var when=data.generated?String(data.generated).slice(0,16).replace("T"," "):"necunoscut";
+    var listHtml=counts.map(function(x){ return '<tr><td>'+esc(x.t)+'</td><td class="right">'+x.n+'</td></tr>'; }).join("") || '<tr><td colspan=2 class="muted center">Snapshot gol</td></tr>';
+    modal("Confirmă restaurarea",
+      '<p class="pill bad" style="display:block;padding:8px 10px;font-size:12.5px">⚠️ Se ȘTERG datele curente din WMS și se înlocuiesc cu cele din snapshot. Ireversibil.</p>'
+      +'<p style="font-size:13px">Snapshot generat: <b>'+esc(when)+'</b> · total <b>'+total+'</b> rânduri.</p>'
+      +'<div style="max-height:200px;overflow:auto"><table><thead><tr><th>Tabel</th><th class="right">Rânduri</th></tr></thead><tbody>'+listHtml+'</tbody></table></div>',
+      function(){ doRestore(data); });
+    var sv=el("modalSave"); if(sv){ sv.textContent="Da, restaurează"; sv.className="danger"; }
+  };
+  reader.readAsText(f);
+};
+window.doRestore = function(data){
+  var sv=el("modalSave"); if(sv) sv.disabled=true;
+  toast("Se restaurează…");
+  api("POST","/api/admin/restore",data).then(function(d){
+    closeModal();
+    var tot=0; if(d.restored){ Object.keys(d.restored).forEach(function(t){ tot+=d.restored[t]; }); }
+    if(el("rs_res")) el("rs_res").innerHTML='<span class="pill good">Restaurat ✓ · '+tot+' rânduri</span>';
+    toast("Restaurare completă ✓");
+  }).catch(function(e){ var s=el("modalSave"); if(s) s.disabled=false; toast("Restaurare eșuată: "+e.message,"bad"); });
 };
 function bkFmtStatus(d){
   var parts=[];
