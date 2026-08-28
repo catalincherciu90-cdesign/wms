@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v38";
+var APP_VERSION = "v39";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -2211,7 +2211,7 @@ window.restoreConfirm = function(){
     if(!data || !data.tables){ toast("Snapshot invalid (lipsă «tables»)","bad"); return; }
     var counts=Object.keys(data.tables).map(function(t){ return {t:t, n:(data.tables[t]||[]).length}; }).filter(function(x){return x.n>0;});
     var total=counts.reduce(function(a,x){return a+x.n;},0);
-    var when=data.generated?String(data.generated).slice(0,16).replace("T"," "):"necunoscut";
+    var when=data.generated?fmtLocal(data.generated):"necunoscut";
     var listHtml=counts.map(function(x){ return '<tr><td>'+esc(x.t)+'</td><td class="right">'+x.n+'</td></tr>'; }).join("") || '<tr><td colspan=2 class="muted center">Snapshot gol</td></tr>';
     modal("Confirmă restaurarea",
       '<p class="pill bad" style="display:block;padding:8px 10px;font-size:12.5px">⚠️ Se ȘTERG datele curente din WMS și se înlocuiesc cu cele din snapshot. Ireversibil.</p>'
@@ -2232,10 +2232,19 @@ window.doRestore = function(data){
     toast("Restaurare completă ✓");
   }).catch(function(e){ var s=el("modalSave"); if(s) s.disabled=false; toast("Restaurare eșuată: "+e.message,"bad"); });
 };
+function fmtLocal(s){
+  if(!s) return "";
+  s=String(s);
+  var iso = /Z|[+]\\d\\d:?\\d\\d$/.test(s) ? s : (s.replace(" ","T")+"Z"); // marcăm ca UTC dacă n-are fus
+  var d=new Date(iso);
+  if(isNaN(d.getTime())) return s.slice(0,16).replace("T"," ");
+  function p(n){ return (n<10?"0":"")+n; }
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
 function bkFmtStatus(d){
   var parts=[];
   if(d.last_run){
-    var when=String(d.last_run).slice(0,16).replace("T"," ");
+    var when=fmtLocal(d.last_run);
     if(d.last_status==="ok") parts.push('<span class="pill good">ultimul: OK · '+esc(when)+'</span>');
     else if(d.last_status==="fail") parts.push('<span class="pill bad">ultimul: eșuat · '+esc(when)+'</span>');
     else parts.push('<span class="muted">ultimul: '+esc(when)+'</span>');
@@ -2255,7 +2264,7 @@ window.loadBackupLog = function(){
     var log=d.log||[];
     if(!log.length){ el("bk_log").innerHTML='<div class="muted" style="font-size:12px">Niciun backup încă.</div>'; return; }
     var rows=log.map(function(x){
-      var when=String(x.created_at||"").slice(0,16).replace("T"," ");
+      var when=fmtLocal(x.created_at);
       var kind=x.kind==="auto"?'<span class="pill mut">automat</span>':'<span class="pill mut">manual</span>';
       var st=x.status==="ok"?'<span class="pill good">OK</span>':'<span class="pill bad">eșuat</span>';
       var sz=x.bytes?(Math.round(x.bytes/1024)+" KB"):"—";
