@@ -12,6 +12,7 @@ export async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS barcode_cache (code TEXT PRIMARY KEY, name TEXT, brand TEXT, category TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS pallets (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, client_id INTEGER, location_id INTEGER, status TEXT NOT NULL DEFAULT 'stored', notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS pallet_items (id INTEGER PRIMARY KEY AUTOINCREMENT, pallet_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 0)",
+    "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
   ];
   for (const sql of tables) {
     try { await env.DB.prepare(sql).run(); } catch (e) { /* există deja */ }

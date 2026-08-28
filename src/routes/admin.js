@@ -132,14 +132,71 @@ async function pushToServer(env) {
   return { ok: true, bytes: sql.length, server: parsed || text.slice(0, 200) };
 }
 
+// ── Setări (tabela settings) ───────────────────────────────────────────────
+async function getSetting(env, key, def) {
+  try {
+    const r = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
+    return (r && r.value !== null && r.value !== undefined) ? r.value : def;
+  } catch (e) { return def; }
+}
+async function setSetting(env, key, value) {
+  await env.DB.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).bind(key, String(value)).run();
+}
+
+// Intervale permise (ore). 0 = oprit.
+const ALLOWED_INTERVALS = [0, 1, 6, 12, 24, 168];
+
 // Endpoint manual: buton „Trimite backup pe server".
 export async function backupPush(request, env, ctx, user) {
   const r = await pushToServer(env);
+  await setSetting(env, 'backup_last_run', new Date().toISOString());
+  await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
+  await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
   if (!r.ok) return json(r, 502);
   return json(r);
 }
 
-// Apelat din cron (scheduled) — backup automat.
+// Citește setările de backup automat.
+export async function backupSettingsGet(request, env, ctx, user) {
+  const interval = Number(await getSetting(env, 'backup_interval_hours', '0')) || 0;
+  return json({
+    interval_hours: interval,
+    last_run: await getSetting(env, 'backup_last_run', ''),
+    last_status: await getSetting(env, 'backup_last_status', ''),
+    last_error: await getSetting(env, 'backup_last_error', ''),
+    allowed: ALLOWED_INTERVALS,
+  });
+}
+
+// Setează intervalul de backup automat.
+export async function backupSettingsSet(request, env, ctx, user) {
+  let body = {};
+  try { body = await request.json(); } catch (e) {}
+  const h = Number(body && body.interval_hours);
+  if (!ALLOWED_INTERVALS.includes(h)) return json({ ok: false, error: 'Interval invalid.' }, 400);
+  await setSetting(env, 'backup_interval_hours', h);
+  return json({ ok: true, interval_hours: h });
+}
+
+// Apelat din cron (scheduled) — rulează backup DOAR când e scadent conform intervalului ales.
 export async function scheduledBackup(env) {
-  try { return await pushToServer(env); } catch (e) { return { ok: false, error: String(e) }; }
+  try {
+    const hours = Number(await getSetting(env, 'backup_interval_hours', '0')) || 0;
+    if (hours <= 0) return { ok: true, skipped: 'oprit' };
+    const last = await getSetting(env, 'backup_last_run', '');
+    const now = Date.now();
+    if (last) {
+      const lastMs = Date.parse(last);
+      if (Number.isFinite(lastMs) && (now - lastMs) < (hours * 3600 * 1000 - 60000)) {
+        return { ok: true, skipped: 'nescadent' };
+      }
+    }
+    const r = await pushToServer(env);
+    await setSetting(env, 'backup_last_run', new Date().toISOString());
+    await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
+    await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
+    return r;
+  } catch (e) { return { ok: false, error: String(e) }; }
 }
