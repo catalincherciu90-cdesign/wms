@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v30";
+var APP_VERSION = "v31";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1427,7 +1427,12 @@ VIEWS.movements = function(){
 };
 
 VIEWS.users = function(){
-  setMain(topbar("Utilizatori", '<button onclick="userForm()">+ Utilizator</button>') + '<div class="card" id="utbl">…</div>');
+  setMain(topbar("Utilizatori", '<button onclick="userForm()">+ Utilizator</button>') + '<div class="card" id="utbl">…</div>'
+    + '<div class="card" style="padding:18px;margin-top:16px">'
+    + '<h2 style="margin:0 0 4px">💾 Backup bază de date</h2>'
+    + '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Descarcă toată baza (produse, stoc, comenzi, clienți, mișcări…) ca fișier <b>.sql</b> compatibil MySQL/MariaDB. În phpMyAdmin: alege baza ta → tab <b>Import</b> → încarcă fișierul. Recomandat periodic (ex. zilnic).</p>'
+    + '<button onclick="downloadBackup()">⬇ Descarcă backup (.sql)</button>'
+    + '</div>');
   api("GET","/api/users").then(function(d){
     cache.users=d.users;
     var rows=d.users.map(function(u){
@@ -2149,6 +2154,11 @@ function filterTab(varName,value,label){
   var viewName=varName.replace("Filter","")+"s";
   return '<button class="sm'+(active?'':' ghost')+'" onclick="window.'+varName+'=\\''+value+'\\';go(\\''+viewName+'\\')">'+esc(label)+'</button>';
 }
+window.downloadBackup = function(){
+  var d=new Date().toISOString().slice(0,10);
+  toast("Se generează backup-ul…");
+  downloadCsv("/api/admin/backup.sql","wms-backup-"+d+".sql");
+};
 window.downloadCsv = function(path, filename){
   fetch(API+path,{ headers: token?{Authorization:"Bearer "+token}:{} }).then(function(r){
     if(!r.ok) throw new Error("Export eșuat"); return r.blob();
