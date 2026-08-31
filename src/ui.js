@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v41";
+var APP_VERSION = "v42";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -1190,7 +1190,7 @@ VIEWS.stock = function(){
 };
 
 function opForm(title, type){
-  var avizBtn = type==="receive" ? '<button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>' : '';
+  var avizBtn = type==="receive" ? '<button class="ghost" onclick="xlsInUI()">📊 Recepție Excel</button> <button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>' : '';
   setMain(topbar(title, avizBtn) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
     + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><div class="row"><input id="op_scan" style="flex:1" placeholder="Scanează sau tastează, apoi Enter" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'op_scan\\').value=t;opScan();})">📷</button></div>'+fhint("Scanează codul (laser sau 📷), apoi Enter — găsește produsul automat.")+'</div>'
@@ -1338,6 +1338,54 @@ window.avizUI=function(){
   api("GET","/api/clients").then(function(d){ if(el("av_client")) el("av_client").innerHTML='<option value="">— intern (al companiei) —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
   el("av_file").onchange=avizParse;
 };
+// Recepție din Excel/CSV — refolosește potrivirea + crearea de produse noi din fluxul de aviz.
+window.xlsInUI=function(){
+  modal("Recepție din Excel",
+    '<div class="muted" style="margin-bottom:8px;font-size:12.5px">Coloane recunoscute: <b>cod_bare (EAN)</b>, <b>cantitate</b>, nume (opțional, pentru produse noi).</div>'
+    +'<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="av_file" type="file" accept=".xlsx,.xls,.csv">'+fhint("Citim EAN-ul și cantitatea din fișier.")+'</div>'
+    +'<div class="field"><label>Locația de recepție</label><select id="av_loc"></select>'+fhint("Unde așezi marfa primită.")+'</div>'
+    +'<div class="field"><label>Client pentru produsele noi (opțional)</label><select id="av_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Marfa nouă (EAN necunoscut) se adaugă ca produs al acestui client.")+'</div>'
+    +field("Referință","av_ref","","","text","Ex: nr. aviz / factură.")
+    +'<div id="av_status" class="muted" style="font-size:12.5px;margin:8px 0"></div>'
+    +'<div id="av_res" style="max-height:44vh;overflow:auto"></div>',
+    function(){ avizReceiveAll(); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Recepționează"; sv.disabled=true; }
+  api("GET","/api/locations").then(function(d){ if(el("av_loc")) el("av_loc").innerHTML=(d.locations||[]).filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); });
+  api("GET","/api/clients").then(function(d){ if(el("av_client")) el("av_client").innerHTML='<option value="">— intern (al companiei) —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
+  el("av_file").onchange=xlsInParse;
+};
+function xlsInParse(){
+  var f=el("av_file").files[0]; if(!f) return;
+  if(!el("av_ref").value) el("av_ref").value=f.name.replace(/\\.(xlsx|xls|csv)$/i,"");
+  el("av_status").textContent="Se citește fișierul…";
+  ensureXLSX().then(function(){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+        var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+        var byEan={};
+        rows.forEach(function(r){
+          var ean=String(impGet(r,["cod_bare","cod bare","cod de bare","barcode","ean","cod ean"])).trim();
+          if(!ean) return;
+          var qty=Math.round(Number(String(impGet(r,["cantitate","cant","qty","quantity","stoc","stoc initial","bucati","buc"])).replace(",",".")))||0;
+          var name=String(impGet(r,["nume","name","denumire","produs","descriere"])).trim();
+          var rec=byEan[ean]||(byEan[ean]={qty:0,name:""});
+          rec.qty+=(qty>0?qty:0);
+          if(!rec.name && name) rec.name=name;
+        });
+        var eans=Object.keys(byEan);
+        if(!eans.length){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Nu am găsit coduri EAN în fișier (coloana «cod_bare» sau «ean»).</span>'; el("av_res").innerHTML=''; return; }
+        api("GET","/api/products").then(function(d){
+          var map={}; (d.products||[]).forEach(function(p){ if(p.barcode) map[String(p.barcode)]=p; });
+          window._avizRows=eans.map(function(en){ return {ean:en, product:map[en]||null, qty:byEan[en].qty, name:byEan[en].name||""}; });
+          avizRender();
+        });
+      }catch(err){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Nu am putut citi fișierul Excel.</span>'; }
+    };
+    reader.readAsArrayBuffer(f);
+  }).catch(function(){ el("av_status").innerHTML='<span class="pill bad" style="display:inline-block;padding:6px 10px">Nu s-a putut încărca cititorul Excel.</span>'; });
+}
 function avizParse(){
   var f=el("av_file").files[0]; if(!f) return;
   if(!el("av_ref").value) el("av_ref").value=f.name.replace(/\\.pdf$/i,"");
