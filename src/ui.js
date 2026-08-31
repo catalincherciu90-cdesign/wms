@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v42";
+var APP_VERSION = "v43";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -964,7 +964,7 @@ window.importUI = function(){
     + '<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="imp_file" type="file" accept=".xlsx,.xls,.csv">'+fhint("Alege fișierul cu produse. Trebuie să aibă coloane EAN și Nume. Opțional: coloană «cantitate» pentru stoc de deschidere.")+'</div>'
     + '<div class="field"><label>Atribuie toate unui client (opțional)</label><select id="imp_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Clientul căruia îi atribui produsele importate.")+'</div>'
     + '<div class="field"><label>Locație pentru stoc de deschidere (opțional)</label><select id="imp_loc"><option value="">— fără stoc (doar catalog) —</option></select>'+fhint("Dacă fișierul are coloana «cantitate» și alegi o locație, se încarcă și stocul aici. Altfel se importă doar catalogul.")+'</div>'
-    + '<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadTemplate()">⬇ Descarcă șablon</button></div>'
+    + '<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadProductTemplate()">⬇ Descarcă model Excel</button> <button class="ghost sm" onclick="downloadTemplate()">⬇ Șablon CSV</button></div>'
     + '<div id="imp_preview" class="muted">Alege un fișier ca să vezi previzualizarea.</div>',
     function(){ importDoImport(); });
   var sv=el("modalSave"); if(sv){ sv.textContent="Importă"; sv.disabled=true; }
@@ -1023,6 +1023,12 @@ window.downloadTemplate = function(){
   var csv="cod_bare,nume,categorie,um,prag,sku,cantitate\\r\\n5941234567890,Exemplu produs,Ambalaje,buc,10,,25\\r\\n";
   var blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
   a.href=url; a.download="sablon-produse.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+};
+window.downloadProductTemplate=function(){
+  downloadXlsx([
+    ["cod_bare","nume","categorie","um","prag","sku","cantitate"],
+    ["5941234567890","Exemplu produs","Ambalaje","buc",10,"",25]
+  ], "model-produse.xlsx", "Produse");
 };
 window.deleteProduct = function(id){
   var p=(cache.products||[]).find(function(x){return x.id===id;});
@@ -1338,10 +1344,29 @@ window.avizUI=function(){
   api("GET","/api/clients").then(function(d){ if(el("av_client")) el("av_client").innerHTML='<option value="">— intern (al companiei) —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
   el("av_file").onchange=avizParse;
 };
+// Generează și descarcă un fișier .xlsx model (antet + exemple).
+function downloadXlsx(aoa, filename, sheetName){
+  ensureXLSX().then(function(){
+    var ws=XLSX.utils.aoa_to_sheet(aoa);
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, sheetName||"Model");
+    var out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    var blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    var url=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }).catch(function(){ toast("Nu s-a putut genera modelul Excel","bad"); });
+}
+window.downloadReceiveTemplate=function(){
+  downloadXlsx([
+    ["cod_bare","cantitate","nume"],
+    ["5941234567890", 10, "Exemplu produs existent"],
+    ["2000000000015", 5, "Exemplu produs nou"]
+  ], "model-receptie.xlsx", "Receptie");
+};
 // Recepție din Excel/CSV — refolosește potrivirea + crearea de produse noi din fluxul de aviz.
 window.xlsInUI=function(){
   modal("Recepție din Excel",
     '<div class="muted" style="margin-bottom:8px;font-size:12.5px">Coloane recunoscute: <b>cod_bare (EAN)</b>, <b>cantitate</b>, nume (opțional, pentru produse noi).</div>'
+    +'<div style="margin-bottom:10px"><button class="ghost sm" onclick="downloadReceiveTemplate()">⬇ Descarcă model Excel</button></div>'
     +'<div class="field"><label>Fișier (.xlsx / .xls / .csv)</label><input id="av_file" type="file" accept=".xlsx,.xls,.csv">'+fhint("Citim EAN-ul și cantitatea din fișier.")+'</div>'
     +'<div class="field"><label>Locația de recepție</label><select id="av_loc"></select>'+fhint("Unde așezi marfa primită.")+'</div>'
     +'<div class="field"><label>Client pentru produsele noi (opțional)</label><select id="av_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Marfa nouă (EAN necunoscut) se adaugă ca produs al acestui client.")+'</div>'
