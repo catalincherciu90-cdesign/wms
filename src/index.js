@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v40';
+const APP_VERSION = 'v41';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -64,6 +64,7 @@ const routes = [
   ['GET', '/api/admin/backup.json', admin.backupJson, 'admin'],
   ['POST', '/api/admin/restore', admin.restore, 'admin'],
   ['GET', '/api/admin/backup-log', admin.backupLog, 'admin'],
+  ['GET', '/api/admin/cron', admin.cronRun, null],
 
   ['GET', '/api/partners', partners.list, 'viewer'],
   ['POST', '/api/partners', partners.create, 'operator'],

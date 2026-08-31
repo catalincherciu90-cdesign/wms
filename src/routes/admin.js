@@ -296,3 +296,25 @@ export async function maybeBackup(env, kind) {
 export async function scheduledBackup(env) {
   try { return await maybeBackup(env, 'auto'); } catch (e) { return { ok: false, error: String(e) }; }
 }
+
+// Endpoint pentru programator EXTERN (ex. Cron Job din cPanel pe serverul tău).
+// Public, dar protejat cu cheie (?key=... sau header X-Cron-Key). Rulează la oră fixă,
+// independent de conectarea utilizatorului. Cu ?force=1 face backup indiferent de interval.
+export async function cronRun(request, env) {
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key') || request.headers.get('x-cron-key') || '';
+  const expected = env.CRON_KEY || env.BACKUP_TOKEN || BACKUP_TOKEN_DEFAULT;
+  if (!expected || key !== expected) return json({ ok: false, error: 'Cheie invalidă' }, 403);
+  const force = url.searchParams.get('force') === '1';
+  let r;
+  if (force) {
+    r = await pushToServer(env);
+    await setSetting(env, 'backup_last_run', new Date().toISOString());
+    await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
+    await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
+    await logBackup(env, 'auto', r);
+  } else {
+    r = await maybeBackup(env, 'auto');
+  }
+  return json(r);
+}
