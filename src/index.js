@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v39';
+const APP_VERSION = 'v40';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -130,6 +130,8 @@ function match(routePath, actualPath) {
   return params;
 }
 
+let lastLazyBackupCheck = 0; // throttle per-isolate pentru backup-ul „leneș"
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -140,6 +142,14 @@ export default {
     // API
     if (path.startsWith('/api/')) {
       await ensureSchema(env); // migrare idempotentă (clienți, portal, coloane noi)
+
+      // Backup automat „leneș": dacă e scadent, îl declanșăm în fundal când e folosită aplicația.
+      // Așa merge sigur chiar dacă Cron Trigger-ul Cloudflare nu se declanșează.
+      const nowT = Date.now();
+      if (nowT - lastLazyBackupCheck > 5 * 60 * 1000) {
+        lastLazyBackupCheck = nowT;
+        ctx.waitUntil(admin.maybeBackup(env, 'auto').catch(() => {}));
+      }
       for (const [method, pattern, handler, role] of routes) {
         if (method !== request.method) continue;
         const params = match(pattern, path);

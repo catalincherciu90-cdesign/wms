@@ -269,24 +269,30 @@ export async function backupSettingsSet(request, env, ctx, user) {
   return json({ ok: true, interval_hours: h });
 }
 
-// Apelat din cron (scheduled) — rulează backup DOAR când e scadent conform intervalului ales.
-export async function scheduledBackup(env) {
-  try {
-    const hours = Number(await getSetting(env, 'backup_interval_hours', '0')) || 0;
-    if (hours <= 0) return { ok: true, skipped: 'oprit' };
-    const last = await getSetting(env, 'backup_last_run', '');
-    const now = Date.now();
-    if (last) {
-      const lastMs = Date.parse(last);
-      if (Number.isFinite(lastMs) && (now - lastMs) < (hours * 3600 * 1000 - 60000)) {
-        return { ok: true, skipped: 'nescadent' };
-      }
+// Rulează backup DOAR când e scadent conform intervalului ales.
+// Folosit atât de cron (scheduled) cât și de declanșatorul „leneș" din fetch.
+export async function maybeBackup(env, kind) {
+  const hours = Number(await getSetting(env, 'backup_interval_hours', '0')) || 0;
+  if (hours <= 0) return { ok: true, skipped: 'oprit' };
+  const last = await getSetting(env, 'backup_last_run', '');
+  const now = Date.now();
+  if (last) {
+    const lastMs = Date.parse(last);
+    if (Number.isFinite(lastMs) && (now - lastMs) < (hours * 3600 * 1000 - 60000)) {
+      return { ok: true, skipped: 'nescadent' };
     }
-    const r = await pushToServer(env);
-    await setSetting(env, 'backup_last_run', new Date().toISOString());
-    await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
-    await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
-    await logBackup(env, 'auto', r);
-    return r;
-  } catch (e) { return { ok: false, error: String(e) }; }
+  }
+  // „Prindem" slotul imediat (setăm last_run înainte de trimitere) ca să nu se
+  // declanșeze de două ori din cereri concurente.
+  await setSetting(env, 'backup_last_run', new Date().toISOString());
+  const r = await pushToServer(env);
+  await setSetting(env, 'backup_last_status', r.ok ? 'ok' : 'fail');
+  await setSetting(env, 'backup_last_error', r.ok ? '' : (r.error || ''));
+  await logBackup(env, kind || 'auto', r);
+  return r;
+}
+
+// Apelat din cron (scheduled).
+export async function scheduledBackup(env) {
+  try { return await maybeBackup(env, 'auto'); } catch (e) { return { ok: false, error: String(e) }; }
 }
