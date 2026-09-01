@@ -14,6 +14,8 @@ export async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS pallet_items (id INTEGER PRIMARY KEY AUTOINCREMENT, pallet_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
     "CREATE TABLE IF NOT EXISTS backup_log (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT (datetime('now')), kind TEXT, status TEXT, bytes INTEGER DEFAULT 0, statements INTEGER DEFAULT 0, note TEXT)",
+    "CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, unit TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    "CREATE TABLE IF NOT EXISTS order_services (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, service_id INTEGER, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, quantity REAL NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   ];
   for (const sql of tables) {
     try { await env.DB.prepare(sql).run(); } catch (e) { /* există deja */ }

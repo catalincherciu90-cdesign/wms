@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v43';
+const APP_VERSION = 'v44';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -21,6 +21,7 @@ import * as portal from './routes/portal.js';
 import * as pallets from './routes/pallets.js';
 import * as pwa from './routes/pwa.js';
 import * as admin from './routes/admin.js';
+import * as services from './routes/services.js';
 import { ensureSchema } from './lib/schema.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
@@ -83,6 +84,15 @@ const routes = [
   ['GET', '/api/reports/low-stock/export', reports.exportLowStockCsv, 'viewer'],
   ['GET', '/api/reports/movements-by-period', reports.movementsByPeriod, 'viewer'],
   ['GET', '/api/reports/top-products', reports.topProducts, 'viewer'],
+
+  // Servicii (catalog) + servicii atașate la comenzi
+  ['GET', '/api/services', services.list, 'operator'],
+  ['POST', '/api/services', services.create, 'admin'],
+  ['PUT', '/api/services/:id', services.update, 'admin'],
+  ['DELETE', '/api/services/:id', services.remove, 'admin'],
+  ['GET', '/api/orders/:id/services', services.listForOrder, 'viewer'],
+  ['POST', '/api/orders/:id/services', services.addToOrder, 'operator'],
+  ['DELETE', '/api/orders/:id/services/:lineId', services.removeFromOrder, 'operator'],
 
   ['GET', '/api/qr', qr.svg, 'viewer'],
 

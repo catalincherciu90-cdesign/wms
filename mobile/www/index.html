@@ -389,10 +389,37 @@ window.screenPick=function(id){
       +'<div class="scanbox"><input id="pk_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul de cules"></div>'
       +'<button class="cam" onclick="openCam(function(c){pickScan(c)})">📷 Scanează cu camera</button>'
       +'<div id="pk_lines" style="margin-top:12px"></div>'
+      +'<div id="pk_services" style="margin-top:14px"></div>'
       +'<div id="pk_done" style="margin-top:14px"></div>'
     , {back:"screenOrders()"});
-    pickRender(); wireScan("pk_scan", pickScan);
+    pickRender(); wireScan("pk_scan", pickScan); pkLoadServices(id);
   }).catch(function(e){ toast(e.message,true); });
+};
+window.pkLoadServices=function(id){
+  if(!el("pk_services")) return;
+  Promise.all([ api("GET","/api/orders/"+id+"/services"), api("GET","/api/services") ]).then(function(r){
+    var list=r[0].services||[], total=r[0].total||0, cat=r[1].services||[];
+    var rows=list.map(function(s){
+      return '<div class="row" style="justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid #1b2540">'
+        +'<span>'+esc(s.name)+' × '+(Number(s.quantity)||0)+'</span>'
+        +'<span>'+((Number(s.price)||0)*(Number(s.quantity)||0)).toFixed(2)+' <button style="padding:2px 8px;margin-left:6px;background:#7f1d1d" onclick="pkRemoveService('+id+','+s.id+')">✕</button></span></div>';
+    }).join("");
+    var opts=cat.map(function(c){ return '<option value="'+c.id+'">'+esc(c.name)+' ('+(Number(c.price)||0).toFixed(2)+' lei)</option>'; }).join("");
+    el("pk_services").innerHTML='<div class="card"><b>Servicii'+(total?(' · '+total.toFixed(2)+' lei'):'')+'</b>'
+      +(rows||'<div class="muted" style="font-size:12.5px;margin:6px 0">Niciun serviciu adăugat.</div>')
+      +(cat.length
+        ? '<div class="row" style="gap:6px;margin-top:8px;align-items:center"><select id="pk_sv" style="flex:1">'+opts+'</select><input id="pk_svqty" type="number" inputmode="numeric" min="1" value="1" style="width:64px"><button onclick="pkAddService('+id+')">+</button></div>'
+        : '<div class="muted" style="font-size:12px;margin-top:6px">Niciun serviciu definit (adaugă-le în admin → Servicii).</div>')
+      +'</div>';
+  }).catch(function(){});
+};
+window.pkAddService=function(id){
+  var sid=el("pk_sv")?Number(el("pk_sv").value):0, qty=el("pk_svqty")?Number(el("pk_svqty").value):1;
+  if(!sid){ toast("Alege un serviciu",true); return; }
+  api("POST","/api/orders/"+id+"/services",{service_id:sid, quantity:qty}).then(function(){ feedback(true); toast("Serviciu adăugat"); pkLoadServices(id); }).catch(function(e){ toast(e.message,true); });
+};
+window.pkRemoveService=function(id, lineId){
+  api("DELETE","/api/orders/"+id+"/services/"+lineId).then(function(){ pkLoadServices(id); }).catch(function(e){ toast(e.message,true); });
 };
 function pickRender(){
   var all=true;

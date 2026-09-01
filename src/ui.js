@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v43";
+var APP_VERSION = "v44";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -780,6 +780,7 @@ var NAV = [
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
   ["reports","Rapoarte","viewer"],
+  ["services","Servicii","admin"],
   ["users","Utilizatori","admin"],
   ["backup","Backup","admin"]
 ];
@@ -1500,6 +1501,46 @@ VIEWS.movements = function(){
   });
 };
 
+VIEWS.services = function(){
+  setMain(topbar("Servicii", '<button onclick="serviceForm()">+ Serviciu</button>')
+    + '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Definești serviciile și prețurile. La procesarea unei comenzi (inclusiv pe Zebra) le poți adăuga pe comandă.</p>'
+    + '<div class="card" id="svtbl">Se încarcă…</div>');
+  loadServices();
+};
+window.loadServices = function(){
+  api("GET","/api/services?all=1").then(function(d){
+    cache.services=d.services;
+    var rows=(d.services||[]).map(function(s){
+      return '<tr><td><b>'+esc(s.name)+'</b></td><td class="right">'+(Number(s.price)||0).toFixed(2)+' lei</td><td>'+esc(s.unit||"")+'</td>'
+        +'<td>'+(s.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td>'
+        +'<td class="right"><button class="ghost sm" onclick="serviceForm('+s.id+')">Edit</button> <button class="danger sm" onclick="serviceDelete('+s.id+')">Șterge</button></td></tr>';
+    }).join("");
+    el("svtbl").innerHTML='<table><thead><tr><th>Serviciu</th><th class="right">Preț</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Niciun serviciu. Apasă «+ Serviciu».</td></tr>')+'</tbody></table>';
+  }).catch(function(e){ if(el("svtbl")) el("svtbl").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+};
+window.serviceForm = function(id){
+  var s=id?((cache.services||[]).find(function(x){return x.id===id;})):{name:"",price:0,unit:"",active:1};
+  if(!s) return;
+  modal(id?"Editează serviciu":"Serviciu nou",
+    field("Nume serviciu","sv_name",s.name,"","text","Ex: Manipulare, Ambalare, Etichetare, Transport.")
+    + '<div class="row"><div style="flex:1">'+field("Preț (lei)","sv_price",s.price,'step="0.01" min="0"',"number","Prețul unitar.")+'</div><div style="flex:1">'+field("Unitate (opțional)","sv_unit",s.unit||"","","text","Ex: buc, comandă, palet, oră.")+'</div></div>'
+    + (id?'<label class="row" style="gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="sv_active" '+(s.active?"checked":"")+' style="width:auto"> Activ</label>':''),
+    function(){ serviceSave(id); });
+};
+window.serviceSave = function(id){
+  var body={ name:el("sv_name").value.trim(), price:Number(el("sv_price").value)||0, unit:el("sv_unit").value.trim() };
+  if(id && el("sv_active")) body.active=el("sv_active").checked?1:0;
+  if(!body.name){ toast("Completează numele serviciului","bad"); return; }
+  var p=id?api("PUT","/api/services/"+id,body):api("POST","/api/services",body);
+  p.then(function(){ closeModal(); toast("Salvat"); loadServices(); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.serviceDelete = function(id){
+  var s=(cache.services||[]).find(function(x){return x.id===id;});
+  modal("Confirmă ștergerea", '<p>Ștergi serviciul <b>'+esc(s?s.name:("#"+id))+'</b>?</p><p class="muted" style="font-size:12.5px">Nu afectează comenzile deja procesate (prețul e păstrat pe comandă).</p>',
+    function(){ api("DELETE","/api/services/"+id).then(function(){ closeModal(); toast("Șters"); loadServices(); }).catch(function(e){ toast(e.message,"bad"); }); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; }
+};
+
 VIEWS.backup = function(){
   setMain(topbar("Backup & Restaurare")
     + '<div class="card" style="padding:18px">'
@@ -1803,7 +1844,9 @@ window.orderDetail = function(id){
     }
     modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
       '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
-      + recip + lines + actions, null);
+      + recip + lines
+      + '<div id="od_services" style="margin-top:14px"></div>'
+      + actions, null);
     // ascunde butonul default de salvare al modalului
     var sv=el("modalSave"); if(sv) sv.style.display="none";
     if(el("od_loc")){
@@ -1811,7 +1854,36 @@ window.orderDetail = function(id){
         el("od_loc").innerHTML=r.locations.filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join("");
       });
     }
+    odLoadServices(o.id, o.status);
   });
+};
+window.odLoadServices = function(orderId, status){
+  if(!el("od_services")) return;
+  Promise.all([ api("GET","/api/orders/"+orderId+"/services"), (can("operator")&&status!=="completed"&&status!=="cancelled")?api("GET","/api/services"):Promise.resolve({services:[]}) ])
+    .then(function(r){
+      var list=r[0].services||[], total=r[0].total||0, cat=r[1].services||[];
+      var rows=list.map(function(s){
+        return '<tr><td>'+esc(s.name)+'</td><td class="right">'+(Number(s.price)||0).toFixed(2)+'</td><td class="right">'+(Number(s.quantity)||0)+'</td><td class="right">'+((Number(s.price)||0)*(Number(s.quantity)||0)).toFixed(2)+'</td>'
+          +'<td class="right">'+((can("operator")&&status!=="completed"&&status!=="cancelled")?'<button class="danger sm" onclick="odRemoveService('+orderId+','+s.id+',\\''+status+'\\')">✕</button>':'')+'</td></tr>';
+      }).join("");
+      var adder='';
+      if(can("operator") && status!=="completed" && status!=="cancelled" && cat.length){
+        adder='<div class="row" style="gap:6px;margin-top:8px;align-items:flex-end"><div style="flex:1"><label>Adaugă serviciu</label><select id="od_sv">'+cat.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+' ('+(Number(c.price)||0).toFixed(2)+' lei)</option>';}).join("")+'</select></div>'
+          +'<div style="width:80px"><label>Cant.</label><input id="od_svqty" type="number" min="1" value="1"></div>'
+          +'<button class="sm" onclick="odAddService('+orderId+',\\''+status+'\\')">Adaugă</button></div>';
+      }
+      el("od_services").innerHTML='<h2 style="font-size:14px;margin:0 0 6px">Servicii'+(total?(' · <span class="muted" style="font-weight:400">total '+total.toFixed(2)+' lei</span>'):'')+'</h2>'
+        +(list.length?'<table><thead><tr><th>Serviciu</th><th class="right">Preț</th><th class="right">Cant.</th><th class="right">Valoare</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="muted" style="font-size:12.5px">Niciun serviciu adăugat.</div>')
+        +adder;
+    }).catch(function(){});
+};
+window.odAddService = function(orderId, status){
+  var sid=el("od_sv")?Number(el("od_sv").value):0, qty=el("od_svqty")?Number(el("od_svqty").value):1;
+  if(!sid){ toast("Alege un serviciu","bad"); return; }
+  api("POST","/api/orders/"+orderId+"/services",{service_id:sid, quantity:qty}).then(function(){ toast("Serviciu adăugat"); odLoadServices(orderId,status); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.odRemoveService = function(orderId, lineId, status){
+  api("DELETE","/api/orders/"+orderId+"/services/"+lineId).then(function(){ toast("Serviciu scos"); odLoadServices(orderId,status); }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.completeOrder = function(id){
   var loc=el("od_loc"); if(!loc) return;
