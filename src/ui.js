@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v44";
+var APP_VERSION = "v45";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -780,6 +780,7 @@ var NAV = [
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
   ["reports","Rapoarte","viewer"],
+  ["commercial","Comercial","operator"],
   ["services","Servicii","admin"],
   ["users","Utilizatori","admin"],
   ["backup","Backup","admin"]
@@ -1500,6 +1501,152 @@ VIEWS.movements = function(){
     el("mtbl").innerHTML='<table><thead><tr><th>Data</th><th>Tip</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th><th>Ref.</th><th>User</th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nicio mișcare</td></tr>')+'</tbody></table>';
   });
 };
+
+/* ---------------- Modul comercial (oferte + contract) ---------------- */
+var FURNIZOR = { name:"WSD Logistics", cui:"[CUI furnizor]", reg:"[Nr. Reg. Com.]", address:"[Adresa furnizor]", iban:"[IBAN]", bank:"[Banca]" };
+var _ofrLines=[], _ofrServices=[];
+function ofrMoney(n){ return (Number(n)||0).toFixed(2); }
+function ofrStatusPill(s){
+  if(s==="accepted") return '<span class="pill good">acceptată</span>';
+  if(s==="rejected") return '<span class="pill bad">respinsă</span>';
+  if(s==="sent") return '<span class="pill warn">trimisă</span>';
+  return '<span class="pill mut">ciornă</span>';
+}
+VIEWS.commercial = function(){
+  setMain(topbar("Comercial — Oferte", '<button onclick="offerForm()">+ Ofertă nouă</button>') + '<div class="card" id="ofrtbl">Se încarcă…</div>');
+  api("GET","/api/offers").then(function(d){
+    cache.offers=d.offers;
+    var rows=(d.offers||[]).map(function(o){
+      var to=o.client_name||o.recipient_name||"—";
+      return '<tr onclick="offerView('+o.id+')" style="cursor:pointer"><td><b>'+esc(o.code)+'</b></td>'
+        +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
+        +'<td>'+esc(to)+'</td>'
+        +'<td class="right">'+ofrMoney(o.total)+' lei</td>'
+        +'<td>'+ofrStatusPill(o.status)+'</td></tr>';
+    }).join("");
+    el("ofrtbl").innerHTML='<table><thead><tr><th>Ofertă</th><th>Data</th><th>Client</th><th class="right">Total</th><th>Status</th></tr></thead><tbody>'
+      +(rows||'<tr><td colspan=5 class="muted center">Nicio ofertă. Apasă «+ Ofertă nouă».</td></tr>')+'</tbody></table>';
+  }).catch(function(e){ if(el("ofrtbl")) el("ofrtbl").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+};
+window.offerForm = function(){
+  _ofrLines=[];
+  modal("Ofertă nouă",
+    '<div class="field"><label>Client (din listă)</label><select id="ofr_client"><option value="">— sau scrie destinatarul mai jos —</option></select>'+fhint("Alege un client existent sau completează destinatarul.")+'</div>'
+    +'<div class="row"><div style="flex:1">'+field("Destinatar (dacă nu e client)","ofr_rname","","","text","Nume firmă/persoană.")+'</div><div style="flex:1">'+field("Contact","ofr_rcontact","","","text","Email/telefon.")+'</div></div>'
+    +'<div class="row" style="align-items:flex-end;gap:8px"><div style="flex:1"><label>Serviciu</label><select id="ofr_sv"><option value="">Se încarcă…</option></select></div><div style="width:80px"><label>Cant.</label><input id="ofr_qty" type="number" min="1" value="1"></div><button class="sm" type="button" onclick="offerAddLine()">Adaugă</button></div>'
+    +'<div id="ofr_lines" style="margin:10px 0"></div>'
+    +'<div class="row"><div style="width:120px">'+field("TVA (%)","ofr_vat","19",'step="0.1" min="0"',"number","Ex: 19. Pune 0 dacă nu aplici TVA.")+'</div><div style="flex:1">'+field("Valabilă până la","ofr_valid","","","text","Ex: 31.12.2026 (opțional).")+'</div></div>'
+    +'<div class="field"><label>Observații (opțional)</label><textarea id="ofr_note" rows="2"></textarea></div>',
+    function(){ offerSubmit(); });
+  var sv=el("modalSave"); if(sv) sv.textContent="Salvează oferta";
+  api("GET","/api/clients").then(function(d){ if(el("ofr_client")) el("ofr_client").innerHTML='<option value="">— sau scrie destinatarul mai jos —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
+  api("GET","/api/services").then(function(d){ _ofrServices=d.services||[]; if(el("ofr_sv")) el("ofr_sv").innerHTML=_ofrServices.length?_ofrServices.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+' ('+ofrMoney(s.price)+' lei)</option>';}).join(""):'<option value="">Niciun serviciu definit</option>'; }).catch(function(){});
+  offerRenderLines();
+};
+window.offerAddLine = function(){
+  var sid=Number(el("ofr_sv").value), qty=Number(el("ofr_qty").value)||1;
+  var s=_ofrServices.find(function(x){return x.id===sid;});
+  if(!s){ toast("Alege un serviciu","bad"); return; }
+  var ex=_ofrLines.find(function(l){return l.service_id===sid;});
+  if(ex) ex.quantity+=qty; else _ofrLines.push({service_id:sid, name:s.name, price:Number(s.price)||0, quantity:qty});
+  el("ofr_qty").value=1; offerRenderLines();
+};
+window.offerDelLine = function(i){ _ofrLines.splice(i,1); offerRenderLines(); };
+function offerRenderLines(){
+  var c=el("ofr_lines"); if(!c) return;
+  if(!_ofrLines.length){ c.innerHTML='<div class="muted" style="font-size:12.5px">Nicio linie. Adaugă servicii din listă.</div>'; return; }
+  var sub=_ofrLines.reduce(function(a,l){return a+l.price*l.quantity;},0);
+  c.innerHTML='<table><thead><tr><th>Serviciu</th><th class="right">Preț</th><th class="right">Cant.</th><th class="right">Valoare</th><th></th></tr></thead><tbody>'
+    +_ofrLines.map(function(l,i){ return '<tr><td>'+esc(l.name)+'</td><td class="right">'+ofrMoney(l.price)+'</td><td class="right">'+l.quantity+'</td><td class="right">'+ofrMoney(l.price*l.quantity)+'</td><td class="right"><button class="danger sm" onclick="offerDelLine('+i+')">✕</button></td></tr>'; }).join("")
+    +'</tbody></table><div class="right" style="margin-top:6px">Subtotal: <b>'+ofrMoney(sub)+' lei</b></div>';
+}
+window.offerSubmit = function(){
+  if(!_ofrLines.length){ toast("Adaugă cel puțin un serviciu","bad"); return; }
+  var body={
+    client_id: el("ofr_client").value?Number(el("ofr_client").value):null,
+    recipient_name: el("ofr_rname").value.trim(),
+    recipient_contact: el("ofr_rcontact").value.trim(),
+    vat_rate: Number(el("ofr_vat").value)||0,
+    valid_until: el("ofr_valid").value.trim(),
+    note: el("ofr_note").value.trim(),
+    lines: _ofrLines.map(function(l){ return {name:l.name, price:l.price, quantity:l.quantity}; })
+  };
+  if(!body.client_id && !body.recipient_name){ toast("Alege un client sau scrie destinatarul","bad"); return; }
+  api("POST","/api/offers",body).then(function(){ closeModal(); toast("Ofertă creată"); go("commercial"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.offerView = function(id){
+  api("GET","/api/offers/"+id).then(function(d){
+    var o=d.offer;
+    var to = o.client_name || o.recipient_name || "—";
+    var lines=(d.lines||[]).map(function(l){ return '<tr><td>'+esc(l.name)+'</td><td class="right">'+ofrMoney(l.price)+'</td><td class="right">'+l.quantity+'</td><td class="right">'+ofrMoney(l.price*l.quantity)+'</td></tr>'; }).join("");
+    var actions='<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px">'
+      +'<button onclick="offerPrintDoc('+id+',\\'oferta\\')">📄 Ofertă PDF</button>'
+      +'<button class="ghost" onclick="offerPrintDoc('+id+',\\'contract\\')">📝 Contract PDF</button>'
+      +(o.status!=="sent"?'<button class="ghost sm" onclick="offerStatus('+id+',\\'sent\\')">Marchează trimisă</button>':'')
+      +(o.status!=="accepted"?'<button class="ghost sm" onclick="offerStatus('+id+',\\'accepted\\')">Acceptată</button>':'')
+      +(o.status!=="rejected"?'<button class="ghost sm" onclick="offerStatus('+id+',\\'rejected\\')">Respinsă</button>':'')
+      +'<button class="danger sm" onclick="offerDelete('+id+')">Șterge</button></div>';
+    modal("Oferta "+esc(o.code)+" — "+ofrStatusPill(o.status),
+      '<div class="muted" style="margin-bottom:8px">Către: <b>'+esc(to)+'</b>'+(o.recipient_contact?(' · '+esc(o.recipient_contact)):'')+' · '+esc(String(o.created_at).slice(0,10))+'</div>'
+      +'<table><thead><tr><th>Serviciu</th><th class="right">Preț</th><th class="right">Cant.</th><th class="right">Valoare</th></tr></thead><tbody>'+lines+'</tbody></table>'
+      +'<div class="right" style="margin-top:8px">Subtotal: <b>'+ofrMoney(d.subtotal)+' lei</b><br>TVA ('+ofrMoney(o.vat_rate)+'%): '+ofrMoney(d.vat)+' lei<br><span style="font-size:16px">Total: <b>'+ofrMoney(d.total)+' lei</b></span></div>'
+      +(o.note?'<div class="muted" style="margin-top:8px;font-size:13px">📝 '+esc(o.note)+'</div>':'')
+      +actions, null);
+    var sv=el("modalSave"); if(sv) sv.style.display="none";
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.offerStatus = function(id,st){ api("PUT","/api/offers/"+id+"/status",{status:st}).then(function(){ closeModal(); toast("Actualizat"); go("commercial"); }).catch(function(e){ toast(e.message,"bad"); }); };
+window.offerDelete = function(id){
+  modal("Confirmă ștergerea", '<p>Ștergi oferta? Acțiune ireversibilă.</p>', function(){ api("DELETE","/api/offers/"+id).then(function(){ closeModal(); toast("Ștearsă"); go("commercial"); }).catch(function(e){ toast(e.message,"bad"); }); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; }
+};
+window.offerPrintDoc = function(id, kind){
+  api("GET","/api/offers/"+id).then(function(d){
+    var html = kind==="contract" ? buildContractHtml(d) : buildOfferHtml(d);
+    var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up","bad"); return; }
+    w.document.write(html+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr'+'ipt>');
+    w.document.close();
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+function docCss(){
+  return '<style>*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#1a2233;margin:24px;font-size:13px;line-height:1.5}'
+    +'h1{color:#0f1a3a;font-size:22px;margin:0 0 2px}.mut{color:#5b6577}.right{text-align:right}'
+    +'table{width:100%;border-collapse:collapse;margin:12px 0}th{background:#0f1a3a;color:#fff;text-align:left;padding:7px 9px}td{border-bottom:1px solid #e4e8f0;padding:7px 9px}'
+    +'.tot{text-align:right;margin-top:8px}.box{border:1px solid #e4e8f0;border-radius:8px;padding:12px;margin:10px 0}'
+    +'.hd{display:flex;justify-content:space-between;border-bottom:3px solid #0f1a3a;padding-bottom:8px;margin-bottom:14px}'
+    +'.sign{display:flex;justify-content:space-between;margin-top:50px}.sign div{width:45%}</style>';
+}
+function buildOfferHtml(d){
+  var o=d.offer, to=o.client_name||o.recipient_name||"—";
+  var rows=(d.lines||[]).map(function(l){ return '<tr><td>'+esc(l.name)+'</td><td class="right">'+ofrMoney(l.price)+'</td><td class="right">'+l.quantity+'</td><td class="right">'+ofrMoney(l.price*l.quantity)+'</td></tr>'; }).join("");
+  return '<html><head><title>Ofertă '+esc(o.code)+'</title>'+docCss()+'</head><body>'
+    +'<div class="hd"><div><h1>'+esc(FURNIZOR.name)+'</h1><div class="mut">'+esc(FURNIZOR.cui)+' · '+esc(FURNIZOR.address)+'</div></div><div class="right"><b>OFERTĂ</b><br>'+esc(o.code)+'<br>'+esc(String(o.created_at).slice(0,10))+'</div></div>'
+    +'<div class="box"><b>Către:</b> '+esc(to)+(o.client_cui?(' · CUI '+esc(o.client_cui)):'')+(o.recipient_contact?(' · '+esc(o.recipient_contact)):'')+(o.client_address?('<br>'+esc(o.client_address)):'')+'</div>'
+    +'<table><thead><tr><th>Serviciu</th><th class="right">Preț unitar</th><th class="right">Cant.</th><th class="right">Valoare</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<div class="tot">Subtotal: <b>'+ofrMoney(d.subtotal)+' lei</b><br>TVA ('+ofrMoney(o.vat_rate)+'%): '+ofrMoney(d.vat)+' lei<br><span style="font-size:16px">Total: <b>'+ofrMoney(d.total)+' lei</b></span></div>'
+    +(o.valid_until?('<p class="mut">Ofertă valabilă până la: '+esc(o.valid_until)+'</p>'):'')
+    +(o.note?('<p>'+esc(o.note)+'</p>'):'')
+    +'</body></html>';
+}
+function buildContractHtml(d){
+  var o=d.offer, to=o.client_name||o.recipient_name||"—";
+  var rows=(d.lines||[]).map(function(l){ return '<tr><td>'+esc(l.name)+'</td><td class="right">'+ofrMoney(l.price)+' lei</td></tr>'; }).join("");
+  var today=new Date().toISOString().slice(0,10);
+  return '<html><head><title>Contract '+esc(o.code)+'</title>'+docCss()+'</head><body>'
+    +'<div class="right mut">Anexă la oferta '+esc(o.code)+'</div>'
+    +'<h1 style="text-align:center">CONTRACT DE PRESTĂRI SERVICII</h1>'
+    +'<p class="right mut">Nr. _______ / '+today+'</p>'
+    +'<p><b>1. PĂRȚILE</b><br><b>Prestator:</b> '+esc(FURNIZOR.name)+', CUI '+esc(FURNIZOR.cui)+', '+esc(FURNIZOR.reg)+', '+esc(FURNIZOR.address)+', IBAN '+esc(FURNIZOR.iban)+' ('+esc(FURNIZOR.bank)+').<br>'
+    +'<b>Beneficiar:</b> '+esc(to)+(o.client_cui?(', CUI '+esc(o.client_cui)):'')+(o.client_reg_com?(', '+esc(o.client_reg_com)):'')+(o.client_address?(', '+esc(o.client_address)):'')+'.</p>'
+    +'<p><b>2. OBIECTUL CONTRACTULUI</b><br>Prestatorul asigură Beneficiarului serviciile de logistică/depozitare de mai jos, conform ofertei '+esc(o.code)+'.</p>'
+    +'<table><thead><tr><th>Serviciu</th><th class="right">Tarif</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<p class="mut">Prețurile nu includ TVA, dacă nu se specifică altfel. TVA aplicat: '+ofrMoney(o.vat_rate)+'%.</p>'
+    +'<p><b>3. DURATA</b><br>Contractul se încheie pe o perioadă de ______ , începând cu data de ____________ .</p>'
+    +'<p><b>4. PLATA</b><br>Facturile se emit lunar, cu scadență de ____ zile. Plata se face în contul Prestatorului.</p>'
+    +'<p><b>5. ALTE CLAUZE</b><br>_______________________________________________________________________</p>'
+    +'<div class="sign"><div>Prestator,<br><b>'+esc(FURNIZOR.name)+'</b><br><br>__________________</div><div>Beneficiar,<br><b>'+esc(to)+'</b><br><br>__________________</div></div>'
+    +'</body></html>';
+}
 
 VIEWS.services = function(){
   setMain(topbar("Servicii", '<button onclick="serviceForm()">+ Serviciu</button>')

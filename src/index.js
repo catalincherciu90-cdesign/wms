@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -22,6 +22,7 @@ import * as pallets from './routes/pallets.js';
 import * as pwa from './routes/pwa.js';
 import * as admin from './routes/admin.js';
 import * as services from './routes/services.js';
+import * as offers from './routes/offers.js';
 import { ensureSchema } from './lib/schema.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
@@ -93,6 +94,13 @@ const routes = [
   ['GET', '/api/orders/:id/services', services.listForOrder, 'viewer'],
   ['POST', '/api/orders/:id/services', services.addToOrder, 'operator'],
   ['DELETE', '/api/orders/:id/services/:lineId', services.removeFromOrder, 'operator'],
+
+  // Modul comercial: oferte
+  ['GET', '/api/offers', offers.list, 'operator'],
+  ['GET', '/api/offers/:id', offers.get, 'operator'],
+  ['POST', '/api/offers', offers.create, 'operator'],
+  ['PUT', '/api/offers/:id/status', offers.setStatus, 'operator'],
+  ['DELETE', '/api/offers/:id', offers.remove, 'operator'],
 
   ['GET', '/api/qr', qr.svg, 'viewer'],
 
