@@ -222,6 +222,7 @@ function renderHome(){
     +tile("receive","📥","Recepție")
     +tile("ship","📤","Expediere")
     +tile("transfer","🔄","Transfer")
+    +tile("stock","✏️","Actualizare<br>stoc")
     +tile("inventory","🧮","Inventar")
     +'</div>'
     +'<button class="big ghost" style="margin-top:22px" onclick="logout()">Ieșire</button>'
@@ -229,7 +230,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -365,6 +366,73 @@ function trSubmit(){
     feedback(true); toast("Transferat: "+qty+" × "+tr.product.name); screenTransfer();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Actualizare stoc directă (scanează produs → setează cantitatea reală pe locație) ---- */
+function screenStockSet(){
+  window._ss={product:null, map:{}, stock:[]};
+  scanTarget=function(code){ ssScan(code); };
+  shell("Actualizare stoc",
+    '<div class="scanbox"><input id="ss_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul (fără Enter)"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'ss_scan\').value=c;ssScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="ss_prod"></div>'
+    +'<div id="ss_form" style="display:none">'
+    +'<label>Locație</label><select id="ss_loc" onchange="ssLocChanged()">'+locOptions()+'</select>'
+    +'<div id="ss_cur" class="muted" style="font-size:13px;margin:6px 0"></div>'
+    +'<label>Cantitate reală (nouă)</label><input id="ss_qty" type="number" inputmode="numeric" min="0" value="0">'
+    +'<button class="big" onclick="ssSubmit()">Actualizează stocul</button>'
+    +'<div class="op-hint center" style="margin-top:8px">Corectează stocul pe locația aleasă la cantitatea numărată.</div>'
+    +'</div>', {back:"renderHome()"});
+  wireScan("ss_scan", ssScan);
+}
+function ssScan(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ feedback(false); el("ss_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("ss_form").style.display="none"; return; }
+    feedback(true);
+    window._ss.product=p;
+    return ssLoadStock(p.id);
+  }).catch(function(e){ toast(e.message,true); });
+}
+function ssLoadStock(pid){
+  return api("GET","/api/inventory/stock?product_id="+pid).then(function(d){
+    var st=(d.stock||[]); window._ss.stock=st;
+    var map={}; st.forEach(function(s){ map[Number(s.location_id)]=Number(s.quantity)||0; }); window._ss.map=map;
+    ssRenderProduct();
+    if(el("ss_form")) el("ss_form").style.display="block";
+    ssLocChanged();
+  });
+}
+function ssRenderProduct(){
+  var p=window._ss.product, st=window._ss.stock||[];
+  var total=st.reduce(function(a,s){return a+Number(s.quantity||0);},0);
+  var rows=st.map(function(s){ return '<tr><td>'+esc(s.location_code)+'</td><td class="center"><b>'+esc(s.quantity)+'</b> '+esc(s.unit||"")+'</td></tr>'; }).join("");
+  el("ss_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div>'
+    +'<div style="font-size:17px;font-weight:800;margin:2px 0 6px">'+esc(p.name)+'</div>'
+    +'<div class="big-num">'+total+' <span style="font-size:15px" class="muted">'+esc(p.unit||"buc")+' total</span></div>'
+    +'<table style="margin-top:10px"><thead><tr><th>Locație</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Fără stoc</td></tr>')+'</tbody></table></div>';
+}
+window.ssLocChanged=function(){
+  var loc=el("ss_loc")?Number(el("ss_loc").value):0;
+  var cur=(window._ss&&window._ss.map&&loc)?(window._ss.map[loc]||0):0;
+  if(el("ss_cur")) el("ss_cur").textContent = loc ? ("Stoc curent pe această locație: "+cur) : "Alege locația.";
+  if(el("ss_qty") && loc){ el("ss_qty").value=cur; el("ss_qty").focus(); el("ss_qty").select(); }
+};
+window.ssSubmit=function(){
+  var ss=window._ss; if(!ss||!ss.product){ toast("Scanează întâi un produs",true); return; }
+  var loc=el("ss_loc")?Number(el("ss_loc").value):0;
+  if(!loc){ toast("Alege locația",true); return; }
+  var vRaw=el("ss_qty")?el("ss_qty").value:"";
+  if(vRaw===""||vRaw==null){ toast("Scrie cantitatea reală",true); return; }
+  var target=Math.max(0, Math.round(Number(vRaw)||0));
+  var cur=ss.map[loc]||0;
+  var delta=target-cur;
+  if(delta===0){ toast("Stocul este deja "+cur+" — nimic de schimbat"); return; }
+  api("POST","/api/inventory/adjust",{product_id:ss.product.id, location_id:loc, delta:delta, reference:"CORECTIE", note:"actualizare stoc din Zebra"}).then(function(){
+    feedback(true);
+    toast("Stoc actualizat: "+cur+" → "+target+" ("+(delta>0?"+":"")+delta+")");
+    ssLoadStock(ss.product.id); // reîmprospătează cifrele afișate
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Inventar (numărare fizică pe locație) ---- */
 function screenInventory(){
