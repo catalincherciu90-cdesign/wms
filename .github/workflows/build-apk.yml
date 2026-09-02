@@ -46,7 +46,7 @@ jobs:
         working-directory: mobile
         run: |
           MF=android/app/src/main/AndroidManifest.xml
-          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <application#' "$MF"
+          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application#' "$MF"
           echo "--- manifest ---"; grep -n "uses-permission" "$MF" || true
 
       - name: Sincronizează

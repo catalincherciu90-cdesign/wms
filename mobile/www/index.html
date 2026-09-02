@@ -94,6 +94,23 @@ function newOrderChime(){
 }
 /* Deblochează audio după un gest (login) — ca sunetul să meargă și când alerta vine din poll. */
 function primeAudio(){ try{ var AC=window.AudioContext||window.webkitAudioContext; window._ac=window._ac||new AC(); if(window._ac.state==="suspended") window._ac.resume(); }catch(e){} }
+/* Notificare nativă în bara Android (dacă rulează în APK Capacitor). */
+function nativeNotify(title, body){
+  try{
+    var C=window.Capacitor;
+    if(C && C.Plugins && C.Plugins.LocalNotifications){
+      C.Plugins.LocalNotifications.schedule({ notifications:[{
+        id: (Date.now()%100000),
+        title: title, body: body,
+        schedule:{ at:new Date(Date.now()+200) },
+        sound: null, ongoing:false
+      }]});
+    }
+  }catch(e){}
+}
+function ensureNotifyPermission(){
+  try{ var C=window.Capacitor; if(C && C.Plugins && C.Plugins.LocalNotifications) C.Plugins.LocalNotifications.requestPermissions(); }catch(e){}
+}
 
 /* Verificare periodică: alertă când apare o comandă nouă de livrare (ex. plasată de client din portal). */
 var _lastOrderId = Number(localStorage.getItem("wms_m_lastorder")||0) || 0;
@@ -107,12 +124,14 @@ function ordPollTick(){
     if(fresh.length){
       _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId));
       newOrderChime();
-      toast(fresh.length===1 ? ("Comandă nouă: "+esc(fresh[0].code)) : (fresh.length+" comenzi noi de pregătit"));
+      var msg = fresh.length===1 ? ("Comandă nouă: "+fresh[0].code) : (fresh.length+" comenzi noi de pregătit");
+      toast(msg);
+      nativeNotify("Comandă nouă de pregătit", msg);
       if(el("ord_list")) screenOrders(); // dacă suntem pe lista de comenzi, o reîmprospătăm
     } else if(maxId>_lastOrderId){ _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId)); }
   }).catch(function(){});
 }
-function startOrdPoll(){ stopOrdPoll(); ordPollTick(); window._ordPoll=setInterval(ordPollTick, 20000); }
+function startOrdPoll(){ stopOrdPoll(); ensureNotifyPermission(); ordPollTick(); window._ordPoll=setInterval(ordPollTick, 20000); }
 function stopOrdPoll(){ if(window._ordPoll){ clearInterval(window._ordPoll); window._ordPoll=null; } }
 function api(method,path,body){
   var o={method:method,headers:{}};
