@@ -192,16 +192,30 @@ function shell(title, body, opts){
 }
 
 function renderLogin(){
+  scanTarget=function(code){ mLoginQR(code); }; // scanezi badge-ul QR cu laserul Zebra direct pe ecranul de login
   el("app").innerHTML='<main><div class="login-wrap">'
     +'<img class="logo" src="logo.png" alt="WSD" onerror="this.style.display=\'none\'">'
     +'<div class="center" style="font-size:22px;font-weight:800;margin-bottom:2px">WSD <span style="opacity:.7;font-weight:600">WMS</span></div>'
     +'<div class="center muted" style="margin-bottom:18px">Autentificare operator</div>'
+    +'<button class="big" onclick="mLoginQRCam()">📷 Conectare rapidă cu QR</button>'
+    +'<div class="center muted" style="margin:12px 0 6px;font-size:12.5px">sau scanează badge-ul cu laserul Zebra · ori intră manual</div>'
     +'<label>Email</label><input id="l_email" type="email" autocomplete="username">'
     +'<label>Parolă</label><input id="l_pass" type="password" autocomplete="current-password">'
     +'<div id="l_msg" class="center" style="color:var(--bad);font-size:14px;margin-top:10px"></div>'
-    +'<button class="big" onclick="doLogin()">Intră în cont</button>'
+    +'<button class="big ghost" onclick="doLogin()">Intră cu email și parolă</button>'
     +'</div></main>';
 }
+/* Conectare prin QR: acceptă payload „WSDWMS1:<token>" (sau tokenul brut). */
+function mLoginQR(code){
+  code=(code||"").trim(); if(!code) return;
+  var msg=el("l_msg"); if(msg) msg.textContent="";
+  api("POST","/api/auth/qr",{payload:code}).then(function(d){
+    if(d.user && d.user.kind==="client"){ if(msg) msg.textContent="Cont de client, nu de operator."; return; }
+    feedback(true);
+    token=d.token; me=d.user; localStorage.setItem("wms_m_token",token); primeAudio(); loadLocs(); renderHome(); startOrdPoll();
+  }).catch(function(e){ feedback(false); if(msg) msg.textContent=e.message; });
+}
+window.mLoginQRCam=function(){ openCam(function(c){ mLoginQR(c); }); };
 function doLogin(){
   var email=el("l_email").value.trim(), pass=el("l_pass").value;
   if(!email||!pass){ el("l_msg").textContent="Completează email și parolă"; return; }

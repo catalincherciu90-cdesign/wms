@@ -1,6 +1,7 @@
 // Rute utilizatori (doar admin)
 import { json, error, readJson } from '../lib/http.js';
 import { hashPassword } from '../lib/auth.js';
+import { randomToken, QR_LOGIN_PREFIX } from './auth.js';
 
 export async function list(request, env) {
   const { results } = await env.DB.prepare(
@@ -42,4 +43,23 @@ export async function update(request, env, ctx, user, params) {
   }
   const updated = await env.DB.prepare('SELECT id, email, name, role, active, created_at FROM users WHERE id = ?').bind(id).first();
   return json({ user: updated });
+}
+
+// Generează (sau rotește) tokenul de conectare prin QR pentru un utilizator. Returnează payload-ul QR.
+export async function genLoginToken(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const existing = await env.DB.prepare('SELECT id, name FROM users WHERE id = ?').bind(id).first();
+  if (!existing) return error('Utilizator inexistent', 404);
+  const tok = randomToken(24);
+  await env.DB.prepare('UPDATE users SET login_token = ? WHERE id = ?').bind(tok, id).run();
+  return json({ ok: true, token: tok, payload: QR_LOGIN_PREFIX + tok, user_id: id, name: existing.name });
+}
+
+// Revocă tokenul de conectare prin QR (QR-urile vechi nu mai funcționează).
+export async function revokeLoginToken(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const existing = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(id).first();
+  if (!existing) return error('Utilizator inexistent', 404);
+  await env.DB.prepare('UPDATE users SET login_token = NULL WHERE id = ?').bind(id).run();
+  return json({ ok: true });
 }

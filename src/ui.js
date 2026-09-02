@@ -1782,10 +1782,17 @@ VIEWS.users = function(){
     var rows=d.users.map(function(u){
       return '<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td><span class="pill mut">'+esc(u.role)+'</span></td>'
         +'<td>'+(u.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td>'
-        +'<td class="right"><button class="ghost sm" onclick="userForm('+u.id+')">Edit</button></td></tr>';
+        +'<td class="right"><button class="ghost sm" onclick="userLoginQR('+u.id+')">▦ QR conectare</button> <button class="ghost sm" onclick="userForm('+u.id+')">Edit</button></td></tr>';
     }).join("");
     el("utbl").innerHTML='<table><thead><tr><th>Nume</th><th>Email</th><th>Rol</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
   });
+};
+// Generează un badge QR de conectare rapidă pentru un operator (rotește tokenul; QR-urile vechi se invalidează).
+window.userLoginQR = function(id){
+  var u = (cache.users||[]).find(function(x){return x.id===id;});
+  api("POST","/api/users/"+id+"/login-token",{}).then(function(d){
+    showQR(d.payload, ((u&&u.name)||"operator")+" — conectare Zebra");
+  }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.userForm = function(id){
   var u = id ? cache.users.find(function(x){return x.id===id;}) : {role:"operator",active:1};

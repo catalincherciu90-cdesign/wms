@@ -24,6 +24,7 @@ export async function ensureSchema(env) {
   }
 
   // coloane noi (ALTER aruncă dacă există deja)
+  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN login_token TEXT').run(); } catch (e) {} // conectare rapidă prin QR
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN client_id INTEGER').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE locations ADD COLUMN capacity INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
 

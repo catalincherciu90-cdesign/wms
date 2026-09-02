@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v47';
+const APP_VERSION = 'v48';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -28,6 +28,7 @@ import { ensureSchema } from './lib/schema.js';
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
   ['POST', '/api/auth/login', auth.login, null],
+  ['POST', '/api/auth/qr', auth.qrLogin, null],
   ['GET', '/api/auth/me', auth.me, 'authed'],
 
   ['GET', '/api/dashboard', dashboard.stats, 'viewer'],
@@ -58,6 +59,8 @@ const routes = [
   ['GET', '/api/users', users.list, 'admin'],
   ['POST', '/api/users', users.create, 'admin'],
   ['PUT', '/api/users/:id', users.update, 'admin'],
+  ['POST', '/api/users/:id/login-token', users.genLoginToken, 'admin'],
+  ['DELETE', '/api/users/:id/login-token', users.revokeLoginToken, 'admin'],
 
   ['GET', '/api/admin/backup.sql', admin.backupSql, 'admin'],
   ['POST', '/api/admin/backup-push', admin.backupPush, 'admin'],
