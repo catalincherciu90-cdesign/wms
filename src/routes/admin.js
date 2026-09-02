@@ -214,6 +214,28 @@ async function setSetting(env, key, value) {
 // Intervale permise (ore). 0 = oprit.
 const ALLOWED_INTERVALS = [0, 1, 6, 12, 24, 168];
 
+// ── Conținut site de prezentare (chei cu prefix site_) ──────────────────────
+export async function siteContentGet(request, env) {
+  const content = {};
+  try {
+    const { results } = await env.DB.prepare("SELECT key, value FROM settings WHERE key LIKE 'site_%'").all();
+    for (const r of (results || [])) content[r.key.slice(5)] = r.value;
+  } catch (e) {}
+  return json({ content });
+}
+export async function siteContentSet(request, env) {
+  let body = {};
+  try { body = await request.json(); } catch (e) {}
+  const content = body && body.content;
+  if (!content || typeof content !== 'object') return json({ ok: false, error: 'Lipsește content' }, 400);
+  const keys = Object.keys(content).slice(0, 100);
+  for (const k of keys) {
+    const safeKey = 'site_' + String(k).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 50);
+    await setSetting(env, safeKey, content[k] == null ? '' : String(content[k]).slice(0, 4000));
+  }
+  return json({ ok: true, saved: keys.length });
+}
+
 // Înregistrează un backup în istoric (păstrează ultimele 200).
 async function logBackup(env, kind, r) {
   try {

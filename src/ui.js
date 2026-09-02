@@ -232,7 +232,7 @@ var me = null;
 var view = "dashboard";
 var cache = {};
 
-var APP_VERSION = "v45";
+var APP_VERSION = "v46";
 try{ console.log("WMS build "+APP_VERSION); }catch(e){}
 var el = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
@@ -345,21 +345,33 @@ function siteHeader(active){
     +'<a class="fitem" onclick="renderLogin();return false"><span class="fic">'+svgIcon("login")+'</span><span class="flbl">Autentificare</span></a>'
     +'</nav></div></div>';
 }
+/* Conținut editabil al site-ului de prezentare (din Setări). */
+var SITE = {};
+function sv(key, def){ var v=SITE&&SITE[key]; return (v!==undefined && v!==null && v!=="") ? v : def; }
+function loadSiteContent(){
+  return api("GET","/api/site-content").then(function(d){ SITE=d.content||{}; }).catch(function(){ SITE={}; });
+}
+function siteStats(){
+  return statItem(sv("stat1_value","12.000"), sv("stat1_unit","m²"), sv("stat1_label","Spațiu de depozitare"))
+    + statItem(sv("stat2_value","8.500"), sv("stat2_unit","+ paleți"), sv("stat2_label","Gestionați lunar"))
+    + statItem(sv("stat3_value","300"), sv("stat3_unit","+ livrări"), sv("stat3_label","Expediate lunar"))
+    + statItem(sv("stat4_value","99,2"), sv("stat4_unit","%"), sv("stat4_label","Comenzi la timp"));
+}
 function siteFooter(){
   var lnk=function(p,t){ return '<a onclick="siteGo(\\''+p+'\\')">'+esc(t)+'</a>'; };
   var soc=function(ic){ return '<a href="#" onclick="return false" title="'+ic+'">'+svgIcon(ic)+'</a>'; };
   return '<footer class="sfooter">'
     +'<div class="sfooter-grid">'
     +'<div><img src="/assets/logo.png" alt="WSD Logistics">'
-      +'<p class="fdesc">Depozitare securizată și transport marfă pentru afacerea ta. Tu vinzi — de restul ne ocupăm noi.</p>'
+      +'<p class="fdesc">'+esc(sv("footer_desc","Depozitare securizată și transport marfă pentru afacerea ta. Tu vinzi — de restul ne ocupăm noi."))+'</p>'
       +'<div class="sfoot-social">'+soc("facebook")+soc("instagram")+soc("linkedin")+'</div></div>'
     +'<div><h4>Navigare</h4>'+lnk("home","Acasă")+lnk("about","Despre noi")+lnk("services","Servicii")+lnk("contact","Contact")+'</div>'
     +'<div><h4>Servicii</h4>'+lnk("services","Depozitare pe paleți")+lnk("services","Transport marfă")+lnk("services","Recepție & expediere")+'<a onclick="renderLogin()">Portal client</a></div>'
     +'<div><h4>Contact</h4><div class="sfoot-contact">'
-      +'<a href="mailto:contact@depozit.ro">contact@depozit.ro</a>'
-      +'<a href="tel:0700000000">0700 000 000</a>'
-      +'<div style="padding:5px 0">Adresă de completat</div>'
-      +'<div style="padding:5px 0">Luni–Vineri, 09:00–18:00</div>'
+      +'<a href="mailto:'+esc(sv("contact_email","contact@depozit.ro"))+'">'+esc(sv("contact_email","contact@depozit.ro"))+'</a>'
+      +'<a href="tel:'+esc(sv("contact_phone","0700 000 000").replace(/\\s/g,""))+'">'+esc(sv("contact_phone","0700 000 000"))+'</a>'
+      +'<div style="padding:5px 0">'+esc(sv("contact_address","Adresă de completat"))+'</div>'
+      +'<div style="padding:5px 0">'+esc(sv("contact_program","Luni–Vineri, 09:00–18:00"))+'</div>'
     +'</div></div>'
     +'</div>'
     +'<div class="sfoot-bottom"><span>© '+new Date().getFullYear()+' WSD Logistics — Depozitare & Transport Marfă. Toate drepturile rezervate.</span><a onclick="renderLogin()">Autentificare client</a></div>'
@@ -385,10 +397,7 @@ window.renderAbout = function(){
     + '</div></section>'
     // bandă statistici
     + '<section style="padding:6px 0"><div class="stat-strip">'
-    + statItem("12.000","m²","Spațiu de depozitare")
-    + statItem("8.500","+ paleți","Gestionați lunar")
-    + statItem("300","+ livrări","Expediate lunar")
-    + statItem("99,2","%","Comenzi la timp")
+    + siteStats()
     + '</div><p class="muted center" style="font-size:11.5px;margin:8px 0 0">* cifre orientative — se înlocuiesc cu datele reale WSD Logistics</p></section>'
     + '<section class="card" style="padding:32px;margin:26px 0;text-align:center"><span class="eyebrow">Misiunea noastră</span><h2 style="font-size:22px;margin:0 0 10px">De ce facem asta</h2><p class="muted" style="max-width:720px;margin:0 auto;line-height:1.7;font-size:15.5px">Îți simplificăm logistica: tu te concentrezi pe vânzări și pe clienții tăi, noi ne ocupăm de depozitare, manipulare și transport — cu <b>transparență totală</b> și marfa mereu sub control.</p></section>'
     + '<section style="padding:26px 0;text-align:center"><span class="eyebrow">Valori</span><h2 style="font-size:24px;margin:0 0 24px">Valorile noastre</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));text-align:left">'
@@ -434,10 +443,10 @@ window.renderContact = function(){
     '<section class="site-hero" style="padding:52px 30px"><span class="eyebrow" style="background:rgba(255,255,255,.16);color:#fff">Contact</span><h1 style="font-size:34px;margin:0">Hai să vorbim</h1><p style="max-width:640px;margin:12px auto 0">Scrie-ne și îți facem o ofertă de depozitare adaptată mărfii tale.</p></section>'
     + '<section style="padding:38px 0"><div class="grid" style="grid-template-columns:1fr 1.1fr;gap:26px">'
     + '<div class="card" style="padding:26px"><span class="eyebrow">Date de contact</span><h2 style="font-size:18px;margin:6px 0 20px">Ne găsești aici</h2><div style="display:grid;gap:18px">'
-    + crow("contact","Email",'<a href="mailto:contact@depozit.ro" style="color:inherit;text-decoration:none">contact@depozit.ro</a>')
-    + crow("phone","Telefon",'<a href="tel:+40700000000" style="color:inherit;text-decoration:none">0700 000 000</a>')
-    + crow("pin","Adresă","Adresă depozit (de completat)")
-    + crow("clock","Program","Luni–Vineri, 08:00–18:00")
+    + crow("contact","Email",'<a href="mailto:'+esc(sv("contact_email","contact@depozit.ro"))+'" style="color:inherit;text-decoration:none">'+esc(sv("contact_email","contact@depozit.ro"))+'</a>')
+    + crow("phone","Telefon",'<a href="tel:'+esc(sv("contact_phone","0700 000 000").replace(/\\s/g,""))+'" style="color:inherit;text-decoration:none">'+esc(sv("contact_phone","0700 000 000"))+'</a>')
+    + crow("pin","Adresă",esc(sv("contact_address","Adresă depozit (de completat)")))
+    + crow("clock","Program",esc(sv("contact_program","Luni–Vineri, 08:00–18:00")))
     + '</div><div class="sfoot-social" style="margin-top:24px"><a href="#" onclick="return false">'+svgIcon("facebook")+'</a><a href="#" onclick="return false">'+svgIcon("instagram")+'</a><a href="#" onclick="return false">'+svgIcon("linkedin")+'</a></div></div>'
     + '<form class="card" style="padding:26px" onsubmit="return sendContact(event)"><span class="eyebrow">Formular</span><h2 style="font-size:18px;margin:6px 0 18px">Trimite-ne un mesaj</h2>'
     + field("Nume","ct_name","")+field("Email","ct_email","","","email")
@@ -468,17 +477,14 @@ window.renderLanding = function(){
     + siteHeader("home")
     // hero (cu poză de fundal)
     + '<section class="site-hero">'
-    + '<h1 style="font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">Depozitare & transport marfă<br>pentru afacerea ta</h1>'
-    + '<p style="font-size:17px;max-width:640px;margin:0 auto 22px;line-height:1.6">WSD Logistics îți gestionează și transportă marfa în siguranță, iar tu vezi stocul online, în timp real. Tu vinzi — de restul ne ocupăm noi.</p>'
+    + '<h1 style="font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em">'+(SITE.hero_title?esc(SITE.hero_title):'Depozitare & transport marfă<br>pentru afacerea ta')+'</h1>'
+    + '<p style="font-size:17px;max-width:640px;margin:0 auto 22px;line-height:1.6">'+esc(sv("hero_subtitle","WSD Logistics îți gestionează și transportă marfa în siguranță, iar tu vezi stocul online, în timp real. Tu vinzi — de restul ne ocupăm noi."))+'</p>'
     + '<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:22px"><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Vizibilitate 24/7</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Trasabilitate completă</span><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Fără investiție în spațiu</span></div>'
     + '<div class="row" style="justify-content:center"><button onclick="renderLogin()" style="padding:12px 22px">Autentificare client</button><button class="ghost" style="padding:12px 22px;color:#fff;border-color:rgba(255,255,255,.55)" onclick="siteGo(\\'contact\\')">Cere o ofertă</button></div>'
     + '</section>'
     // bandă statistici
     + '<section style="padding:6px 0 0"><div class="stat-strip">'
-    + statItem("12.000","m²","Spațiu de depozitare")
-    + statItem("8.500","+ paleți","Gestionați lunar")
-    + statItem("300","+ livrări","Expediate lunar")
-    + statItem("99,2","%","Comenzi la timp")
+    + siteStats()
     + '</div><p class="muted center" style="font-size:11.5px;margin:8px 0 0">* cifre orientative — se înlocuiesc cu datele reale WSD Logistics</p></section>'
     // trust icons sub hero
     + '<section style="padding:14px 0 0"><div class="trustbar">'
@@ -783,6 +789,7 @@ var NAV = [
   ["commercial","Comercial","operator"],
   ["services","Servicii","admin"],
   ["users","Utilizatori","admin"],
+  ["settings","Setări site","admin"],
   ["backup","Backup","admin"]
 ];
 
@@ -1686,6 +1693,45 @@ window.serviceDelete = function(id){
   modal("Confirmă ștergerea", '<p>Ștergi serviciul <b>'+esc(s?s.name:("#"+id))+'</b>?</p><p class="muted" style="font-size:12.5px">Nu afectează comenzile deja procesate (prețul e păstrat pe comandă).</p>',
     function(){ api("DELETE","/api/services/"+id).then(function(){ closeModal(); toast("Șters"); loadServices(); }).catch(function(e){ toast(e.message,"bad"); }); });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; }
+};
+
+VIEWS.settings = function(){
+  setMain(topbar("Setări site") + '<div class="card" id="setcard" style="padding:20px;max-width:720px">Se încarcă…</div>');
+  loadSiteContent().then(function(){
+    function inp(key,label,def,hint,ta){
+      var id="set_"+key, val=sv(key,def);
+      return '<div class="field"><label>'+esc(label)+'</label>'
+        +(ta?('<textarea id="'+id+'" rows="2">'+esc(val)+'</textarea>'):('<input id="'+id+'" value="'+esc(val)+'">'))
+        +(hint?('<div class="fhint">'+esc(hint)+'</div>'):'')+'</div>';
+    }
+    function statRow(n,dv,du,dl){
+      return '<div class="row" style="gap:8px"><div style="flex:1">'+inp("stat"+n+"_value","Cifra "+n,dv)+'</div>'
+        +'<div style="flex:1">'+inp("stat"+n+"_unit","Unitate",du)+'</div>'
+        +'<div style="flex:1.4">'+inp("stat"+n+"_label","Etichetă",dl)+'</div></div>';
+    }
+    el("setcard").innerHTML=
+      '<p class="muted" style="margin:0 0 14px;font-size:12.5px">Editezi textele de pe site-ul de prezentare. Se salvează instant și apar public.</p>'
+      + '<h2 style="margin:0 0 6px;font-size:16px">Pagina principală</h2>'
+      + inp("hero_title","Titlu principal","Depozitare & transport marfă pentru afacerea ta")
+      + inp("hero_subtitle","Subtitlu","WSD Logistics îți gestionează și transportă marfa în siguranță, iar tu vezi stocul online, în timp real. Tu vinzi — de restul ne ocupăm noi.","",true)
+      + '<h2 style="margin:16px 0 6px;font-size:16px">Cifre afișate (statistici)</h2>'
+      + statRow(1,"12.000","m²","Spațiu de depozitare")
+      + statRow(2,"8.500","+ paleți","Gestionați lunar")
+      + statRow(3,"300","+ livrări","Expediate lunar")
+      + statRow(4,"99,2","%","Comenzi la timp")
+      + '<h2 style="margin:16px 0 6px;font-size:16px">Contact & footer</h2>'
+      + '<div class="row" style="gap:8px"><div style="flex:1">'+inp("contact_email","Email","contact@depozit.ro")+'</div><div style="flex:1">'+inp("contact_phone","Telefon","0700 000 000")+'</div></div>'
+      + inp("contact_address","Adresă","Adresă depozit (de completat)")
+      + inp("contact_program","Program","Luni–Vineri, 09:00–18:00")
+      + inp("footer_desc","Descriere footer","Depozitare securizată și transport marfă pentru afacerea ta. Tu vinzi — de restul ne ocupăm noi.","",true)
+      + '<div class="row" style="gap:8px;margin-top:14px"><button onclick="settingsSave()">Salvează modificările</button><button class="ghost" onclick="renderLanding()">Vezi site-ul</button></div>';
+  });
+};
+window.settingsSave = function(){
+  var keys=["hero_title","hero_subtitle","stat1_value","stat1_unit","stat1_label","stat2_value","stat2_unit","stat2_label","stat3_value","stat3_unit","stat3_label","stat4_value","stat4_unit","stat4_label","contact_email","contact_phone","contact_address","contact_program","footer_desc"];
+  var content={};
+  keys.forEach(function(k){ var e=el("set_"+k); if(e) content[k]=e.value; });
+  api("PUT","/api/admin/site-content",{content:content}).then(function(){ toast("Setări salvate ✓"); loadSiteContent(); }).catch(function(e){ toast(e.message,"bad"); });
 };
 
 VIEWS.backup = function(){
@@ -2631,8 +2677,8 @@ window.closeModal=function(){
 window.onhashchange=function(){ if(me && me.kind!=="client") handleHash(); };
 if(token){
   api("GET","/api/auth/me").then(function(d){ me=d.user; enterApp(); })
-    .catch(function(){ token=null; me=null; localStorage.removeItem("wms_token"); renderLanding(); });
-} else { renderLanding(); }
+    .catch(function(){ token=null; me=null; localStorage.removeItem("wms_token"); loadSiteContent().then(renderLanding); });
+} else { loadSiteContent().then(renderLanding); }
 </script>
 </body>
 </html>`;
