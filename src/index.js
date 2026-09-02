@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v49';
+const APP_VERSION = 'v50';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';

@@ -665,21 +665,90 @@ function porderStatusPill(s){
   if(s==="confirmed") return '<span class="pill warn">În așteptare</span>';
   return '<span class="pill mut">Ciornă</span>';
 }
+var pOrders=[], pRepFrom="", pRepTo="";
+function pYmd(d){ var m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0"); return d.getFullYear()+"-"+m+"-"+day; }
 function portalOrders(){
-  setMain(topbar("Comenzile mele", '<button onclick="portalOrderNew()">+ Comandă nouă</button>') + '<div class="card" id="pord">…</div>');
+  setMain(topbar("Comenzile mele", '<button onclick="portalOrderNew()">+ Comandă nouă</button>')
+    + '<div class="card" id="prep"></div>'
+    + '<div class="card" id="pord">…</div>');
   api("GET","/api/portal/orders").then(function(d){
-    var rows=(d.orders||[]).map(function(o){
-      return '<tr onclick="portalOrderView('+o.id+')" style="cursor:pointer">'
-        +'<td><b>'+esc(o.code)+'</b></td>'
-        +'<td class="muted">'+esc(String(o.created_at).slice(0,16))+'</td>'
-        +'<td>'+esc(o.recipient_name||"—")+(o.recipient_city?(' <span class="muted">· '+esc(o.recipient_city)+'</span>'):'')+'</td>'
-        +'<td class="right">'+esc(o.line_count)+' prod. / '+esc(o.total_qty)+' buc.</td>'
-        +'<td>'+porderStatusPill(o.status)+'</td></tr>';
-    }).join("");
-    el("pord").innerHTML='<table><thead><tr><th>Comandă</th><th>Data</th><th>Destinatar</th><th class="right">Conținut</th><th>Status</th></tr></thead><tbody>'
-      +(rows||'<tr><td colspan=5 class="muted center">Nicio comandă încă. Apasă «+ Comandă nouă» ca să trimiți o livrare.</td></tr>')+'</tbody></table>';
+    pOrders=(d.orders||[]);
+    if(!pRepFrom) pReportPeriod("month"); else { pRenderReportControls(); pReportRender(); }
   });
 }
+function pRenderReportControls(){
+  var host=el("prep"); if(!host) return;
+  host.innerHTML='<div style="font-weight:700;margin-bottom:8px">📊 Raport comenzi</div>'
+    +'<div class="toolbar" style="flex-wrap:wrap;gap:6px">'
+    +'<button class="ghost sm" onclick="pReportPeriod(\\'week\\')">Săptămâna aceasta</button>'
+    +'<button class="ghost sm" onclick="pReportPeriod(\\'month\\')">Luna aceasta</button>'
+    +'<button class="ghost sm" onclick="pReportPeriod(\\'lastmonth\\')">Luna trecută</button>'
+    +'</div>'
+    +'<div class="row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'
+    +'<label style="margin:0">De la</label><input type="date" id="prep_from" value="'+esc(pRepFrom)+'" onchange="pReportCustom()">'
+    +'<label style="margin:0">Până la</label><input type="date" id="prep_to" value="'+esc(pRepTo)+'" onchange="pReportCustom()">'
+    +'<button class="sm" onclick="pReportCsv()">Export CSV</button>'
+    +'<button class="ghost sm" onclick="pReportPrint()">📄 Raport PDF</button>'
+    +'</div>'
+    +'<div id="prep_sum" class="muted" style="font-size:13px;margin-top:8px"></div>';
+}
+window.pReportPeriod=function(kind){
+  var now=new Date(), from, to;
+  if(kind==="week"){ var day=(now.getDay()+6)%7; from=new Date(now); from.setDate(now.getDate()-day); to=new Date(from); to.setDate(from.getDate()+6); }
+  else if(kind==="lastmonth"){ from=new Date(now.getFullYear(), now.getMonth()-1, 1); to=new Date(now.getFullYear(), now.getMonth(), 0); }
+  else { from=new Date(now.getFullYear(), now.getMonth(), 1); to=new Date(now.getFullYear(), now.getMonth()+1, 0); }
+  pRepFrom=pYmd(from); pRepTo=pYmd(to);
+  pRenderReportControls(); pReportRender();
+};
+window.pReportCustom=function(){ var f=el("prep_from"), t=el("prep_to"); if(f&&f.value) pRepFrom=f.value; if(t&&t.value) pRepTo=t.value; pReportRender(); };
+function pReportFiltered(){
+  return pOrders.filter(function(o){ var d=String(o.created_at).slice(0,10); return (!pRepFrom||d>=pRepFrom) && (!pRepTo||d<=pRepTo); });
+}
+function pReportStats(list){
+  var totBuc=list.reduce(function(a,o){return a+(Number(o.total_qty)||0);},0);
+  var exped=list.filter(function(o){return o.status==="completed";}).length;
+  var anul=list.filter(function(o){return o.status==="cancelled";}).length;
+  return { n:list.length, buc:totBuc, exped:exped, anul:anul, astept:list.length-exped-anul };
+}
+function pReportRender(){
+  var list=pReportFiltered(), s=pReportStats(list);
+  var sum=el("prep_sum");
+  if(sum) sum.innerHTML='Interval <b>'+esc(pRepFrom)+'</b> → <b>'+esc(pRepTo)+'</b> · <b>'+s.n+'</b> comenzi · <b>'+s.buc+'</b> buc. · '+s.exped+' expediate, '+s.astept+' în așteptare, '+s.anul+' anulate';
+  var rows=list.map(function(o){
+    return '<tr onclick="portalOrderView('+o.id+')" style="cursor:pointer">'
+      +'<td><b>'+esc(o.code)+'</b></td>'
+      +'<td class="muted">'+esc(String(o.created_at).slice(0,16))+'</td>'
+      +'<td>'+esc(o.recipient_name||"—")+(o.recipient_city?(' <span class="muted">· '+esc(o.recipient_city)+'</span>'):'')+'</td>'
+      +'<td class="right">'+esc(o.line_count)+' prod. / '+esc(o.total_qty)+' buc.</td>'
+      +'<td>'+porderStatusPill(o.status)+'</td></tr>';
+  }).join("");
+  var host=el("pord"); if(host) host.innerHTML='<table><thead><tr><th>Comandă</th><th>Data</th><th>Destinatar</th><th class="right">Conținut</th><th>Status</th></tr></thead><tbody>'
+    +(rows||'<tr><td colspan=5 class="muted center">Nicio comandă în intervalul ales.</td></tr>')+'</tbody></table>';
+}
+var pStMap={completed:"Expediată",cancelled:"Anulată",confirmed:"În așteptare",draft:"Ciornă"};
+window.pReportCsv=function(){
+  var list=pReportFiltered();
+  var lines=[["Cod","Data","Destinatar","Oras","Produse","Bucati","Status"]];
+  list.forEach(function(o){ lines.push([o.code, String(o.created_at).slice(0,16), (o.recipient_name||""), (o.recipient_city||""), o.line_count, o.total_qty, (pStMap[o.status]||o.status)]); });
+  var csv=lines.map(function(r){ return r.map(function(c){ var v=String(c==null?"":c); return /[",\\n;]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }).join(","); }).join("\\r\\n");
+  var blob=new Blob(["\\ufeff"+csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download="raport-comenzi_"+pRepFrom+"_"+pRepTo+".csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+};
+window.pReportPrint=function(){
+  var list=pReportFiltered(), s=pReportStats(list);
+  var c=(portalMe&&portalMe.client)||{};
+  var rows=list.map(function(o){ return '<tr><td>'+esc(o.code)+'</td><td>'+esc(String(o.created_at).slice(0,16))+'</td><td>'+esc(o.recipient_name||"—")+'</td><td>'+esc(o.recipient_city||"")+'</td><td style="text-align:right">'+esc(o.total_qty)+'</td><td>'+esc(pStMap[o.status]||o.status)+'</td></tr>'; }).join("");
+  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi","bad"); return; }
+  var html='<html><head><meta charset="utf-8"><title>Raport comenzi</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#111;padding:24px}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}th{background:#f2f2f2}.muted{color:#666;font-size:13px}.sum{margin-top:10px;font-size:14px}</style></head><body>'
+    +'<h1>Raport comenzi</h1>'
+    +'<div class="muted">'+esc(c.name||me.name||"")+(c.cui?(" · CUI "+esc(c.cui)):"")+'</div>'
+    +'<div class="muted">Interval: '+esc(pRepFrom)+' → '+esc(pRepTo)+'</div>'
+    +'<div class="sum"><b>'+s.n+'</b> comenzi · <b>'+s.buc+'</b> bucăți · '+s.exped+' expediate, '+s.astept+' în așteptare, '+s.anul+' anulate</div>'
+    +'<table><thead><tr><th>Cod</th><th>Data</th><th>Destinatar</th><th>Oraș</th><th style="text-align:right">Buc.</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 style="text-align:center;color:#666">Nicio comandă</td></tr>')+'</tbody></table>'
+    +'<p class="muted" style="margin-top:18px">Generat din portalul WSD Logistics · '+esc(pYmd(new Date()))+'</p>'
+    +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt></body></html>';
+  w.document.write(html); w.document.close();
+};
 var porderLines = [];
 var pProducts = [];
 function portalOrderNew(){
