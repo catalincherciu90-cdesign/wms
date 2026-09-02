@@ -75,22 +75,32 @@ function feedback(ok){
   try{ if(navigator.vibrate) navigator.vibrate(ok?55:[70,60,70]); }catch(e){}
 }
 /* Alertă „comandă nouă": chime ascendent (3 note) + vibrație puternică. Distinct de beep-ul de scan. */
-function newOrderChime(){
+/* Redă o secvență de note. vol = volum (0..1). */
+function playTones(notes, vol, gap, dur){
   try{
     var AC=window.AudioContext||window.webkitAudioContext;
     var ctx=window._ac||(window._ac=new AC()); if(ctx.state==="suspended") ctx.resume();
-    var notes=[784,988,1319]; // Sol–Si–Mi ascendent
     for(var i=0;i<notes.length;i++){
-      var t0=ctx.currentTime+i*0.17;
+      var t0=ctx.currentTime+i*(gap||0.17);
       var o=ctx.createOscillator(), g=ctx.createGain();
-      o.type="sine"; o.frequency.value=notes[i];
+      o.type="square"; o.frequency.value=notes[i]; // square = mai „tare"/perceput mai puternic
       g.gain.setValueAtTime(0.0001,t0);
-      g.gain.exponentialRampToValueAtTime(0.14,t0+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001,t0+0.16);
-      o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0+0.18);
+      g.gain.exponentialRampToValueAtTime(vol||0.35,t0+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+(dur||0.16));
+      o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0+(dur||0.16)+0.02);
     }
   }catch(e){}
-  try{ if(navigator.vibrate) navigator.vibrate([200,100,200,100,300]); }catch(e){}
+}
+function newOrderChime(){
+  var up=[784,988,1319]; // Sol–Si–Mi ascendent
+  playTones(up, 0.38, 0.16, 0.16);
+  setTimeout(function(){ playTones(up, 0.38, 0.16, 0.16); }, 620); // repetat, ca să se audă bine
+  try{ if(navigator.vibrate) navigator.vibrate([300,120,300,120,450]); }catch(e){}
+}
+function cancelChime(){
+  var down=[660,523,392,392]; // descendent = „anulat"
+  playTones(down, 0.38, 0.18, 0.20);
+  try{ if(navigator.vibrate) navigator.vibrate([500,150,500]); }catch(e){}
 }
 /* Deblochează audio după un gest (login) — ca sunetul să meargă și când alerta vine din poll. */
 function primeAudio(){ try{ var AC=window.AudioContext||window.webkitAudioContext; window._ac=window._ac||new AC(); if(window._ac.state==="suspended") window._ac.resume(); }catch(e){} }
@@ -112,13 +122,33 @@ function ensureNotifyPermission(){
   try{ var C=window.Capacitor; if(C && C.Plugins && C.Plugins.LocalNotifications) C.Plugins.LocalNotifications.requestPermissions(); }catch(e){}
 }
 
-/* Verificare periodică: alertă când apare o comandă nouă de livrare (ex. plasată de client din portal). */
+/* Verificare periodică: alertă când apare o comandă nouă de livrare (ex. plasată de client din portal)
+   sau când o comandă cunoscută este anulată. */
 var _lastOrderId = Number(localStorage.getItem("wms_m_lastorder")||0) || 0;
+var _ordStatusMap = null; // {id: status} — referință în memorie pentru a detecta anulările
 function ordPollTick(){
   if(!token || !me || me.kind==="client") return;
   api("GET","/api/orders?type=outbound").then(function(d){
     var orders=(d.orders||[]); if(!orders.length) return;
     var maxId=orders.reduce(function(m,o){ return Math.max(m, Number(o.id)||0); }, 0);
+
+    /* Detectare anulări: comenzi cunoscute care au trecut pe status "cancelled". */
+    var cancelled=[];
+    if(_ordStatusMap){
+      orders.forEach(function(o){
+        var id=Number(o.id), prev=_ordStatusMap[id];
+        if(prev!==undefined && prev!=="cancelled" && o.status==="cancelled") cancelled.push(o);
+      });
+    }
+    var newMap={}; orders.forEach(function(o){ newMap[Number(o.id)]=o.status; }); _ordStatusMap=newMap;
+    if(cancelled.length){
+      cancelChime();
+      var cmsg = cancelled.length===1 ? ("Comandă anulată: "+cancelled[0].code) : (cancelled.length+" comenzi anulate");
+      toast(cmsg);
+      nativeNotify("Comandă anulată", cmsg);
+      if(el("ord_list")) screenOrders();
+    }
+
     if(_lastOrderId===0){ _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId)); return; } // prima rulare = referință, fără alertă
     var fresh=orders.filter(function(o){ return Number(o.id)>_lastOrderId && o.status!=="completed" && o.status!=="cancelled"; });
     if(fresh.length){
