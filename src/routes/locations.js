@@ -39,6 +39,38 @@ export async function update(request, env, ctx, user, params) {
 
 export async function remove(request, env, ctx, user, params) {
   const id = Number(params.id);
-  await env.DB.prepare('UPDATE locations SET active = 0 WHERE id = ?').bind(id).run();
+  const loc = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(id).first();
+  if (!loc) return error('Locație inexistentă', 404);
+
+  // 1) Nu se poate șterge dacă are stoc curent sau paleți depozitați.
+  const inv = await env.DB.prepare('SELECT COALESCE(SUM(quantity),0) AS qty, COUNT(*) AS rows FROM inventory WHERE location_id = ?').bind(id).first();
+  const storedPallets = await env.DB.prepare("SELECT COUNT(*) AS n FROM pallets WHERE location_id = ? AND status = 'stored'").bind(id).first();
+  if ((inv?.qty || 0) !== 0 || (storedPallets?.n || 0) > 0) {
+    return error('Locația are stoc sau paleți depozitați. Golește-o (transfer) înainte de ștergere.', 400);
+  }
+
+  // 2) Dacă a avut vreodată mișcări/inventar/paleți → o dezactivăm (ascundem), păstrând trasabilitatea.
+  const mov = await env.DB.prepare('SELECT COUNT(*) AS n FROM stock_movements WHERE location_id = ?').bind(id).first();
+  const anyPallet = await env.DB.prepare('SELECT COUNT(*) AS n FROM pallets WHERE location_id = ?').bind(id).first();
+  const hasHistory = (mov?.n || 0) > 0 || (inv?.rows || 0) > 0 || (anyPallet?.n || 0) > 0;
+
+  if (hasHistory) {
+    // curățăm rândurile de inventar cu 0 (fără să atingem istoricul de mișcări)
+    await env.DB.prepare('DELETE FROM inventory WHERE location_id = ? AND quantity = 0').bind(id).run();
+    await env.DB.prepare('UPDATE locations SET active = 0 WHERE id = ?').bind(id).run();
+    return json({ ok: true, archived: true });
+  }
+
+  // 3) Locație nefolosită vreodată → ștergere definitivă.
+  await env.DB.prepare('DELETE FROM locations WHERE id = ?').bind(id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// Reactivează o locație dezactivată.
+export async function reactivate(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const loc = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(id).first();
+  if (!loc) return error('Locație inexistentă', 404);
+  await env.DB.prepare('UPDATE locations SET active = 1 WHERE id = ?').bind(id).run();
   return json({ ok: true });
 }

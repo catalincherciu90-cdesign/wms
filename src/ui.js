@@ -1210,16 +1210,42 @@ VIEWS.locations = function(){
   setMain(topbar("Locații", addBtn) + '<div class="card" id="ltbl">…</div>');
   api("GET","/api/locations").then(function(d){
     cache.locations = d.locations;
-    var rows = d.locations.map(function(l){
+    var active = d.locations.filter(function(l){ return l.active; });
+    var inactive = d.locations.filter(function(l){ return !l.active; });
+    var rows = active.map(function(l){
       return '<tr><td><b>'+esc(l.code)+'</b></td><td>'+esc(l.name||"—")+'</td><td>'+esc(l.zone||"—")+'</td>'
         + '<td>'+fillBar(l.used, l.capacity)+'</td>'
-        + '<td>'+(l.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showQR(appOrigin()+\\'/#loc=\\'+encodeURIComponent(\\''+esc(l.code)+'\\'),\\''+esc(l.code)+'\\')">▦ QR</button>'
         + ' <button class="ghost sm" onclick="locationView(\\''+esc(l.code)+'\\')">Vezi</button>'
-        + (can("operator")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')+'</td></tr>';
+        + (can("operator")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')
+        + (can("admin")?' <button class="danger sm" onclick="deleteLocation('+l.id+',\\''+esc(l.code)+'\\')">Șterge</button>':'')
+        + '</td></tr>';
     }).join("");
-    el("ltbl").innerHTML='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Ocupare</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Nicio locație</td></tr>')+'</tbody></table>';
+    var html='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Ocupare</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio locație activă</td></tr>')+'</tbody></table>';
+    if(inactive.length){
+      html += '<div style="margin-top:16px;font-weight:600;font-size:13px" class="muted">Locații dezactivate ('+inactive.length+')</div>';
+      html += '<table style="margin-top:6px"><tbody>'+inactive.map(function(l){
+        return '<tr style="opacity:.7"><td><b>'+esc(l.code)+'</b></td><td>'+esc(l.name||"—")+'</td><td>'+esc(l.zone||"—")+'</td>'
+          + '<td><span class="pill mut">inactiv</span></td>'
+          + '<td class="right">'+(can("operator")?'<button class="ghost sm" onclick="reactivateLocation('+l.id+')">Reactivează</button>':'')+'</td></tr>';
+      }).join("")+'</tbody></table>';
+    }
+    el("ltbl").innerHTML=html;
   });
+};
+window.deleteLocation = function(id, code){
+  modal("Șterge locația "+esc(code||("#"+id)),
+    '<p>Sigur ștergi locația <b>'+esc(code||("#"+id))+'</b>?</p>'
+    +'<p class="muted" style="font-size:13px">Dacă locația nu a fost folosită niciodată, se șterge definitiv. Dacă are istoric de mișcări sau paleți, se <b>dezactivează</b> (se ascunde din listă), ca să nu pierzi trasabilitatea. O locație cu stoc sau paleți depozitați nu poate fi ștearsă — golește-o întâi.</p>',
+    function(){
+      api("DELETE","/api/locations/"+id).then(function(r){
+        closeModal(); toast(r.deleted ? "Locație ștearsă" : "Locație dezactivată (avea istoric)"); go("locations");
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; sv.style.display=""; }
+};
+window.reactivateLocation = function(id){
+  api("POST","/api/locations/"+id+"/reactivate",{}).then(function(){ toast("Locație reactivată"); go("locations"); }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.locationForm = function(id){
   var l = id ? cache.locations.find(function(x){return x.id===id;}) : {};
