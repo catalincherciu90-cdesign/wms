@@ -219,7 +219,12 @@ function screenMove(kind){
 function mvScan(code){
   code=(code||"").trim(); if(!code) return;
   resolveProduct(code).then(function(p){
-    if(!p){ feedback(false); el("m_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("m_form").style.display="none"; return; }
+    if(!p){
+      feedback(false);
+      if(window._mv && window._mv.kind==="receive"){ mvNewProduct(code); }
+      else { el("m_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("m_form").style.display="none"; }
+      return;
+    }
     feedback(true);
     window._mv.product=p;
     el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
@@ -227,6 +232,33 @@ function mvScan(code){
     el("m_qty").focus(); el("m_qty").select();
   }).catch(function(e){ toast(e.message,true); });
 }
+function mvNewProduct(code){
+  window._mv.newcode=code;
+  if(el("m_form")) el("m_form").style.display="none";
+  el("m_prod").innerHTML='<div class="card">'
+    +'<div style="font-weight:800;margin-bottom:4px">Produs nou</div>'
+    +'<div class="muted" style="font-size:12px;margin-bottom:8px">Cod: '+esc(code)+' — negăsit în sistem. Adaugă-l:</div>'
+    +'<label>Nume produs</label><input id="np_name" placeholder="Denumire produs" autocomplete="off">'
+    +'<label>Client (opțional)</label><select id="np_client"><option value="">— intern (al companiei) —</option></select>'
+    +'<label>UM</label><input id="np_unit" value="buc">'
+    +'<button class="big" onclick="mvCreateProduct()">Creează și continuă recepția</button></div>';
+  api("GET","/api/clients").then(function(d){ if(el("np_client")) el("np_client").innerHTML='<option value="">— intern (al companiei) —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
+  setTimeout(function(){ if(el("np_name")) el("np_name").focus(); },120);
+}
+window.mvCreateProduct=function(){
+  var name=el("np_name")?el("np_name").value.trim():"";
+  if(!name){ toast("Scrie numele produsului",true); return; }
+  var body={ barcode:window._mv.newcode, name:name,
+    unit:(el("np_unit")&&el("np_unit").value.trim())||"buc",
+    client_id:(el("np_client")&&el("np_client").value)?Number(el("np_client").value):null };
+  api("POST","/api/products",body).then(function(d){
+    feedback(true); toast("Produs creat: "+d.product.name);
+    window._mv.product=d.product;
+    el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(d.product.barcode||d.product.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(d.product.name)+'</div></div>';
+    el("m_form").style.display="block";
+    if(el("m_qty")){ el("m_qty").focus(); el("m_qty").select(); }
+  }).catch(function(e){ toast(e.message,true); });
+};
 function mvSubmit(){
   var mv=window._mv; if(!mv||!mv.product){ toast("Scanează întâi un produs",true); return; }
   var loc=Number(el("m_loc").value), qty=Number(el("m_qty").value);
