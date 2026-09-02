@@ -170,7 +170,10 @@ export async function remove(request, env, ctx, user, params) {
   const id = Number(params.id);
   const order = await env.DB.prepare('SELECT status FROM orders WHERE id = ?').bind(id).first();
   if (!order) return error('Comandă inexistentă', 404);
-  if (order.status === 'completed') return error('Comenzile finalizate nu pot fi șterse', 400);
+  // Comenzile finalizate pot fi șterse doar de admin (stocul deja mișcat NU se reversează automat).
+  if (order.status === 'completed' && user.role !== 'admin') {
+    return error('Doar un administrator poate șterge o comandă finalizată', 403);
+  }
   await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(id).run(); // liniile cad prin ON DELETE CASCADE
   return json({ ok: true });
 }

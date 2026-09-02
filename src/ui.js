@@ -2031,7 +2031,11 @@ window.orderDetail = function(id){
         + '<div class="row" style="margin-top:8px">'
         + (o.status==="draft"?'<button class="ghost sm" onclick="orderStatus('+o.id+',\\'confirmed\\')">Confirmă</button>':'')
         + '<button class="ghost sm" onclick="orderCancel('+o.id+',\\''+o.code+'\\')">Anulează</button>'
-        + '<button class="danger sm" onclick="deleteOrder('+o.id+')">Șterge</button></div>';
+        + '<button class="danger sm" onclick="deleteOrder('+o.id+',\\''+o.code+'\\','+(o.status==="completed"?1:0)+')">Șterge</button></div>';
+    }
+    // Admin: poate șterge ORICE comandă, inclusiv finalizată sau anulată.
+    if(can("admin") && (o.status==="completed" || o.status==="cancelled")){
+      actions += '<div class="row" style="margin-top:12px"><button class="danger sm" onclick="deleteOrder('+o.id+',\\''+o.code+'\\','+(o.status==="completed"?1:0)+')">Șterge comanda</button></div>';
     }
     var recip='';
     if(o.source==="portal"){
@@ -2103,8 +2107,16 @@ window.orderCancel = function(id, code){
     });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, anulează"; sv.className="danger"; sv.style.display=""; }
 };
-window.deleteOrder = function(id){
-  api("DELETE","/api/orders/"+id).then(function(){ closeModal(); toast("Ștearsă"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+window.deleteOrder = function(id, code, wasCompleted){
+  var warn = wasCompleted
+    ? '<p class="muted" style="font-size:13px">Atenție: comanda e <b>finalizată</b>. Ștergerea o scoate din liste, dar <b>stocul deja mișcat NU se reversează automat</b> (mișcările de stoc rămân în istoric). Dacă vrei să corectezi stocul, fă-o separat din «Actualizare stoc».</p>'
+    : '<p class="muted" style="font-size:13px">Comanda și liniile ei se șterg definitiv.</p>';
+  modal("Șterge comanda "+esc(code||("#"+id)),
+    '<p>Sigur ștergi comanda <b>'+esc(code||("#"+id))+'</b>? Acțiunea nu poate fi anulată.</p>'+warn,
+    function(){
+      api("DELETE","/api/orders/"+id).then(function(){ closeModal(); toast("Comandă ștearsă"); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; sv.style.display=""; }
 };
 var orderLines=[];
 window.orderForm = function(){
