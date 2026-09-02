@@ -413,7 +413,7 @@ function screenOrders(){
 var _pick=null;
 window.screenPick=function(id){
   api("GET","/api/orders/"+id).then(function(d){
-    _pick={ id:id, order:d.order, lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0}; }) };
+    _pick={ id:id, order:d.order, lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0, packed:false}; }) };
     scanTarget=function(code){ pickScan(code); };
     var recip = d.order.source==="portal" ? ('<div class="muted" style="font-size:13px;margin-bottom:8px">Livrare: <b>'+esc(d.order.recipient_name||"—")+'</b>'+(d.order.recipient_address?(', '+esc(d.order.recipient_address)):'')+(d.order.recipient_city?(', '+esc(d.order.recipient_city)):'')+'</div>') : '';
     shell("Picking "+esc(d.order.code),
@@ -454,23 +454,29 @@ window.pkRemoveService=function(id, lineId){
   api("DELETE","/api/orders/"+id+"/services/"+lineId).then(function(){ pkLoadServices(id); }).catch(function(e){ toast(e.message,true); });
 };
 function pickRender(){
-  var all=true;
-  var rows=_pick.lines.map(function(l){
-    var ok=l.done>=l.need; if(!ok) all=false;
-    return '<div class="card" style="margin-bottom:8px;border-left:4px solid '+(ok?"#22c55e":"#f0c651")+'">'
+  var allScanned=true, allPacked=true;
+  var rows=_pick.lines.map(function(l,idx){
+    var ok=l.done>=l.need; if(!ok) allScanned=false;
+    if(!ok || !l.packed) allPacked=false;
+    var bar = l.packed ? "#22c55e" : (ok ? "#3b82f6" : "#f0c651");
+    var check = ok ? ('<label class="row" style="gap:8px;align-items:center;margin-top:10px;font-size:15px"><input type="checkbox" '+(l.packed?"checked":"")+' onchange="pkTogglePacked('+idx+')" style="width:22px;height:22px"> Pus în colet</label>') : '';
+    return '<div class="card" style="margin-bottom:8px;border-left:4px solid '+bar+'">'
       +'<div class="row" style="justify-content:space-between;align-items:center">'
       +'<div><b>'+esc(l.name)+'</b><div class="muted" style="font-size:12px">'+esc(l.sku||"")+'</div></div>'
       +'<div style="text-align:right"><b style="font-size:20px;color:'+(ok?"#22c55e":"#eef2fb")+'">'+l.done+'</b><span class="muted"> / '+l.need+' '+esc(l.unit||"")+'</span></div>'
-      +'</div></div>';
+      +'</div>'+check+'</div>';
   }).join("");
   el("pk_lines").innerHTML=rows;
   var host=el("pk_done"); if(!host) return;
-  if(all){
-    host.innerHTML='<div class="card center" style="background:rgba(34,197,94,.12);margin-bottom:12px"><b>Tot culese ✓</b></div>'
+  if(allScanned && allPacked){
+    host.innerHTML='<div class="card center" style="background:rgba(34,197,94,.12);margin-bottom:12px"><b>Tot cules și pus în colet ✓</b></div>'
       +'<label>Expediază din locația</label><select id="pk_loc">'+locOptions()+'</select>'
       +'<button class="big" onclick="completePick()">Finalizează &amp; expediază</button>';
+  } else if(allScanned && !allPacked){
+    host.innerHTML='<div class="card center" style="background:rgba(240,198,81,.14);color:#f0c651"><b>Bifează „Pus în colet" la toate produsele ca să poți expedia</b></div>';
   } else { host.innerHTML=''; }
 }
+window.pkTogglePacked=function(idx){ if(_pick&&_pick.lines[idx]){ _pick.lines[idx].packed=!_pick.lines[idx].packed; if(_pick.lines[idx].packed) feedback(true); pickRender(); } };
 function pickScan(code){
   code=(code||"").trim(); if(!code||!_pick) return;
   resolveProduct(code).then(function(p){
