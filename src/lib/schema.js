@@ -37,6 +37,10 @@ export async function ensureSchema(env) {
     'recipient_city TEXT',
     'recipient_county TEXT',
     'recipient_postal TEXT',
+    // blocare comandă „în procesare" — cine o procesează acum (lock cu heartbeat)
+    'locked_by INTEGER',
+    'locked_name TEXT',
+    'locked_at TEXT',
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}

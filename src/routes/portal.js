@@ -112,7 +112,7 @@ export async function orderCancel(request, env, ctx, user, params) {
   if (!order) return error('Comandă inexistentă', 404);
   if (order.status === 'completed') return error('Comanda e deja expediată și nu mai poate fi anulată', 400);
   if (order.status === 'cancelled') return error('Comanda e deja anulată', 400);
-  await env.DB.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").bind(id).run();
+  await env.DB.prepare("UPDATE orders SET status = 'cancelled', locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(id).run();
   return json({ ok: true, status: 'cancelled' });
 }
 

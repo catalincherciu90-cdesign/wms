@@ -2,12 +2,16 @@
 // La finalizare, comanda generează automat mișcări de stoc (receiving / picking).
 import { json, error, readJson } from '../lib/http.js';
 
+// Un „lock" pe comandă expiră după atâtea secunde fără heartbeat (dispozitiv închis/căzut).
+const LOCK_TTL = 300;
+const LOCK_ACTIVE = "CASE WHEN o.locked_by IS NOT NULL AND o.locked_at > datetime('now','-" + LOCK_TTL + " seconds') THEN 1 ELSE 0 END AS lock_active";
+
 export async function list(request, env) {
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
   const status = url.searchParams.get('status');
   let sql = `
-    SELECT o.*, p.name AS partner_name, c.name AS client_name,
+    SELECT o.*, p.name AS partner_name, c.name AS client_name, ${LOCK_ACTIVE},
            (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
            (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id) AS total_qty
     FROM orders o LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN clients c ON c.id = o.client_id WHERE 1=1`;
@@ -22,7 +26,7 @@ export async function list(request, env) {
 export async function get(request, env, ctx, user, params) {
   const id = Number(params.id);
   const order = await env.DB.prepare(`
-    SELECT o.*, p.name AS partner_name, c.name AS client_name FROM orders o
+    SELECT o.*, p.name AS partner_name, c.name AS client_name, ${LOCK_ACTIVE} FROM orders o
     LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN clients c ON c.id = o.client_id WHERE o.id = ?`).bind(id).first();
   if (!order) return error('Comandă inexistentă', 404);
   const { results: lines } = await env.DB.prepare(`
@@ -64,7 +68,44 @@ export async function setStatus(request, env, ctx, user, params) {
   if (!order) return error('Comandă inexistentă', 404);
   if (order.status === 'completed') return error('Comanda e deja finalizată', 400);
   await env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(b.status, id).run();
+  if (b.status === 'cancelled') await releaseLock(env, id); // anularea eliberează procesarea
   return json({ ok: true, status: b.status });
+}
+
+// ---- Blocare comandă „în procesare" (lock cu heartbeat) ----
+async function releaseLock(env, id) {
+  await env.DB.prepare('UPDATE orders SET locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?').bind(id).run();
+}
+
+// Preia (sau reînnoiește) procesarea comenzii. Dacă altcineva o procesează activ → 409.
+export async function lock(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare('SELECT status, locked_by, locked_name, locked_at FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.status === 'completed') return error('Comanda e deja finalizată', 400);
+  if (order.status === 'cancelled') return error('Comanda e anulată', 400);
+  const held = await env.DB.prepare(
+    "SELECT 1 FROM orders WHERE id = ? AND locked_by IS NOT NULL AND locked_by <> ? AND locked_at > datetime('now','-" + LOCK_TTL + " seconds')"
+  ).bind(id, user.sub).first();
+  if (held) {
+    return json({ ok: false, locked: true, locked_by: order.locked_by, locked_name: order.locked_name,
+      error: 'Comanda este procesată de ' + (order.locked_name || 'alt utilizator') }, 409);
+  }
+  await env.DB.prepare("UPDATE orders SET locked_by = ?, locked_name = ?, locked_at = datetime('now') WHERE id = ?")
+    .bind(user.sub, user.name || ('#' + user.sub), id).run();
+  return json({ ok: true, locked_by: user.sub, locked_name: user.name || ('#' + user.sub) });
+}
+
+// Eliberează procesarea (deținătorul sau un admin).
+export async function unlock(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare('SELECT locked_by FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.locked_by && order.locked_by !== user.sub && user.role !== 'admin') {
+    return error('Comanda e blocată de alt utilizator', 403);
+  }
+  await releaseLock(env, id);
+  return json({ ok: true });
 }
 
 // Finalizează comanda: aplică mișcările de stoc într-o locație aleasă.
@@ -79,6 +120,13 @@ export async function complete(request, env, ctx, user, params) {
   if (!order) return error('Comandă inexistentă', 404);
   if (order.status === 'completed') return error('Comanda e deja finalizată', 400);
   if (order.status === 'cancelled') return error('Comanda e anulată', 400);
+  // respectă lock-ul: doar cel care procesează (sau lock liber/învechit) o poate finaliza
+  if (order.locked_by && order.locked_by !== user.sub && user.role !== 'admin') {
+    const held = await env.DB.prepare(
+      "SELECT locked_name FROM orders WHERE id = ? AND locked_at > datetime('now','-" + LOCK_TTL + " seconds')"
+    ).bind(id).first();
+    if (held) return error('Comanda este procesată de ' + (held.locked_name || 'alt utilizator'), 409);
+  }
 
   const { results: lines } = await env.DB.prepare('SELECT * FROM order_lines WHERE order_id = ?').bind(id).all();
   if (!lines.length) return error('Comanda nu are linii', 400);
@@ -112,7 +160,7 @@ export async function complete(request, env, ctx, user, params) {
       .bind(l.product_id, locationId, order.type, delta, order.code, 'comandă ' + order.code, user.sub));
     stmts.push(env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
   }
-  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now') WHERE id = ?").bind(id));
+  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(id));
   await env.DB.batch(stmts);
 
   return json({ ok: true, status: 'completed' });

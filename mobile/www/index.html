@@ -122,6 +122,12 @@ function ensureNotifyPermission(){
   try{ var C=window.Capacitor; if(C && C.Plugins && C.Plugins.LocalNotifications) C.Plugins.LocalNotifications.requestPermissions(); }catch(e){}
 }
 
+/* Firma de la care a venit comanda (pentru pop-up/notificare). */
+function ordWho(o){
+  if(!o) return "";
+  if(o.source==="portal") return (o.client_name||"client")+(o.recipient_name?(" → "+o.recipient_name):"");
+  return (o.client_name||o.partner_name||"");
+}
 /* Verificare periodică: alertă când apare o comandă nouă de livrare (ex. plasată de client din portal)
    sau când o comandă cunoscută este anulată. */
 var _lastOrderId = Number(localStorage.getItem("wms_m_lastorder")||0) || 0;
@@ -143,7 +149,8 @@ function ordPollTick(){
     var newMap={}; orders.forEach(function(o){ newMap[Number(o.id)]=o.status; }); _ordStatusMap=newMap;
     if(cancelled.length){
       cancelChime();
-      var cmsg = cancelled.length===1 ? ("Comandă anulată: "+cancelled[0].code) : (cancelled.length+" comenzi anulate");
+      var cwho = ordWho(cancelled[0]);
+      var cmsg = cancelled.length===1 ? ("Comandă anulată: "+cancelled[0].code+(cwho?(" — "+cwho):"")) : (cancelled.length+" comenzi anulate");
       toast(cmsg);
       nativeNotify("Comandă anulată", cmsg);
       if(el("ord_list")) screenOrders();
@@ -154,7 +161,8 @@ function ordPollTick(){
     if(fresh.length){
       _lastOrderId=maxId; localStorage.setItem("wms_m_lastorder",String(maxId));
       newOrderChime();
-      var msg = fresh.length===1 ? ("Comandă nouă: "+fresh[0].code) : (fresh.length+" comenzi noi de pregătit");
+      var fwho = ordWho(fresh[0]);
+      var msg = fresh.length===1 ? ("Comandă nouă: "+fresh[0].code+(fwho?(" — "+fwho):"")) : (fresh.length+" comenzi noi de pregătit");
       toast(msg);
       nativeNotify("Comandă nouă de pregătit", msg);
       if(el("ord_list")) screenOrders(); // dacă suntem pe lista de comenzi, o reîmprospătăm
@@ -172,7 +180,7 @@ function api(method,path,body){
     return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||("Eroare "+r.status)); return d; });
   });
 }
-function logout(){ stopOrdPoll(); token=""; me=null; localStorage.removeItem("wms_m_token"); renderLogin(); }
+function logout(){ stopOrdPoll(); if(typeof pickStopHb==="function") pickStopHb(); token=""; me=null; localStorage.removeItem("wms_m_token"); renderLogin(); }
 
 /* ====== Ecrane ====== */
 function shell(title, body, opts){
@@ -452,16 +460,33 @@ function screenOrders(){
     if(!list.length){ el("ord_list").innerHTML='<div class="card center muted">Nicio comandă de pregătit.</div>'; return; }
     el("ord_list").innerHTML=list.map(function(o){
       var who = o.source==="portal" ? (esc(o.client_name||"client")+(o.recipient_name?(' → '+esc(o.recipient_name)):'')) : esc(o.partner_name||"—");
-      return '<div class="card" onclick="screenPick('+o.id+')" style="margin-bottom:10px;cursor:pointer">'
-        +'<div class="row" style="justify-content:space-between;align-items:center"><b>'+esc(o.code)+'</b>'+ordStatus(o.status)+'</div>'
+      var mine = me && Number(o.locked_by)===Number(me.id);
+      var busy = o.lock_active && !mine;
+      var badge = busy
+        ? '<span style="background:#7f1d1d;color:#fecaca;border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap">🔒 '+esc(o.locked_name||"în procesare")+'</span>'
+        : (mine ? '<span style="background:#14532d;color:#bbf7d0;border-radius:6px;padding:2px 8px;font-size:12px">tu procesezi</span>' : ordStatus(o.status));
+      return '<div class="card" onclick="screenPick('+o.id+')" style="margin-bottom:10px;cursor:pointer'+(busy?';opacity:.6':'')+'">'
+        +'<div class="row" style="justify-content:space-between;align-items:center"><b>'+esc(o.code)+'</b>'+badge+'</div>'
         +'<div class="muted" style="font-size:13px;margin-top:4px">'+who+'</div>'
         +'<div class="muted" style="font-size:12.5px;margin-top:2px">'+esc(o.line_count)+' produse · '+esc(o.total_qty)+' buc.</div></div>';
     }).join("");
   }).catch(function(e){ el("ord_list").innerHTML='<div class="card center" style="color:#f88">'+esc(e.message)+'</div>'; });
 }
-var _pick=null;
+var _pick=null, _pickHb=null;
+function pickStopHb(){ if(_pickHb){ clearInterval(_pickHb); _pickHb=null; } }
+/* Reînnoiește lock-ul periodic; dacă altcineva l-a preluat (lock expirat) → ieșim din picking. */
+function pickHeartbeat(id){
+  api("POST","/api/orders/"+id+"/lock").catch(function(e){
+    pickStopHb(); _pick=null; toast(e.message||"Comanda a fost preluată de altcineva",true); screenOrders();
+  });
+}
+/* Ieșire din picking: eliberează comanda ca s-o poată prelua altcineva. */
+window.pickLeave=function(){ var id=_pick&&_pick.id; pickStopHb(); if(id) api("POST","/api/orders/"+id+"/unlock").catch(function(){}); _pick=null; screenOrders(); };
 window.screenPick=function(id){
-  api("GET","/api/orders/"+id).then(function(d){
+  // Blochează comanda ÎNAINTE de a o deschide — dacă e deja procesată, nu intrăm.
+  api("POST","/api/orders/"+id+"/lock").then(function(){
+    return api("GET","/api/orders/"+id);
+  }).then(function(d){
     _pick={ id:id, order:d.order, lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0, packed:false}; }) };
     scanTarget=function(code){ pickScan(code); };
     var recip = d.order.source==="portal" ? ('<div class="muted" style="font-size:13px;margin-bottom:8px">Livrare: <b>'+esc(d.order.recipient_name||"—")+'</b>'+(d.order.recipient_address?(', '+esc(d.order.recipient_address)):'')+(d.order.recipient_city?(', '+esc(d.order.recipient_city)):'')+'</div>') : '';
@@ -472,9 +497,10 @@ window.screenPick=function(id){
       +'<div id="pk_lines" style="margin-top:12px"></div>'
       +'<div id="pk_services" style="margin-top:14px"></div>'
       +'<div id="pk_done" style="margin-top:14px"></div>'
-    , {back:"screenOrders()"});
+    , {back:"pickLeave()"});
     pickRender(); wireScan("pk_scan", pickScan); pkLoadServices(id);
-  }).catch(function(e){ toast(e.message,true); });
+    pickStopHb(); _pickHb=setInterval(function(){ pickHeartbeat(id); }, 90000); // heartbeat lock
+  }).catch(function(e){ toast(e.message,true); }); // ex. „Comanda este procesată de X"
 };
 window.pkLoadServices=function(id){
   if(!el("pk_services")) return;
@@ -543,7 +569,7 @@ window.completePick=function(){
   var loc=el("pk_loc")?Number(el("pk_loc").value):0;
   if(!loc){ toast("Alege locația de expediere",true); return; }
   api("POST","/api/orders/"+_pick.id+"/complete",{location_id:loc}).then(function(){
-    feedback(true); toast("Comandă expediată ✓"); _pick=null; screenOrders();
+    feedback(true); toast("Comandă expediată ✓"); pickStopHb(); _pick=null; screenOrders();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
 

@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v46';
+const APP_VERSION = 'v47';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -80,6 +80,8 @@ const routes = [
   ['POST', '/api/orders', orders.create, 'operator'],
   ['PUT', '/api/orders/:id/status', orders.setStatus, 'operator'],
   ['POST', '/api/orders/:id/complete', orders.complete, 'operator'],
+  ['POST', '/api/orders/:id/lock', orders.lock, 'operator'],
+  ['POST', '/api/orders/:id/unlock', orders.unlock, 'operator'],
   ['DELETE', '/api/orders/:id', orders.remove, 'operator'],
 
   ['GET', '/api/reports/stock-by-category', reports.stockByCategory, 'viewer'],
