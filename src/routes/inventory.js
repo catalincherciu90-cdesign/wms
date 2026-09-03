@@ -133,6 +133,36 @@ export async function transfer(request, env, ctx, user) {
   } catch (e) { return error(String(e.message || e), 400); }
 }
 
+// Mută TOT stocul dintr-o locație în alta (toate produsele, cantitățile întregi), dintr-o singură operație.
+export async function transferLocation(request, env, ctx, user) {
+  const b = await readJson(request);
+  const from = Number(b?.from_location_id), to = Number(b?.to_location_id);
+  if (!from || !to) return error('from_location_id și to_location_id obligatorii', 400);
+  if (from === to) return error('Locațiile trebuie să difere', 400);
+  const src = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(from).first();
+  const dst = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(to).first();
+  if (!src) return error('Locația sursă inexistentă', 404);
+  if (!dst) return error('Locația destinație inexistentă', 404);
+
+  const { results: rows } = await env.DB.prepare('SELECT product_id, quantity FROM inventory WHERE location_id = ? AND quantity > 0').bind(from).all();
+  if (!rows.length) return error('Locația sursă nu are stoc de mutat', 400);
+
+  const note = 'mutare locație #' + from + ' → #' + to;
+  const stmts = [];
+  const upsert = 'INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ' +
+    "ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')";
+  const mov = 'INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  for (const r of rows) {
+    const q = Number(r.quantity);
+    stmts.push(env.DB.prepare(upsert).bind(r.product_id, from, -q));
+    stmts.push(env.DB.prepare(upsert).bind(r.product_id, to, q));
+    stmts.push(env.DB.prepare(mov).bind(r.product_id, from, 'transfer', -q, 'MUTARE', note, user.sub));
+    stmts.push(env.DB.prepare(mov).bind(r.product_id, to, 'transfer', q, 'MUTARE', note, user.sub));
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true, moved_products: rows.length });
+}
+
 export async function exportStockCsv(request, env) {
   const { results } = await env.DB.prepare(`
     SELECT p.sku, p.name, l.code AS location, i.quantity, i.updated_at

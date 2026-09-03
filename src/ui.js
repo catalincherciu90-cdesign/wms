@@ -1217,6 +1217,7 @@ VIEWS.locations = function(){
         + '<td>'+fillBar(l.used, l.capacity)+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showQR(appOrigin()+\\'/#loc=\\'+encodeURIComponent(\\''+esc(l.code)+'\\'),\\''+esc(l.code)+'\\')">▦ QR</button>'
         + ' <button class="ghost sm" onclick="locationView(\\''+esc(l.code)+'\\')">Vezi</button>'
+        + (can("operator")?' <button class="ghost sm" onclick="moveLocationStock('+l.id+',\\''+esc(l.code)+'\\')">↦ Mută stocul</button>':'')
         + (can("operator")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteLocation('+l.id+',\\''+esc(l.code)+'\\')">Șterge</button>':'')
         + '</td></tr>';
@@ -1246,6 +1247,23 @@ window.deleteLocation = function(id, code){
 };
 window.reactivateLocation = function(id){
   api("POST","/api/locations/"+id+"/reactivate",{}).then(function(){ toast("Locație reactivată"); go("locations"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+// Mută tot stocul dintr-o locație în alta (o singură operație).
+window.moveLocationStock = function(fromId, fromCode){
+  var opts = (cache.locations||[]).filter(function(l){ return l.active && l.id!==fromId; })
+    .map(function(l){ return '<option value="'+l.id+'">'+esc(l.code)+'</option>'; }).join("");
+  if(!opts){ toast("Nu există altă locație activă unde să muți","bad"); return; }
+  modal("Mută tot stocul din "+esc(fromCode),
+    '<p class="muted" style="font-size:13px">Se mută <b>tot stocul</b> din <b>'+esc(fromCode)+'</b> în locația aleasă (toate produsele, cantitățile întregi). Mișcările se înregistrează în istoric.</p>'
+    + '<div class="field"><label>În locația</label><select id="mv_to">'+opts+'</select></div>',
+    function(){
+      var to=el("mv_to")?Number(el("mv_to").value):0;
+      if(!to){ toast("Alege locația destinație","bad"); return; }
+      api("POST","/api/inventory/transfer-location",{from_location_id:fromId, to_location_id:to}).then(function(r){
+        closeModal(); toast("Mutat: "+r.moved_products+" produse"); go("locations");
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Mută tot"; }
 };
 window.locationForm = function(id){
   var l = id ? cache.locations.find(function(x){return x.id===id;}) : {};
