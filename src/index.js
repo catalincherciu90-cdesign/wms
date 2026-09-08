@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v53';
+const APP_VERSION = 'v54';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -37,6 +37,8 @@ const routes = [
   ['GET', '/api/products/export', products.exportCsv, 'viewer'],
   ['POST', '/api/products', products.create, 'operator'],
   ['POST', '/api/products/import', products.importProducts, 'operator'],
+  ['POST', '/api/products/gen-barcodes', products.genBarcodesBulk, 'operator'],
+  ['POST', '/api/products/:id/gen-barcode', products.genBarcode, 'operator'],
   ['POST', '/api/products/reassign', products.reassign, 'operator'],
   ['POST', '/api/products/bulk-delete', products.bulkDelete, 'admin'],
   ['PUT', '/api/products/:id', products.update, 'operator'],

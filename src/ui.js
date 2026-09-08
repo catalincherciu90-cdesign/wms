@@ -1013,6 +1013,7 @@ function productsView(scope, title){
   var addBtn = can("operator") ? '<button onclick="productForm()">+ Produs</button>' : '';
   var impBtn = can("operator") ? '<button class="ghost" onclick="importUI()">⬆ Import Excel</button>' : '';
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/products/export\\',\\'produse.csv\\')">Export CSV</button>';
+  var genBtn = can("operator") ? '<button class="ghost" onclick="genMissingBarcodes()">⌗ Coduri interne (lipsă)</button>' : '';
   var bulk = can("operator")
     ? '<div class="card" id="pbulk" style="display:none;padding:10px 14px;margin-bottom:12px">'
       + '<div class="row" style="align-items:center;gap:10px">'
@@ -1024,7 +1025,7 @@ function productsView(scope, title){
       + '<button class="ghost sm" onclick="pselClear()">Anulează selecția</button>'
       + '</div></div>'
     : '';
-  setMain(topbar(title, addBtn+impBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută EAN / SKU / nume" oninput="loadProducts()" style="max-width:320px"></div>' + bulk + '<div class="card" id="ptbl">…</div>');
+  setMain(topbar(title, addBtn+impBtn+genBtn+exp) + '<div class="toolbar"><input id="pq" placeholder="Caută EAN / SKU / nume" oninput="loadProducts()" style="max-width:320px"></div>' + bulk + '<div class="card" id="ptbl">…</div>');
   if(can("operator")){
     api("GET","/api/clients").then(function(d){
       cache.clients = d.clients;
@@ -1143,11 +1144,15 @@ window.loadProducts = function(){
       var skuLine = (p.sku && p.sku!==p.barcode) ? '<div class="muted" style="font-size:11.5px">SKU: '+esc(p.sku)+'</div>' : '';
       var owner = p.client_name ? esc(p.client_name) : '<span class="muted">intern</span>';
       var chk = can("operator") ? '<td><input type="checkbox" class="psel" value="'+p.id+'" onclick="pselUpd()" style="width:auto"></td>' : '';
+      var hasBc = p.barcode && String(p.barcode).trim();
+      var codeBtns = hasBc
+        ? '<button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
+          + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦ QR</button>'
+        : (can("operator") ? '<button class="ghost sm" onclick="genProductBarcode('+p.id+')">⌗ Generează cod</button>' : '<span class="muted">fără cod</span>');
       return '<tr>'+chk+'<td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+owner+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
-        + '<td class="right"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
-        + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦ QR</button>'
+        + '<td class="right">'+codeBtns
         + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
@@ -1194,10 +1199,26 @@ window.deleteSelected = function(){
     });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge definitiv"; sv.className="danger"; }
 };
+// Generează un cod intern EAN-13 pentru un produs fără cod de bare.
+window.genProductBarcode = function(id){
+  api("POST","/api/products/"+id+"/gen-barcode",{}).then(function(r){
+    toast("Cod intern generat: "+(r.product&&r.product.barcode||"")); loadProducts();
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+// Generează coduri interne pentru toate produsele care nu au cod de bare.
+window.genMissingBarcodes = function(){
+  modal("Generează coduri interne",
+    '<p>Se generează câte un <b>cod de bare intern (EAN-13)</b> pentru toate produsele care nu au cod. Codurile existente nu se modifică.</p>'
+    +'<p class="muted" style="font-size:13px">Codurile interne încep cu cifra „2" (interval rezervat uzului intern) și pot fi tipărite/scanate ca orice cod de bare.</p>',
+    function(){
+      api("POST","/api/products/gen-barcodes",{}).then(function(r){ closeModal(); toast("Coduri generate: "+r.generated); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv) sv.textContent="Generează";
+};
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",
-    '<div class="field"><label>Cod de bare (EAN) — cod principal</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează sau tastează EAN-ul" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div>'+fhint("Codul de bare principal (EAN), scanat de pe ambalaj.")+'<div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
+    '<div class="field"><label>Cod de bare (EAN) — cod principal</label><div class="row"><input id="p_barcode" style="flex:1" value="'+esc(p.barcode||"")+'" placeholder="scanează / tastează EAN-ul (sau lasă gol)" oninput="bcInfo()"><button type="button" class="ghost" title="Scanează" onclick="scanInto(\\'p_barcode\\',true)">📷</button><button type="button" class="ghost" title="Identifică online" onclick="barcodeLookup()">🔍</button></div>'+fhint("Dacă produsul nu are EAN pe ambalaj, lasă câmpul gol — se generează automat un cod intern (EAN-13).")+'<div id="p_bc_info" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
     + field("SKU (opțional — auto din EAN)","p_sku",p.sku||"",id?"disabled":"","text","Cod intern opțional; dacă îl lași gol, se ia din EAN.")
     + field("Nume","p_name",p.name||"","","text","Denumirea clară a produsului (ex: Detergent lichid 2L).")
     + field("Categorie","p_category",p.category||"","","text","Categoria produsului (ex: Alimente, Cosmetice).")

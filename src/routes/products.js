@@ -23,26 +23,76 @@ export async function list(request, env) {
   return json({ products: results });
 }
 
+// Cod intern EAN-13 valid, derivat din id-ul produsului.
+// Prefix „2" = interval rezervat de GS1 pentru uz intern (in-store), deci nu se
+// suprapune cu EAN-uri reale de producători. Rezultat: 13 cifre, cu cifră de control.
+export function internalEan(id) {
+  let base = ('2' + String(id).padStart(11, '0')).slice(0, 12); // 12 cifre
+  let sum = 0;
+  for (let i = 0; i < 12; i++) { const d = base.charCodeAt(i) - 48; sum += (i % 2 === 0) ? d : d * 3; }
+  const check = (10 - (sum % 10)) % 10;
+  return base + String(check);
+}
+
 export async function create(request, env) {
   const b = await readJson(request);
-  const barcode = (b?.barcode ?? '').toString().trim();
-  const sku = (b?.sku ?? '').toString().trim() || barcode; // SKU auto din EAN dacă lipsește
-  if (!barcode) return error('Codul EAN (cod de bare) e obligatoriu', 400);
   if (!b?.name) return error('Numele e obligatoriu', 400);
+  const barcodeIn = (b?.barcode ?? '').toString().trim();
+  const skuIn = (b?.sku ?? '').toString().trim();
   try {
+    // Inserăm întâi cu un SKU temporar unic, apoi calculăm codurile finale din id
+    // (ca să putem genera un cod intern EAN-13 bazat pe id când lipsește EAN-ul).
+    const tmpSku = 'TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase();
     const res = await env.DB.prepare(
       `INSERT INTO products (sku, barcode, name, description, category, unit, reorder_point, client_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      sku, barcode, b.name.trim(), b.description || null,
+      tmpSku, barcodeIn || null, b.name.trim(), b.description || null,
       b.category || null, b.unit || 'buc', Number(b.reorder_point) || 0, b.client_id ? Number(b.client_id) : null
     ).run();
-    const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(res.meta.last_row_id).first();
+    const id = res.meta.last_row_id;
+    const barcode = barcodeIn || internalEan(id); // cod intern dacă nu are EAN
+    const sku = skuIn || barcode;                  // SKU din EAN/cod intern dacă lipsește
+    try {
+      await env.DB.prepare('UPDATE products SET barcode=?, sku=? WHERE id=?').bind(barcode, sku, id).run();
+    } catch (e2) {
+      await env.DB.prepare('DELETE FROM products WHERE id=?').bind(id).run(); // fără rând orfan
+      if (String(e2).includes('UNIQUE')) return error('EAN sau SKU deja existent', 409);
+      throw e2;
+    }
+    const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first();
     return json({ product }, 201);
   } catch (e) {
     if (String(e).includes('UNIQUE')) return error('EAN sau SKU deja existent', 409);
     throw e;
   }
+}
+
+// Generează un cod intern EAN-13 pentru un produs care nu are cod de bare.
+export async function genBarcode(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const p = await env.DB.prepare('SELECT id, barcode, sku FROM products WHERE id = ?').bind(id).first();
+  if (!p) return error('Produs inexistent', 404);
+  if (p.barcode && String(p.barcode).trim()) return error('Produsul are deja cod de bare', 400);
+  const code = internalEan(id);
+  const sku = (p.sku && String(p.sku).trim() && !String(p.sku).startsWith('TMP-')) ? p.sku : code;
+  await env.DB.prepare('UPDATE products SET barcode=?, sku=? WHERE id=?').bind(code, sku, id).run();
+  const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first();
+  return json({ ok: true, product });
+}
+
+// Generează coduri interne pentru TOATE produsele fără cod de bare.
+export async function genBarcodesBulk(request, env, ctx, user) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, sku FROM products WHERE barcode IS NULL OR TRIM(barcode) = ''"
+  ).all();
+  let n = 0;
+  for (const p of results) {
+    const code = internalEan(p.id);
+    const sku = (p.sku && String(p.sku).trim() && !String(p.sku).startsWith('TMP-')) ? p.sku : code;
+    try { await env.DB.prepare('UPDATE products SET barcode=?, sku=? WHERE id=?').bind(code, sku, p.id).run(); n++; } catch (e) {}
+  }
+  return json({ ok: true, generated: n });
 }
 
 export async function update(request, env, ctx, user, params) {
