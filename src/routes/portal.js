@@ -16,20 +16,32 @@ export async function summary(request, env, ctx, user) {
     SELECT COUNT(DISTINCT i.location_id) AS n
     FROM inventory i JOIN products p ON p.id = i.product_id
     WHERE p.client_id = ? AND i.quantity <> 0`).bind(user.client_id).first();
-  return json({ summary: { products: s.products, units: s.units, locations: locs.n } });
+  // câte produse sunt sub prag (prag > 0 și stoc total <= prag)
+  const low = await env.DB.prepare(`
+    SELECT COUNT(*) AS n FROM (
+      SELECT p.id, p.reorder_point, COALESCE(SUM(i.quantity),0) AS total
+      FROM products p LEFT JOIN inventory i ON i.product_id = p.id
+      WHERE p.client_id = ? AND p.active = 1
+      GROUP BY p.id
+      HAVING p.reorder_point > 0 AND total <= p.reorder_point
+    )`).bind(user.client_id).first();
+  return json({ summary: { products: s.products, units: s.units, locations: locs.n, low_stock: low.n } });
 }
 
 // Fiecare produs individual + total + locațiile unde e depozitat
 export async function products(request, env, ctx, user) {
   const { results } = await env.DB.prepare(`
-    SELECT p.id, p.sku, p.name, p.category, p.unit, p.barcode,
+    SELECT p.id, p.sku, p.name, p.category, p.unit, p.barcode, p.reorder_point,
            COALESCE(SUM(i.quantity), 0) AS total,
            (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id = ol.order_id
               WHERE ol.product_id = p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved
     FROM products p LEFT JOIN inventory i ON i.product_id = p.id
     WHERE p.client_id = ? AND p.active = 1
     GROUP BY p.id ORDER BY p.name`).bind(user.client_id).all();
-  for (const r of results) r.available = (r.total || 0) - (r.reserved || 0);
+  for (const r of results) {
+    r.available = (r.total || 0) - (r.reserved || 0);
+    r.low = (Number(r.reorder_point) > 0 && (r.total || 0) <= Number(r.reorder_point)) ? 1 : 0;
+  }
 
   const { results: locs } = await env.DB.prepare(`
     SELECT i.product_id, l.code AS location_code, i.quantity

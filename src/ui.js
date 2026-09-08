@@ -627,23 +627,33 @@ function portalPallets(){
 
 function portalStock(){
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/portal/export\\',\\'stocul-meu.csv\\')">Export CSV</button>';
-  setMain(topbar("Stocul meu", exp) + '<div id="pkpi"></div><div class="card" id="pstock" style="margin-top:14px">…</div>');
+  setMain(topbar("Stocul meu", exp) + '<div id="pkpi"></div><div id="plowbanner"></div><div class="card" id="pstock" style="margin-top:14px">…</div>');
   api("GET","/api/portal/summary").then(function(d){
-    var s=d.summary;
-    el("pkpi").innerHTML='<div class="kpis" style="grid-template-columns:repeat(3,1fr)">'
-      + kpi(s.products,"Produse") + kpi(s.units,"Unități în stoc") + kpi(s.locations,"Locații ocupate") + '</div>';
+    var s=d.summary, low=Number(s.low_stock||0);
+    el("pkpi").innerHTML='<div class="kpis" style="grid-template-columns:repeat(4,1fr)">'
+      + kpi(s.products,"Produse") + kpi(s.units,"Unități în stoc") + kpi(s.locations,"Locații ocupate")
+      + kpi(low,"Sub prag", low>0?"bad":null)
+      + '</div>';
+    if(low>0){
+      el("plowbanner").innerHTML='<div class="card" style="margin-top:12px;border-left:4px solid var(--bad);background:rgba(220,50,50,.06)">'
+        +'<b style="color:var(--bad)">⚠ '+low+' '+(low===1?'produs este sub prag':'produse sunt sub prag')+' de stoc.</b>'
+        +'<div class="muted" style="font-size:13px;margin-top:2px">Sunt marcate mai jos cu «sub prag». Poți plasa o comandă de reaprovizionare sau ne poți contacta.</div></div>';
+    } else { el("plowbanner").innerHTML=''; }
   });
   api("GET","/api/portal/products").then(function(d){
     var rows=d.products.map(function(p){
       var locs=(p.locations||[]).map(function(l){return esc(l.location)+': '+esc(l.qty);}).join(" · ")||'<span class="muted">—</span>';
       var resv=Number(p.reserved||0), avail=Number(p.available!=null?p.available:(p.total-resv));
-      return '<tr><td><b>'+esc(p.barcode||p.sku)+'</b></td><td>'+esc(p.name)+'</td>'
-        +'<td class="right">'+esc(p.total)+' '+esc(p.unit||"")+'</td>'
+      var prag=Number(p.reorder_point||0);
+      var lowBadge = p.low ? ' <span class="pill bad">sub prag</span>' : '';
+      return '<tr'+(p.low?' style="background:rgba(220,50,50,.06)"':'')+'><td><b>'+esc(p.barcode||p.sku)+'</b></td><td>'+esc(p.name)+'</td>'
+        +'<td class="right">'+esc(p.total)+' '+esc(p.unit||"")+lowBadge+'</td>'
+        +'<td class="right">'+(prag>0?esc(prag):'<span class="muted">—</span>')+'</td>'
         +'<td class="right">'+(resv>0?'<span class="pill warn">'+resv+'</span>':'<span class="muted">0</span>')+'</td>'
         +'<td class="right"><b>'+avail+'</b></td>'
         +'<td style="font-size:12px">'+locs+'</td></tr>';
     }).join("");
-    el("pstock").innerHTML='<table><thead><tr><th>EAN</th><th>Produs</th><th class="right">În stoc</th><th class="right">Rezervat</th><th class="right">Disponibil</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
+    el("pstock").innerHTML='<table><thead><tr><th>EAN</th><th>Produs</th><th class="right">În stoc</th><th class="right">Prag</th><th class="right">Rezervat</th><th class="right">Disponibil</th><th>Locații</th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nu ai încă marfă în depozit</td></tr>')+'</tbody></table>';
   });
 }
 function portalMovements(){
