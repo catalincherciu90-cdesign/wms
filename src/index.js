@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v54';
+const APP_VERSION = 'v55';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -119,6 +119,7 @@ const routes = [
 
   // Clienți de depozitare + conturile lor (staff)
   ['GET', '/api/clients', clients.list, 'operator'],
+  ['GET', '/api/clients/:id/overview', clients.overview, 'operator'],
   ['POST', '/api/clients', clients.create, 'admin'],
   ['PUT', '/api/clients/:id', clients.update, 'admin'],
   ['DELETE', '/api/clients/:id', clients.remove, 'admin'],

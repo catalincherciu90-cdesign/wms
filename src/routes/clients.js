@@ -51,6 +51,51 @@ export async function remove(request, env, ctx, user, params) {
   return json({ ok: true });
 }
 
+// Dosarul complet al unui client: date firmă, produse + stoc, comenzi, conturi, paleți.
+export async function overview(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const client = await env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(id).first();
+  if (!client) return error('Client inexistent', 404);
+
+  const { results: products } = await env.DB.prepare(`
+    SELECT p.id, p.sku, p.barcode, p.name, p.category, p.unit, p.reorder_point,
+           COALESCE(SUM(i.quantity),0) AS total,
+           (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id=ol.order_id
+              WHERE ol.product_id=p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved
+    FROM products p LEFT JOIN inventory i ON i.product_id=p.id
+    WHERE p.client_id=? AND p.active=1
+    GROUP BY p.id ORDER BY p.name`).bind(id).all();
+  for (const r of products) {
+    r.available = (r.total || 0) - (r.reserved || 0);
+    r.low = (Number(r.reorder_point) > 0 && (r.total || 0) <= Number(r.reorder_point)) ? 1 : 0;
+  }
+
+  const { results: orders } = await env.DB.prepare(`
+    SELECT o.id, o.code, o.status, o.source, o.created_at, o.recipient_name, o.recipient_city,
+           (SELECT COUNT(*) FROM order_lines WHERE order_id=o.id) AS line_count,
+           (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id=o.id) AS total_qty
+    FROM orders o WHERE o.client_id=? AND o.type='outbound'
+    ORDER BY o.created_at DESC, o.id DESC LIMIT 100`).bind(id).all();
+
+  const { results: users } = await env.DB.prepare(
+    'SELECT id, email, name, active, created_at FROM client_users WHERE client_id=? ORDER BY name'
+  ).bind(id).all();
+
+  const { results: pallets } = await env.DB.prepare(`
+    SELECT pa.id, pa.code, pa.status, l.code AS location_code
+    FROM pallets pa LEFT JOIN locations l ON l.id=pa.location_id
+    WHERE pa.client_id=? ORDER BY pa.code`).bind(id).all();
+
+  const units = products.reduce((a, p) => a + (p.total || 0), 0);
+  const low = products.filter((p) => p.low).length;
+  const openOrders = orders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled').length;
+
+  return json({
+    client, products, orders, users, pallets,
+    stats: { products: products.length, units, low, orders: orders.length, open_orders: openOrders, users: users.length, pallets: pallets.length },
+  });
+}
+
 // Conturi de portal ale unui client
 export async function listUsers(request, env, ctx, user, params) {
   const { results } = await env.DB.prepare(
