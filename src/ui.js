@@ -180,6 +180,10 @@ export function renderUI() {
   h1{font-size:20px;margin:0} h2{font-size:15px;margin:0 0 12px}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
   .kpi{padding:16px 18px} .kpi .n{font-size:28px;font-weight:800;letter-spacing:-.02em} .kpi .l{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+  .dtile{background:var(--panel-2,var(--panel));border:1px solid var(--border);border-radius:12px;padding:16px 10px;text-align:center;font-weight:600;font-size:13.5px;color:var(--text);cursor:pointer;transition:transform .06s,border-color .12s}
+  .dtile:hover{border-color:var(--brand);transform:translateY(-1px)}
+  .dtile .di{font-size:26px;display:block;margin-bottom:6px}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
   .toolbar .spacer{flex:1}
   .muted{color:var(--muted)} .right{text-align:right} .center{text-align:center}
@@ -948,6 +952,23 @@ VIEWS.dashboard = function(){
       + kpi(k.open_orders||0,"Comenzi deschise")
       + kpi(k.low_stock,"Sub prag stoc", k.low_stock>0?"bad":"good")
       + '</div>';
+    var quick = '<div class="card" style="padding:16px;margin-bottom:16px"><h2 style="margin:0 0 12px">Acces rapid</h2><div class="dgrid">'
+      + dashTile("receive","📥","Recepție","operator")
+      + dashTile("ship","📤","Expediere","operator")
+      + dashTile("transfer","🔄","Transfer","operator")
+      + dashTile("orders","📋","Comenzi","viewer")
+      + dashTile("products","📦","Produse","viewer")
+      + dashTile("stock","🧮","Stoc","viewer")
+      + dashTile("locations","🗺️","Locații","viewer")
+      + dashTile("labels","🏷️","Etichete","operator")
+      + dashTile("clients","👥","Clienți","operator")
+      + dashTile("movements","🔁","Mișcări","viewer")
+      + dashTile("reports","📊","Rapoarte","viewer")
+      + dashTile("commercial","💼","Comercial","operator")
+      + dashTile("users","👤","Utilizatori","admin")
+      + dashTile("backup","💾","Backup","admin")
+      + '</div></div>';
+
     var chart = '<div class="card" style="padding:18px"><h2>Activitate ultimele 7 zile</h2>'
       + '<canvas id="chart" height="220"></canvas>'
       + '<div class="row" style="gap:18px;margin-top:10px;font-size:12.5px">'
@@ -970,10 +991,14 @@ VIEWS.dashboard = function(){
         : '<div class="muted">Totul peste prag ✔</div>')+'</div>';
     var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
 
-    el("dash").innerHTML = kpis + top + bottom;
+    el("dash").innerHTML = kpis + quick + top + bottom;
     drawChart(d.activity||[]);
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
 };
+function dashTile(v, ic, label, role){
+  if(role && !can(role)) return "";
+  return '<div class="dtile" onclick="go(\\''+v+'\\')"><span class="di">'+ic+'</span>'+esc(label)+'</div>';
+}
 function catBars(rows){
   if(!rows.length) return '<div class="muted">Fără stoc</div>';
   var max=1; rows.forEach(function(r){ max=Math.max(max,r.units); });
