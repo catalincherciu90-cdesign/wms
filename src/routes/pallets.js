@@ -83,6 +83,7 @@ export async function receive(request, env, ctx, user) {
   if (!items.length) return error('Adaugă cel puțin un produs pe palet', 400);
   if (!(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
   const colete = Number(b.colete) > 0 ? Math.round(Number(b.colete)) : null;
+  const lot = (b.lot || '').toString().trim() || null;
   const clientId = b.client_id ? Number(b.client_id) : null;
 
   let code = (b.code || '').toString().trim();
@@ -90,8 +91,8 @@ export async function receive(request, env, ctx, user) {
   let id;
   try {
     const res = await env.DB.prepare(
-      "INSERT INTO pallets (code, client_id, location_id, status, colete, notes) VALUES (?, ?, ?, 'stored', ?, ?)"
-    ).bind(tmp, clientId, locationId, colete, b.notes || null).run();
+      "INSERT INTO pallets (code, client_id, location_id, status, colete, lot, notes) VALUES (?, ?, ?, 'stored', ?, ?, ?)"
+    ).bind(tmp, clientId, locationId, colete, lot, b.notes || null).run();
     id = res.meta.last_row_id;
   } catch (e) {
     if (String(e).includes('UNIQUE')) return error('Cod palet deja existent', 409);
@@ -101,7 +102,7 @@ export async function receive(request, env, ctx, user) {
     code = 'PAL-' + String(id).padStart(5, '0');
     await env.DB.prepare('UPDATE pallets SET code = ? WHERE id = ?').bind(code, id).run();
   }
-  const note = 'recepție palet ' + code + (colete ? (' · ' + colete + ' colete') : '');
+  const note = 'recepție palet ' + code + (colete ? (' · ' + colete + ' colete') : '') + (lot ? (' · lot ' + lot) : '');
   const stmts = [];
   for (const it of items) {
     const pid = Number(it.product_id), q = Number(it.quantity);

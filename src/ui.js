@@ -2063,7 +2063,8 @@ window.palletReceiveUI = function(){
     + '<div class="row"><div style="flex:1"><label>Client (opțional)</label><select id="pal_client"><option value="">— intern (al companiei) —</option></select></div>'
     + '<div style="flex:1"><label>Locație *</label><select id="pal_loc"></select></div></div>'
     + '<div class="row"><div style="flex:1"><label>Nr. colete pe palet</label><input id="pal_colete" type="number" min="0" placeholder="ex: 24"></div>'
-    + '<div style="flex:1"><label>Cod palet (opțional)</label><input id="pal_code" placeholder="auto: PAL-xxxxx"></div></div>'
+    + '<div style="flex:1"><label>Nr. lot</label><input id="pal_lot" placeholder="ex: LOT-2026-014"></div></div>'
+    + '<div class="row"><div style="flex:1"><label>Cod palet (opțional)</label><input id="pal_code" placeholder="auto: PAL-xxxxx"></div><div style="flex:1"></div></div>'
     + '<h2 style="font-size:14px;margin:16px 0 6px">Produse pe palet</h2>'
     + '<div class="row" style="align-items:flex-end"><div style="flex:2"><label>Produs</label><select id="pal_prod"></select></div>'
     + '<div style="width:110px"><label>Cantitate</label><input id="pal_qty" type="number" min="1" value="1"></div>'
@@ -2100,6 +2101,7 @@ window.palReceiveSubmit = function(){
   var body={ location_id:loc,
     client_id: el("pal_client")&&el("pal_client").value?Number(el("pal_client").value):null,
     colete: el("pal_colete")&&el("pal_colete").value?Number(el("pal_colete").value):null,
+    lot: el("pal_lot")&&el("pal_lot").value.trim()?el("pal_lot").value.trim():null,
     code: el("pal_code")&&el("pal_code").value.trim()?el("pal_code").value.trim():null,
     items:_palRec.lines.map(function(l){return {product_id:l.product_id, quantity:l.quantity};}) };
   api("POST","/api/pallets/receive",body).then(function(r){
@@ -2119,6 +2121,7 @@ window.printPalletLabel = function(pallet, items){
       +(pallet.client_name?('Client: <b>'+esc(pallet.client_name)+'</b><br>'):'')
       +(pallet.location_code?('Locație: <b>'+esc(pallet.location_code)+'</b><br>'):'')
       +(pallet.colete?('Nr. colete: <b>'+esc(pallet.colete)+'</b><br>'):'')
+      +(pallet.lot?('Lot: <b>'+esc(pallet.lot)+'</b><br>'):'')
       +'Data: '+esc(new Date().toLocaleString())+'</div>'
     +'<table><thead><tr><td><b>Produs</b></td><td style="text-align:right"><b>Cant.</b></td></tr></thead><tbody>'+(rows||'<tr><td colspan=2>—</td></tr>')+'</tbody></table>'
     +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt></body></html>';
@@ -2138,7 +2141,7 @@ window.palletDetail = function(id){
     }
     window._pdData = { pallet:p, items:d.items };
     modal("Palet "+esc(p.code)+(p.location_code?(" · "+esc(p.location_code)):" · neplasat"),
-      '<div class="muted" style="margin-bottom:10px">Client: <b>'+esc(p.client_name||"—")+'</b> · status: '+esc(p.status)+(p.colete?(' · '+esc(p.colete)+' colete'):'')+'</div>'
+      '<div class="muted" style="margin-bottom:10px">Client: <b>'+esc(p.client_name||"—")+'</b> · status: '+esc(p.status)+(p.colete?(' · '+esc(p.colete)+' colete'):'')+(p.lot?(' · lot '+esc(p.lot)):'')+'</div>'
       +'<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="printPalletLabel(_pdData.pallet,_pdData.items)">🏷️ Printează eticheta</button></div>'
       +items+actions, null);
     var sv=el("modalSave"); if(sv) sv.style.display="none";
