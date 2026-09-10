@@ -1398,7 +1398,8 @@ window.loadStockData = function(){
 };
 
 function opForm(title, type){
-  var avizBtn = type==="receive" ? '<button class="ghost" onclick="palletReceiveUI(\\'palet\\')">📦 Recepție palet</button> <button class="ghost" onclick="palletReceiveUI(\\'colet\\')">📥 Recepție colet</button> <button class="ghost" onclick="xlsInUI()">📊 Recepție Excel</button> <button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>' : '';
+  var avizBtn = type==="receive" ? '<button class="ghost" onclick="palletReceiveUI(\\'palet\\')">📦 Recepție palet</button> <button class="ghost" onclick="palletReceiveUI(\\'colet\\')">📥 Recepție colet</button> <button class="ghost" onclick="xlsInUI()">📊 Recepție Excel</button> <button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>'
+    : (type==="ship" ? '<button class="ghost" onclick="palletShipUI()">📦 Expediere palet/colet</button>' : '');
   setMain(topbar(title, avizBtn) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
     + '<div class="field"><label>⌗ Scanează cod de bare / SKU</label><div class="row"><input id="op_scan" style="flex:1" placeholder="Scanează sau tastează, apoi Enter" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();opScan();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'op_scan\\').value=t;opScan();})">📷</button></div>'+fhint("Scanează codul (laser sau 📷), apoi Enter — găsește produsul automat.")+'</div>'
@@ -2168,6 +2169,43 @@ window.viewAviz = function(id){
     .then(function(r){ if(!r.ok) throw new Error("Nu am putut încărca avizul"); return r.blob(); })
     .then(function(b){ var u=URL.createObjectURL(b); window.open(u,"_blank"); setTimeout(function(){URL.revokeObjectURL(u);},60000); })
     .catch(function(e){ toast(e.message,"bad"); });
+};
+/* ---- Expediere pe palet / colet (scanezi codul, vezi info, expediezi) ---- */
+window.palletShipUI = function(){
+  setMain(topbar("Expediere palet/colet", '<button class="ghost" onclick="go(\\'ship\\')">← Expediere</button>')
+    + '<div class="card" style="padding:16px;max-width:660px">'
+    + '<div class="field"><label>Scanează / scrie codul paletului sau coletului</label><div class="row"><input id="ps_code" style="flex:1" placeholder="ex: PAL-00001 / COL-00001" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();palShipFind();}"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'ps_code\\').value=t;palShipFind();})">📷</button><button onclick="palShipFind()">Caută</button></div></div>'
+    + '<div id="ps_res"></div></div>');
+  setTimeout(function(){ if(el("ps_code")) el("ps_code").focus(); }, 60);
+};
+window.palShipFind = function(){
+  var code=(el("ps_code")?el("ps_code").value:"").trim();
+  if(!code){ toast("Scanează un cod","bad"); return; }
+  api("GET","/api/pallets?code="+encodeURIComponent(code)).then(function(d){
+    var p=(d.pallets||[])[0];
+    if(!p){ if(el("ps_res")) el("ps_res").innerHTML='<div class="card center muted" style="margin-top:12px">Niciun palet/colet activ cu codul <b>'+esc(code)+'</b>. (Poate e deja expediat.)</div>'; return; }
+    return api("GET","/api/pallets/"+p.id).then(function(dd){ palShipRender(dd.pallet, dd.items); });
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+function palShipRender(p, items){
+  var rows=(items||[]).map(function(it){ return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td></tr>'; }).join("");
+  var meta='<div class="muted" style="font-size:13px;line-height:1.7;margin-top:4px">'
+    +'Tip: <b>'+(p.kind==="colet"?"Colet":"Palet")+'</b> · Client: <b>'+esc(p.client_name||"—")+'</b> · Locație: <b>'+esc(p.location_code||"—")+'</b><br>'
+    +(p.colete?('Nr. colete: <b>'+esc(p.colete)+'</b> · '):'')+(p.lot?('Lot: <b>'+esc(p.lot)+'</b> · '):'')
+    +(p.aviz?('Aviz: <b>'+esc(p.aviz)+'</b> · '):'')+(p.received_at?('Recepționat: <b>'+esc(p.received_at)+'</b>'):'')+'</div>';
+  var shipped = p.status==="shipped";
+  if(el("ps_res")) el("ps_res").innerHTML='<div class="card" style="margin-top:12px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">'+esc(p.code)+'</h2>'+(shipped?'<span class="pill mut">expediat</span>':'<span class="pill good">'+esc(p.status)+'</span>')+'</div>'
+    + meta
+    + '<table style="margin-top:10px"><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=3 class="muted center">Fără produse</td></tr>')+'</tbody></table>'
+    + (p.has_aviz?'<div style="margin-top:8px"><button class="ghost sm" onclick="viewAviz('+p.id+')">📄 Vezi avizul scanat</button></div>':'')
+    + (shipped?'':'<button class="big" style="margin-top:14px;background:var(--bad)" onclick="palShipConfirm('+p.id+',\\''+esc(p.code)+'\\','+(p.kind==="colet"?1:0)+')">📤 Expediază '+(p.kind==="colet"?"coletul":"paletul")+'</button>')
+    + '</div>';
+}
+window.palShipConfirm = function(id, code, isColet){
+  modal("Expediază "+esc(code),
+    '<p>Confirmi expedierea? Se scade <b>tot stocul</b> de pe '+(isColet?"colet":"palet")+' din locație (mișcări outbound), iar unitatea devine «expediată».</p>',
+    function(){ api("POST","/api/pallets/"+id+"/ship").then(function(r){ closeModal(); toast("Expediat: "+r.code); palletShipUI(); }).catch(function(e){ toast(e.message,"bad"); }); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, expediază"; sv.className="danger"; }
 };
 window.palletDetail = function(id){
   api("GET","/api/pallets/"+id).then(function(d){

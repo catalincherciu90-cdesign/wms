@@ -14,9 +14,11 @@ export async function list(request, env) {
     LEFT JOIN clients c ON c.id = pa.client_id
     LEFT JOIN locations l ON l.id = pa.location_id
     WHERE pa.status <> 'shipped'`;
+  const code = url.searchParams.get('code');
   const binds = [];
   if (clientId) { sql += ' AND pa.client_id = ?'; binds.push(Number(clientId)); }
   if (locationId) { sql += ' AND pa.location_id = ?'; binds.push(Number(locationId)); }
+  if (code) { sql += ' AND pa.code = ?'; binds.push(String(code).trim()); }
   sql += ' ORDER BY pa.code';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return json({ pallets: results });
@@ -137,6 +139,39 @@ export async function receive(request, env, ctx, user) {
     'SELECT pi.quantity, pr.sku, pr.name AS product_name, pr.unit FROM pallet_items pi JOIN products pr ON pr.id=pi.product_id WHERE pi.pallet_id=?'
   ).bind(id).all();
   return json({ ok: true, pallet, items: itemsOut });
+}
+
+// Expediere pe palet/colet: scade tot stocul de pe unitate din locație (outbound)
+// și marchează unitatea ca „shipped" (eliberează spațiul).
+export async function ship(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const pallet = await env.DB.prepare('SELECT * FROM pallets WHERE id = ?').bind(id).first();
+  if (!pallet) return error('Palet/colet inexistent', 404);
+  if (pallet.status === 'shipped') return error('Deja expediat', 400);
+  const locationId = pallet.location_id;
+  const { results: items } = await env.DB.prepare('SELECT product_id, quantity FROM pallet_items WHERE pallet_id = ?').bind(id).all();
+
+  if (locationId && items.length) {
+    for (const it of items) {
+      const inv = await env.DB.prepare('SELECT quantity FROM inventory WHERE product_id=? AND location_id=?').bind(it.product_id, locationId).first();
+      const avail = inv?.quantity || 0;
+      if (avail < it.quantity) {
+        const pr = await env.DB.prepare('SELECT sku FROM products WHERE id=?').bind(it.product_id).first();
+        return error('Stoc insuficient pentru ' + (pr?.sku || ('#' + it.product_id)) + ' în locație (disponibil: ' + avail + ', necesar: ' + it.quantity + ')', 400);
+      }
+    }
+  }
+  const note = 'expediere ' + (pallet.kind || 'palet') + ' ' + pallet.code;
+  const stmts = [];
+  if (locationId) {
+    for (const it of items) {
+      stmts.push(env.DB.prepare("INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')").bind(it.product_id, locationId, -it.quantity));
+      stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'outbound', ?, ?, ?, ?)").bind(it.product_id, locationId, -it.quantity, pallet.code, note, user.sub));
+    }
+  }
+  stmts.push(env.DB.prepare("UPDATE pallets SET status='shipped', location_id=NULL WHERE id=?").bind(id));
+  await env.DB.batch(stmts);
+  return json({ ok: true, code: pallet.code, kind: pallet.kind || 'palet' });
 }
 
 // Descarcă avizul scanat atașat unei unități (palet/colet).

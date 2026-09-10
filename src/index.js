@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v61';
+const APP_VERSION = 'v62';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -134,6 +134,7 @@ const routes = [
   ['POST', '/api/pallets', pallets.create, 'operator'],
   ['POST', '/api/pallets/receive', pallets.receive, 'operator'],
   ['GET', '/api/pallets/:id/aviz', pallets.avizFile, 'viewer'],
+  ['POST', '/api/pallets/:id/ship', pallets.ship, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
   ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
   ['DELETE', '/api/pallets/:id/items/:itemId', pallets.removeItem, 'operator'],
