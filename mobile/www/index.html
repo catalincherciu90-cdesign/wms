@@ -234,6 +234,7 @@ function renderHome(){
     +tile("orders","📋","Comenzi<br>de pregătit")
     +tile("lookup","🔎","Scanează<br>& caută")
     +tile("receive","📥","Recepție")
+    +tile("pallet","📦","Recepție<br>palet/colet")
     +tile("ship","📤","Expediere")
     +tile("transfer","🔄","Transfer")
     +tile("stock","✏️","Actualizare<br>stoc")
@@ -244,7 +245,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -343,6 +344,83 @@ function mvSubmit(){
     screenMove(mv.kind); // reset pentru următorul scan
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Recepție palet / colet (scanezi produsele + poză aviz) ---- */
+function screenPallet(){
+  if(!window._plt) window._plt={kind:"palet", lines:[], aviz:null};
+  var today=new Date().toISOString().slice(0,10);
+  scanTarget=function(code){ pltScan(code); };
+  shell("Recepție palet/colet",
+    '<div class="row" style="gap:8px;margin-bottom:8px"><button id="pl_kp" onclick="pltSetKind(\'palet\')" style="flex:1">📦 Palet</button><button id="pl_kc" class="ghost" onclick="pltSetKind(\'colet\')" style="flex:1">📥 Colet</button></div>'
+    +'<div class="scanbox"><input id="pl_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsele (fără Enter)"></div>'
+    +'<button class="cam" onclick="openCam(function(c){pltScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="pl_list" style="margin:10px 0"></div>'
+    +'<label>Locație</label><select id="pl_loc">'+locOptions()+'</select>'
+    +'<label>Nr. colete (doar palet)</label><input id="pl_colete" type="number" inputmode="numeric" min="0" placeholder="ex: 24">'
+    +'<label>Nr. lot</label><input id="pl_lot" placeholder="ex: LOT-2026-014">'
+    +'<label>Nr. aviz</label><input id="pl_aviz" inputmode="numeric" placeholder="ex: 12345">'
+    +'<label>Data recepției</label><input id="pl_recv" type="date" value="'+today+'">'
+    +'<label>Aviz scanat (poză)</label><input id="pl_photo" type="file" accept="image/*" capture="environment" onchange="pltPhoto(this)"><div id="pl_photo_info" class="muted" style="font-size:12px;margin-top:4px"></div>'
+    +'<button class="big" style="margin-top:14px" onclick="pltFinish()">Finalizează recepția</button>'
+  , {back:"renderHome()"});
+  wireScan("pl_scan", pltScan);
+  pltSetKind(_plt.kind); pltRenderList(); pltPhotoInfo();
+}
+window.pltSetKind=function(k){ _plt.kind=k; var pb=el("pl_kp"), cb=el("pl_kc"); if(pb) pb.className=(k==="palet"?"":"ghost"); if(cb) cb.className=(k==="colet"?"":"ghost"); };
+function pltScan(code){
+  code=(code||"").trim(); if(!code||!window._plt) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ feedback(false); toast("Produs negăsit: "+code,true); return; }
+    feedback(true);
+    var ex=_plt.lines.find(function(l){ return l.product_id===p.id; });
+    if(ex) ex.qty++; else _plt.lines.push({product_id:p.id, name:p.name, code:(p.barcode||p.sku||""), qty:1});
+    toast(p.name+" +1"); pltRenderList();
+  }).catch(function(e){ toast(e.message,true); });
+}
+function pltRenderList(){
+  var h=el("pl_list"); if(!h) return;
+  if(!_plt.lines.length){ h.innerHTML='<div class="muted center" style="padding:8px;font-size:13px">Scanează produsele care intră pe palet/colet.</div>'; return; }
+  h.innerHTML=_plt.lines.map(function(l,idx){
+    return '<div class="card" style="margin-bottom:6px"><div class="row" style="justify-content:space-between;align-items:center">'
+      +'<div style="flex:1"><b>'+esc(l.name)+'</b><div class="muted" style="font-size:11.5px">'+esc(l.code)+'</div></div>'
+      +'<div class="row" style="align-items:center;gap:6px"><button onclick="pltQty('+idx+',-1)" style="padding:4px 12px">−</button><b style="min-width:28px;text-align:center;font-size:17px">'+l.qty+'</b><button onclick="pltQty('+idx+',1)" style="padding:4px 12px">+</button><button onclick="pltDel('+idx+')" style="padding:4px 9px;background:#7f1d1d">✕</button></div>'
+      +'</div></div>';
+  }).join("");
+}
+window.pltQty=function(i,d){ if(_plt.lines[i]){ _plt.lines[i].qty=Math.max(1,_plt.lines[i].qty+d); pltRenderList(); } };
+window.pltDel=function(i){ _plt.lines.splice(i,1); pltRenderList(); };
+function pltPhotoInfo(){ var h=el("pl_photo_info"); if(h) h.textContent=(_plt.aviz?("Poză atașată ("+Math.round(_plt.aviz.data.length/1024)+" KB)"):""); }
+window.pltPhoto=function(inp){
+  var f=inp.files&&inp.files[0]; if(!f){ _plt.aviz=null; pltPhotoInfo(); return; }
+  var img=new Image(), url=URL.createObjectURL(f);
+  img.onload=function(){
+    var max=1400, sc=Math.min(1,max/Math.max(img.width,img.height));
+    var cw=Math.round(img.width*sc), ch=Math.round(img.height*sc);
+    var c=document.createElement("canvas"); c.width=cw; c.height=ch;
+    c.getContext("2d").drawImage(img,0,0,cw,ch);
+    _plt.aviz={ name:"aviz.jpg", mime:"image/jpeg", data:c.toDataURL("image/jpeg",0.7) };
+    URL.revokeObjectURL(url); pltPhotoInfo();
+  };
+  img.onerror=function(){ URL.revokeObjectURL(url); toast("Nu am putut citi poza",true); };
+  img.src=url;
+};
+window.pltFinish=function(){
+  if(!window._plt) return;
+  var loc=el("pl_loc")?Number(el("pl_loc").value):0;
+  if(!loc){ toast("Alege locația",true); return; }
+  if(!_plt.lines.length){ toast("Scanează cel puțin un produs",true); return; }
+  var body={ kind:_plt.kind, location_id:loc,
+    colete: el("pl_colete")&&el("pl_colete").value?Number(el("pl_colete").value):null,
+    lot: el("pl_lot")&&el("pl_lot").value.trim()?el("pl_lot").value.trim():null,
+    aviz: el("pl_aviz")&&el("pl_aviz").value.trim()?el("pl_aviz").value.trim():null,
+    received_at: el("pl_recv")&&el("pl_recv").value?el("pl_recv").value:null,
+    aviz_file: _plt.aviz||null,
+    items:_plt.lines.map(function(l){ return {product_id:l.product_id, quantity:l.qty}; }) };
+  api("POST","/api/pallets/receive",body).then(function(r){
+    feedback(true); toast((_plt.kind==="colet"?"Colet":"Palet")+" recepționat: "+r.pallet.code);
+    window._plt=null; screenPallet();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Transfer ---- */
 function screenTransfer(){
