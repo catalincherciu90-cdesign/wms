@@ -13,16 +13,19 @@ export async function stock(request, env) {
     JOIN products p  ON p.id = i.product_id
     JOIN locations l ON l.id = i.location_id
     WHERE i.quantity <> 0`;
+  const clientId = url.searchParams.get('client_id');
   const binds = [];
   if (productId) { sql += ' AND p.id = ?'; binds.push(Number(productId)); }
+  if (clientId) { sql += ' AND p.client_id = ?'; binds.push(Number(clientId)); }
   sql += ' ORDER BY p.name, l.code';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return json({ stock: results });
 }
 
-// Stoc total per produs (pentru dashboard / listă)
+// Stoc total per produs (pentru dashboard / listă). Opțional filtrat pe client.
 export async function summary(request, env) {
-  const { results } = await env.DB.prepare(`
+  const clientId = new URL(request.url).searchParams.get('client_id');
+  let sql = `
     SELECT p.id AS product_id, p.sku, p.name, p.unit, p.reorder_point,
            COALESCE(SUM(i.quantity), 0) AS total,
            (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id = ol.order_id
@@ -30,9 +33,11 @@ export async function summary(request, env) {
            CASE WHEN COALESCE(SUM(i.quantity),0) <= p.reorder_point THEN 1 ELSE 0 END AS low
     FROM products p
     LEFT JOIN inventory i ON i.product_id = p.id
-    WHERE p.active = 1
-    GROUP BY p.id
-    ORDER BY p.name`).all();
+    WHERE p.active = 1`;
+  const binds = [];
+  if (clientId) { sql += ' AND p.client_id = ?'; binds.push(Number(clientId)); }
+  sql += ' GROUP BY p.id ORDER BY p.name';
+  const { results } = await env.DB.prepare(sql).bind(...binds).all();
   for (const r of results) r.available = (r.total || 0) - (r.reserved || 0);
   return json({ summary: results });
 }

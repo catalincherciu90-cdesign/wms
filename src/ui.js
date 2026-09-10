@@ -1355,18 +1355,30 @@ window.resetStockConfirm = function(){
 VIEWS.stock = function(){
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/inventory/export\\',\\'stoc.csv\\')">Export CSV</button>'
     + (can("admin")?' <button class="danger" onclick="resetStockConfirm()">⚠ Resetează stoc la 0</button>':'');
-  setMain(topbar("Stoc", exp)
-    + '<h2 style="margin-top:6px">Ocupare rafturi</h2><div class="card" id="occ" style="margin-bottom:18px;padding:8px 4px">…</div>'
-    + '<h2>Total per produs</h2><div class="card" id="sumtbl" style="margin-bottom:18px">…</div><h2>Detaliu pe locație</h2><div class="card" id="stbl">…</div>');
+  var filter = '<div class="toolbar"><label style="margin:0">Client:</label><select id="stk_client" onchange="loadStockData()" style="max-width:280px"><option value="">Toți (tot depozitul)</option></select> <span id="stk_hint" class="muted" style="font-size:12.5px"></span></div>';
+  setMain(topbar("Stoc", exp) + filter
+    + '<div id="occwrap"><h2 style="margin-top:6px">Ocupare rafturi</h2><div class="card" id="occ" style="margin-bottom:18px;padding:8px 4px">…</div></div>'
+    + '<h2 id="sumttl">Total per produs</h2><div class="card" id="sumtbl" style="margin-bottom:18px">…</div><h2>Detaliu pe locație</h2><div class="card" id="stbl">…</div>');
+  api("GET","/api/clients").then(function(d){
+    var sel=el("stk_client"); if(sel) sel.innerHTML='<option value="">Toți (tot depozitul)</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");
+  }).catch(function(){});
   api("GET","/api/locations").then(function(d){
     var locs=d.locations.filter(function(l){return l.active;});
     var rows=locs.map(function(l){
       return '<tr><td style="padding-left:14px"><b>'+esc(l.code)+'</b> <span class="muted">'+esc(l.zone||"")+'</span></td><td style="width:200px">'+fillBar(l.used,l.capacity)+'</td></tr>';
     }).join("");
-    el("occ").innerHTML=rows?('<table><tbody>'+rows+'</tbody></table>'):'<div class="muted center" style="padding:10px">Nicio locație</div>';
+    if(el("occ")) el("occ").innerHTML=rows?('<table><tbody>'+rows+'</tbody></table>'):'<div class="muted center" style="padding:10px">Nicio locație</div>';
   });
-  api("GET","/api/inventory/summary").then(function(d){
-    var rows=d.summary.map(function(s){
+  loadStockData();
+};
+window.loadStockData = function(){
+  var cid = el("stk_client") ? el("stk_client").value : "";
+  var q = cid ? ("?client_id="+encodeURIComponent(cid)) : "";
+  var ow=el("occwrap"); if(ow) ow.style.display = cid ? "none" : "";
+  var ttl=el("sumttl"); if(ttl) ttl.textContent = cid ? "Total per produs (client selectat)" : "Total per produs";
+  var hint=el("stk_hint"); if(hint) hint.textContent = cid ? "Se afișează doar stocul clientului ales." : "";
+  api("GET","/api/inventory/summary"+q).then(function(d){
+    var rows=(d.summary||[]).map(function(s){
       var resv=Number(s.reserved||0), avail=Number(s.available!=null?s.available:(s.total-resv));
       var resvCell = resv>0 ? '<span class="pill warn">'+resv+'</span>' : '<span class="muted">0</span>';
       return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.name)+'</td>'
@@ -1375,13 +1387,13 @@ VIEWS.stock = function(){
         +'<td class="right"><b>'+avail+'</b></td>'
         +'<td>'+(s.low?'<span class="pill bad">sub prag</span>':(avail<=0&&s.total>0?'<span class="pill warn">tot rezervat</span>':'<span class="pill good">ok</span>'))+'</td></tr>';
     }).join("");
-    el("sumtbl").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">În stoc</th><th class="right">Rezervat</th><th class="right">Disponibil</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Fără stoc</td></tr>')+'</tbody></table>';
+    if(el("sumtbl")) el("sumtbl").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">În stoc</th><th class="right">Rezervat</th><th class="right">Disponibil</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Fără stoc</td></tr>')+'</tbody></table>';
   });
-  api("GET","/api/inventory/stock").then(function(d){
-    var rows=d.stock.map(function(s){
+  api("GET","/api/inventory/stock"+q).then(function(d){
+    var rows=(d.stock||[]).map(function(s){
       return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.product_name)+'</td><td>'+esc(s.location_code)+'</td><td class="right">'+esc(s.quantity)+'</td><td class="muted">'+esc(s.updated_at)+'</td></tr>';
     }).join("");
-    el("stbl").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th><th>Actualizat</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Fără stoc</td></tr>')+'</tbody></table>';
+    if(el("stbl")) el("stbl").innerHTML='<table><thead><tr><th>SKU</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th><th>Actualizat</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Fără stoc</td></tr>')+'</tbody></table>';
   });
 };
 
