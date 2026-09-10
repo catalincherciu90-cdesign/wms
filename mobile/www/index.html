@@ -237,6 +237,7 @@ function renderHome(){
     +tile("pallet","📦","Recepție<br>palet/colet")
     +tile("ship","📤","Expediere")
     +tile("palletship","🚚","Expediere<br>palet/colet")
+    +tile("spargere","✂️","Spargere<br>palet")
     +tile("transfer","🔄","Transfer")
     +tile("stock","✏️","Actualizare<br>stoc")
     +tile("inventory","🧮","Inventar")
@@ -246,7 +247,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -486,6 +487,53 @@ window.pspShip=function(){
   (_psp.items||[]).forEach(function(it,idx){ var v=el("pspq_"+idx); var q=v?Math.max(0,Math.round(Number(v.value)||0)):0; q=Math.min(q, Number(it.quantity)); if(q>0){ items.push({product_id:it.product_id, quantity:q}); total+=q; } });
   if(!total){ toast("Pune cantități > 0",true); return; }
   api("POST","/api/pallets/"+_psp.id+"/ship",{items:items}).then(function(r){ feedback(true); toast("Expediat: "+r.code+(r.partial?(" · rest "+r.remaining):"")); screenPalletShip(); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
+
+/* ---- Spargere / mutare marfă de pe un palet pe altul ---- */
+function screenSplit(){
+  window._sp=null;
+  scanTarget=function(code){ spSrcFind(code); };
+  shell("Spargere / mutare palet",
+    '<div class="scanbox"><input id="sp_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează paletul SURSĂ"></div>'
+    +'<button class="cam" onclick="openCam(function(c){spSrcFind(c)})">📷 Scanează cu camera</button>'
+    +'<div id="sp_res"></div>', {back:"renderHome()"});
+  wireScan("sp_scan", spSrcFind);
+}
+function spSrcFind(code){
+  code=(code||"").trim(); if(!code) return;
+  api("GET","/api/pallets?code="+encodeURIComponent(code)).then(function(d){
+    var p=(d.pallets||[])[0];
+    if(!p){ feedback(false); if(el("sp_res")) el("sp_res").innerHTML='<div class="card center muted">Niciun palet activ: '+esc(code)+'</div>'; return; }
+    feedback(true);
+    return api("GET","/api/pallets/"+p.id).then(function(dd){ spRender(dd.pallet, dd.items); });
+  }).catch(function(e){ toast(e.message,true); });
+}
+function spRender(p, items){
+  window._sp={ id:p.id, code:p.code, items:(items||[]) };
+  scanTarget=function(code){ spDestScan(code); }; // după ce ai sursa, scanezi destinația
+  var rows=(items||[]).map(function(it,idx){
+    return '<div class="card" style="margin-bottom:6px"><div class="row" style="justify-content:space-between;align-items:center"><span style="flex:1">'+esc(it.product_name)+' <span class="muted" style="font-size:11px">(din '+esc(it.quantity)+')</span></span><input id="spm_'+idx+'" type="number" inputmode="numeric" min="0" max="'+it.quantity+'" value="0" style="width:72px"></div></div>';
+  }).join("");
+  el("sp_res").innerHTML='<div class="card" style="margin-top:10px"><b>Sursă: '+esc(p.code)+'</b> <span class="muted" style="font-size:12px">('+(p.kind==="colet"?"colet":"palet")+' · loc '+esc(p.location_code||"—")+')</span></div>'
+    +'<div style="font-size:13px;margin:8px 0 4px">Cât muți din fiecare:</div>'
+    +(rows||'<div class="muted">Fără produse</div>')
+    +'<div class="card"><label style="display:block;margin-bottom:6px"><input type="checkbox" id="sp_isnew" onchange="spToggleNew()" style="width:auto"> Palet nou (altfel scanează unul existent)</label>'
+    +'<div id="sp_exist"><label>Palet destinație</label><div class="scanbox"><input id="sp_to" inputmode="none" autocomplete="off" placeholder="Scanează paletul destinație"></div><button class="cam" onclick="openCam(function(c){el(\'sp_to\').value=c})">📷 Scanează destinația</button></div>'
+    +'<div id="sp_new" style="display:none"><label>Tip</label><select id="sp_kind"><option value="palet">Palet</option><option value="colet">Colet</option><option value="ambalaje">Palet ambalaje</option></select><label>Locație</label><select id="sp_loc">'+locOptions()+'</select></div>'
+    +'</div>'
+    +'<button class="big" onclick="spSubmit()">Execută spargerea</button>';
+}
+function spDestScan(code){ if(el("sp_isnew")&&el("sp_isnew").checked) return; if(el("sp_to")){ el("sp_to").value=(code||"").trim(); feedback(true); } }
+window.spToggleNew=function(){ var isnew=el("sp_isnew")&&el("sp_isnew").checked; if(el("sp_exist")) el("sp_exist").style.display=isnew?"none":""; if(el("sp_new")) el("sp_new").style.display=isnew?"":"none"; };
+window.spSubmit=function(){
+  var s=window._sp; if(!s) return;
+  var items=[]; s.items.forEach(function(it,idx){ var v=el("spm_"+idx); var q=v?Math.max(0,Math.round(Number(v.value)||0)):0; q=Math.min(q,Number(it.quantity)); if(q>0) items.push({product_id:it.product_id, quantity:q}); });
+  if(!items.length){ toast("Pune cantități de mutat",true); return; }
+  var body={ items:items };
+  var isnew=el("sp_isnew")&&el("sp_isnew").checked;
+  if(isnew){ body.new_kind=el("sp_kind")?el("sp_kind").value:"palet"; body.new_location_id=(el("sp_loc")&&el("sp_loc").value)?Number(el("sp_loc").value):null; }
+  else { var toc=el("sp_to")&&el("sp_to").value.trim(); if(!toc){ toast("Scanează paletul destinație",true); return; } body.to_code=toc; }
+  api("POST","/api/pallets/"+s.id+"/split",body).then(function(r){ feedback(true); toast("Mutat din "+r.source+" în "+r.dest); screenSplit(); }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
 
 /* ---- Transfer ---- */
