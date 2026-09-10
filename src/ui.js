@@ -1398,7 +1398,7 @@ window.loadStockData = function(){
 };
 
 function opForm(title, type){
-  var avizBtn = type==="receive" ? '<button class="ghost" onclick="palletReceiveUI(\\'palet\\')">📦 Recepție palet</button> <button class="ghost" onclick="palletReceiveUI(\\'colet\\')">📥 Recepție colet</button> <button class="ghost" onclick="xlsInUI()">📊 Recepție Excel</button> <button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>'
+  var avizBtn = type==="receive" ? '<button class="ghost" onclick="palletReceiveUI(\\'palet\\')">📦 Recepție palet</button> <button class="ghost" onclick="palletReceiveUI(\\'colet\\')">📥 Recepție colet</button> <button class="ghost" onclick="palletReceiveUI(\\'ambalaje\\')">🎁 Palet ambalaje</button> <button class="ghost" onclick="xlsInUI()">📊 Recepție Excel</button> <button class="ghost" onclick="avizUI()">📄 Aviz PDF</button>'
     : (type==="ship" ? '<button class="ghost" onclick="palletShipUI()">📦 Expediere palet/colet</button>' : '');
   setMain(topbar(title, avizBtn) + '<div class="card" style="padding:20px;max-width:520px">'
     + '<div id="opmsg"></div>'
@@ -2055,32 +2055,35 @@ window.palSubmit = function(){
   if(!body.code){ el("plmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">Codul paletului e obligatoriu</div>'; return; }
   api("POST","/api/pallets",body).then(function(){ toast("Palet creat"); go("pallets"); }).catch(function(e){ el("plmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
 };
-/* ---- Recepție pe palet / colet (creează unitatea + produse + stoc + aviz + etichetă) ---- */
+/* ---- Recepție pe palet / colet / palet ambalaje (creează unitatea + produse + stoc + aviz + etichetă) ---- */
+function palKind(k){ return k==="colet"?"Colet":(k==="ambalaje"?"Palet ambalaje":"Palet"); }
 var _palRec = { lines: [], products: [], kind: "palet", avizFile: null };
 window.palletReceiveUI = function(kind){
-  kind = kind==="colet" ? "colet" : "palet";
+  kind = (kind==="colet"||kind==="ambalaje") ? kind : "palet";
   _palRec = { lines: [], products: [], kind: kind, avizFile: null };
-  var isPal = kind==="palet";
+  var isColet = kind==="colet", isPal = !isColet;
+  var kindLbl = palKind(kind), kindLc = kindLbl.toLowerCase();
+  var pref = kind==="colet"?"COL":(kind==="ambalaje"?"AMB":"PAL");
   var today = new Date().toISOString().slice(0,10);
   var coleteField = isPal
     ? '<div style="flex:1"><label>Nr. colete pe palet</label><input id="pal_colete" type="number" min="0" placeholder="ex: 24"></div>'
     : '';
-  setMain(topbar("Recepție "+kind, '<button class="ghost" onclick="go(\\'receive\\')">← Recepție</button>')
+  setMain(topbar("Recepție "+kindLc, '<button class="ghost" onclick="go(\\'receive\\')">← Recepție</button>')
     + '<div class="card" style="padding:20px;max-width:660px"><div id="palmsg"></div>'
     + '<div class="row"><div style="flex:1"><label>Client (opțional)</label><select id="pal_client"><option value="">— intern (al companiei) —</option></select></div>'
     + '<div style="flex:1"><label>Locație *</label><select id="pal_loc"></select></div></div>'
     + '<div class="row">'+coleteField+'<div style="flex:1"><label>Nr. lot</label><input id="pal_lot" placeholder="ex: LOT-2026-014"></div></div>'
     + '<div class="row"><div style="flex:1"><label>Nr. aviz</label><input id="pal_aviz" placeholder="ex: 12345"></div>'
     + '<div style="flex:1"><label>Data recepției (de pe aviz)</label><input id="pal_recv" type="date" value="'+today+'"></div></div>'
-    + '<div class="row"><div style="flex:1"><label>Cod '+kind+' (opțional)</label><input id="pal_code" placeholder="auto: '+(isPal?'PAL':'COL')+'-xxxxx"></div>'
+    + '<div class="row"><div style="flex:1"><label>Cod '+kindLc+' (opțional)</label><input id="pal_code" placeholder="auto: '+pref+'-xxxxx"></div>'
     + '<div style="flex:1"><label>Aviz scanat (poză/PDF)</label><input id="pal_avizfile" type="file" accept="image/*,application/pdf" onchange="palReadAviz(this)"><div id="pal_aviz_info" class="muted" style="font-size:11.5px;margin-top:3px"></div></div></div>'
-    + '<h2 style="font-size:14px;margin:16px 0 6px">Produse '+(isPal?'pe palet':'în colet')+'</h2>'
+    + '<h2 style="font-size:14px;margin:16px 0 6px">Produse '+(isColet?'în colet':'pe palet')+'</h2>'
     + '<div class="row" style="align-items:flex-end;flex-wrap:wrap"><div style="flex:2;min-width:150px"><label>Produs</label><select id="pal_prod"></select></div>'
     + '<div style="width:90px"><label>Nr. cutii</label><input id="pal_boxes" type="number" min="1" value="1"></div>'
     + '<div style="width:90px"><label>Buc/cutie</label><input id="pal_perbox" type="number" min="1" value="1"></div>'
     + '<button class="sm" onclick="palrAddLine()">Adaugă</button></div>'
     + '<div id="pal_lines" style="margin-top:10px"></div>'
-    + '<button class="big" style="margin-top:16px" onclick="palReceiveSubmit()">Recepționează '+(isPal?'paletul':'coletul')+'</button></div>');
+    + '<button class="big" style="margin-top:16px" onclick="palReceiveSubmit()">Recepționează '+kindLc+'</button></div>');
   api("GET","/api/clients").then(function(d){ var s=el("pal_client"); if(s) s.innerHTML='<option value="">— intern (al companiei) —</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""); }).catch(function(){});
   api("GET","/api/locations").then(function(d){ var s=el("pal_loc"); if(s) s.innerHTML=(d.locations||[]).filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join(""); }).catch(function(){});
   api("GET","/api/products").then(function(d){ _palRec.products=d.products||[]; var s=el("pal_prod"); if(s) s.innerHTML=_palRec.products.map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+' ('+esc(p.barcode||p.sku)+')</option>';}).join(""); }).catch(function(){});
@@ -2146,7 +2149,7 @@ window.palReceiveSubmit = function(){
     aviz_file: _palRec.avizFile || null,
     items:_palRec.lines.map(function(l){return {product_id:l.product_id, boxes:l.boxes, per_box:l.per_box, quantity:l.quantity};}) };
   api("POST","/api/pallets/receive",body).then(function(r){
-    toast((_palRec.kind==="colet"?"Colet":"Palet")+" recepționat: "+r.pallet.code);
+    toast(palKind(_palRec.kind)+" recepționat: "+r.pallet.code);
     printPalletLabel(r.pallet, r.items);
     go("pallets");
   }).catch(function(e){ var m=el("palmsg"); if(m) m.innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; else toast(e.message,"bad"); });
@@ -2155,7 +2158,7 @@ window.printPalletLabel = function(pallet, items){
   var bc = lblBarcodeURL(pallet.code);
   var rows=(items||[]).map(function(i){ var bx=(i.boxes&&i.per_box)?(i.boxes+'×'+i.per_box+' = '):''; return '<tr><td>'+esc(i.product_name)+' <span style="color:#666">'+esc(i.sku||"")+'</span></td><td style="text-align:right">'+bx+esc(i.quantity)+' '+esc(i.unit||"")+'</td></tr>'; }).join("");
   var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi eticheta","bad"); return; }
-  var kindLbl = (pallet.kind==="colet") ? "COLET" : "PALET";
+  var kindLbl = (pallet.kind==="colet") ? "COLET" : (pallet.kind==="ambalaje" ? "PALET AMBALAJE" : "PALET");
   var html='<html><head><meta charset="utf-8"><title>Etichetă '+esc(pallet.code)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:16px}h1{font-size:22px;margin:0}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}td{border-bottom:1px solid #ddd;padding:4px 6px}.meta{font-size:14px;margin:6px 0;line-height:1.5}.code{font-size:24px;font-weight:bold;letter-spacing:1px}</style></head><body>'
     +'<h1>'+kindLbl+'</h1><div class="code">'+esc(pallet.code)+'</div>'
     +'<img src="'+bc+'" style="max-width:100%;margin:8px 0">'
@@ -2199,7 +2202,7 @@ function palShipRender(p, items){
     return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+bx+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td>'
       +'<td class="right"><input id="psq_'+idx+'" type="number" min="0" max="'+it.quantity+'" value="'+it.quantity+'" style="width:80px"></td></tr>'; }).join("");
   var meta='<div class="muted" style="font-size:13px;line-height:1.7;margin-top:4px">'
-    +'Tip: <b>'+(p.kind==="colet"?"Colet":"Palet")+'</b> · Client: <b>'+esc(p.client_name||"—")+'</b> · Locație: <b>'+esc(p.location_code||"—")+'</b><br>'
+    +'Tip: <b>'+palKind(p.kind)+'</b> · Client: <b>'+esc(p.client_name||"—")+'</b> · Locație: <b>'+esc(p.location_code||"—")+'</b><br>'
     +(p.colete?('Nr. colete: <b>'+esc(p.colete)+'</b> · '):'')+(p.lot?('Lot: <b>'+esc(p.lot)+'</b> · '):'')
     +(p.aviz?('Aviz: <b>'+esc(p.aviz)+'</b> · '):'')+(p.received_at?('Recepționat: <b>'+esc(p.received_at)+'</b>'):'')+'</div>';
   var shipped = p.status==="shipped";
@@ -2234,7 +2237,7 @@ window.palletDetail = function(id){
         + '<div class="row" style="margin-top:12px"><button class="danger sm" onclick="palDelete('+id+')">Șterge paletul</button></div>';
     }
     window._pdData = { pallet:p, items:d.items };
-    var title = (p.kind==="colet"?"Colet ":"Palet ")+esc(p.code)+(p.location_code?(" · "+esc(p.location_code)):" · neplasat");
+    var title = palKind(p.kind)+" "+esc(p.code)+(p.location_code?(" · "+esc(p.location_code)):" · neplasat");
     var meta='Client: <b>'+esc(p.client_name||"—")+'</b> · status: '+esc(p.status)
       +(p.colete?(' · '+esc(p.colete)+' colete'):'')+(p.lot?(' · lot '+esc(p.lot)):'')
       +(p.aviz?(' · aviz '+esc(p.aviz)):'')+(p.received_at?(' · recepție '+esc(p.received_at)):'');

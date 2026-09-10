@@ -80,7 +80,7 @@ export async function create(request, env, ctx, user) {
 // + produsele ȘI încarcă stocul în locație (inbound). Opțional atașează avizul scanat.
 export async function receive(request, env, ctx, user) {
   const b = await readJson(request);
-  const kind = b.kind === 'colet' ? 'colet' : 'palet';
+  const kind = ['colet', 'ambalaje'].includes(b.kind) ? b.kind : 'palet';
   const locationId = b.location_id ? Number(b.location_id) : null;
   if (!locationId) return error('Alege locația de recepție', 400);
   // Normalizează liniile: acceptă {quantity} SAU {boxes, per_box} (total = cutii × buc/cutie)
@@ -92,15 +92,15 @@ export async function receive(request, env, ctx, user) {
     return { product_id: Number(i.product_id), quantity: qty, boxes, per_box: perBox };
   }).filter((i) => i.product_id && i.quantity > 0);
   if (!items.length) return error('Adaugă cel puțin un produs', 400);
-  // capacitatea locației e în „spații de palet" — o verificăm doar pentru paleți
-  if (kind === 'palet' && !(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
+  // capacitatea locației e în „spații de palet" — o verificăm pentru paleți (inclusiv ambalaje), nu pentru colete
+  if (kind !== 'colet' && !(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
 
   const colete = Number(b.colete) > 0 ? Math.round(Number(b.colete)) : null;
   const lot = (b.lot || '').toString().trim() || null;
   const aviz = (b.aviz || '').toString().trim() || null;
   const receivedAt = (b.received_at || '').toString().trim() || null;
   const clientId = b.client_id ? Number(b.client_id) : null;
-  const prefix = kind === 'colet' ? 'COL-' : 'PAL-';
+  const prefix = kind === 'colet' ? 'COL-' : (kind === 'ambalaje' ? 'AMB-' : 'PAL-');
 
   let code = (b.code || '').toString().trim();
   const tmp = code || ('TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase());
