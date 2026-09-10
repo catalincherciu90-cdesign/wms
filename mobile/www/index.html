@@ -374,21 +374,26 @@ function pltScan(code){
     if(!p){ feedback(false); toast("Produs negăsit: "+code,true); return; }
     feedback(true);
     var ex=_plt.lines.find(function(l){ return l.product_id===p.id; });
-    if(ex) ex.qty++; else _plt.lines.push({product_id:p.id, name:p.name, code:(p.barcode||p.sku||""), qty:1});
-    toast(p.name+" +1"); pltRenderList();
+    if(ex){ ex.boxes=(ex.boxes||0)+1; } else _plt.lines.push({product_id:p.id, name:p.name, code:(p.barcode||p.sku||""), boxes:1, per_box:1});
+    toast(p.name+" +1 cutie"); pltRenderList();
   }).catch(function(e){ toast(e.message,true); });
 }
 function pltRenderList(){
   var h=el("pl_list"); if(!h) return;
   if(!_plt.lines.length){ h.innerHTML='<div class="muted center" style="padding:8px;font-size:13px">Scanează produsele care intră pe palet/colet.</div>'; return; }
   h.innerHTML=_plt.lines.map(function(l,idx){
-    return '<div class="card" style="margin-bottom:6px"><div class="row" style="justify-content:space-between;align-items:center">'
-      +'<div style="flex:1"><b>'+esc(l.name)+'</b><div class="muted" style="font-size:11.5px">'+esc(l.code)+'</div></div>'
-      +'<div class="row" style="align-items:center;gap:6px"><button onclick="pltQty('+idx+',-1)" style="padding:4px 12px">−</button><b style="min-width:28px;text-align:center;font-size:17px">'+l.qty+'</b><button onclick="pltQty('+idx+',1)" style="padding:4px 12px">+</button><button onclick="pltDel('+idx+')" style="padding:4px 9px;background:#7f1d1d">✕</button></div>'
+    var qty=(l.boxes||0)*(l.per_box||0);
+    return '<div class="card" style="margin-bottom:6px">'
+      +'<div class="row" style="justify-content:space-between;align-items:center"><b style="flex:1">'+esc(l.name)+'</b><button onclick="pltDel('+idx+')" style="padding:3px 9px;background:#7f1d1d">✕</button></div>'
+      +'<div class="muted" style="font-size:11.5px">'+esc(l.code)+'</div>'
+      +'<div class="row" style="align-items:center;gap:6px;margin-top:6px">'
+      +'<span style="font-size:13px">Cutii</span><input type="number" inputmode="numeric" min="1" value="'+(l.boxes||1)+'" onchange="pltSet('+idx+',\'boxes\',this.value)" style="width:60px">'
+      +'<span style="font-size:13px">× buc</span><input type="number" inputmode="numeric" min="1" value="'+(l.per_box||1)+'" onchange="pltSet('+idx+',\'per_box\',this.value)" style="width:60px">'
+      +'<span style="margin-left:auto;font-size:13px">= <b style="font-size:18px">'+qty+'</b></span>'
       +'</div></div>';
   }).join("");
 }
-window.pltQty=function(i,d){ if(_plt.lines[i]){ _plt.lines[i].qty=Math.max(1,_plt.lines[i].qty+d); pltRenderList(); } };
+window.pltSet=function(i,field,val){ if(_plt.lines[i]){ _plt.lines[i][field]=Math.max(1,Math.round(Number(val)||1)); pltRenderList(); } };
 window.pltDel=function(i){ _plt.lines.splice(i,1); pltRenderList(); };
 function pltPhotoInfo(){ var h=el("pl_photo_info"); if(h) h.textContent=(_plt.aviz?("Poză atașată ("+Math.round(_plt.aviz.data.length/1024)+" KB)"):""); }
 window.pltPhoto=function(inp){
@@ -416,7 +421,7 @@ window.pltFinish=function(){
     aviz: el("pl_aviz")&&el("pl_aviz").value.trim()?el("pl_aviz").value.trim():null,
     received_at: el("pl_recv")&&el("pl_recv").value?el("pl_recv").value:null,
     aviz_file: _plt.aviz||null,
-    items:_plt.lines.map(function(l){ return {product_id:l.product_id, quantity:l.qty}; }) };
+    items:_plt.lines.map(function(l){ return {product_id:l.product_id, boxes:l.boxes, per_box:l.per_box, quantity:(l.boxes||0)*(l.per_box||0)}; }) };
   api("POST","/api/pallets/receive",body).then(function(r){
     feedback(true); toast((_plt.kind==="colet"?"Colet":"Palet")+" recepționat: "+r.pallet.code);
     window._plt=null; screenPallet();
@@ -444,7 +449,7 @@ function pspFind(code){
 }
 function pspRender(p, items){
   window._psp={ id:p.id, code:p.code, kind:p.kind };
-  var rows=(items||[]).map(function(it){ return '<div class="row" style="justify-content:space-between;border-top:1px solid #1b2540;padding:6px 0"><span>'+esc(it.product_name)+'</span><b>'+esc(it.quantity)+' '+esc(it.unit||"")+'</b></div>'; }).join("");
+  var rows=(items||[]).map(function(it){ var bx=(it.boxes&&it.per_box)?(' <span class="muted" style="font-size:11px">('+it.boxes+'×'+it.per_box+')</span>'):''; return '<div class="row" style="justify-content:space-between;border-top:1px solid #1b2540;padding:6px 0"><span>'+esc(it.product_name)+bx+'</span><b>'+esc(it.quantity)+' '+esc(it.unit||"")+'</b></div>'; }).join("");
   el("psp_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:19px;font-weight:800">'+esc(p.code)+'</div>'
     +'<div class="muted" style="font-size:12.5px;margin:4px 0 6px">'+(p.kind==="colet"?"Colet":"Palet")+' · '+esc(p.client_name||"intern")+' · loc '+esc(p.location_code||"—")+(p.colete?(" · "+esc(p.colete)+" colete"):"")+(p.lot?(" · lot "+esc(p.lot)):"")+(p.aviz?(" · aviz "+esc(p.aviz)):"")+'</div>'
     +(rows||'<div class="muted">Fără produse</div>')

@@ -31,6 +31,8 @@ export async function ensureSchema(env) {
   try { await env.DB.prepare("ALTER TABLE pallets ADD COLUMN kind TEXT NOT NULL DEFAULT 'palet'").run(); } catch (e) {} // palet | colet
   try { await env.DB.prepare('ALTER TABLE pallets ADD COLUMN aviz TEXT').run(); } catch (e) {} // nr. aviz
   try { await env.DB.prepare('ALTER TABLE pallets ADD COLUMN received_at TEXT').run(); } catch (e) {} // data recepției (de pe aviz)
+  try { await env.DB.prepare('ALTER TABLE pallet_items ADD COLUMN boxes INTEGER').run(); } catch (e) {} // nr. cutii
+  try { await env.DB.prepare('ALTER TABLE pallet_items ADD COLUMN per_box INTEGER').run(); } catch (e) {} // buc/cutie
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN client_id INTEGER').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE locations ADD COLUMN capacity INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
 

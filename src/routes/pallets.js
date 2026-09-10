@@ -83,7 +83,14 @@ export async function receive(request, env, ctx, user) {
   const kind = b.kind === 'colet' ? 'colet' : 'palet';
   const locationId = b.location_id ? Number(b.location_id) : null;
   if (!locationId) return error('Alege locația de recepție', 400);
-  const items = Array.isArray(b.items) ? b.items.filter((i) => i.product_id && Number(i.quantity) > 0) : [];
+  // Normalizează liniile: acceptă {quantity} SAU {boxes, per_box} (total = cutii × buc/cutie)
+  const items = (Array.isArray(b.items) ? b.items : []).map((i) => {
+    const boxes = Number(i.boxes) > 0 ? Math.round(Number(i.boxes)) : null;
+    const perBox = Number(i.per_box) > 0 ? Math.round(Number(i.per_box)) : null;
+    let qty = Number(i.quantity) > 0 ? Number(i.quantity) : 0;
+    if ((!qty || qty <= 0) && boxes && perBox) qty = boxes * perBox;
+    return { product_id: Number(i.product_id), quantity: qty, boxes, per_box: perBox };
+  }).filter((i) => i.product_id && i.quantity > 0);
   if (!items.length) return error('Adaugă cel puțin un produs', 400);
   // capacitatea locației e în „spații de palet" — o verificăm doar pentru paleți
   if (kind === 'palet' && !(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
@@ -116,7 +123,7 @@ export async function receive(request, env, ctx, user) {
   const stmts = [];
   for (const it of items) {
     const pid = Number(it.product_id), q = Number(it.quantity);
-    stmts.push(env.DB.prepare('INSERT INTO pallet_items (pallet_id, product_id, quantity) VALUES (?, ?, ?)').bind(id, pid, q));
+    stmts.push(env.DB.prepare('INSERT INTO pallet_items (pallet_id, product_id, quantity, boxes, per_box) VALUES (?, ?, ?, ?, ?)').bind(id, pid, q, it.boxes, it.per_box));
     stmts.push(env.DB.prepare("INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')").bind(pid, locationId, q));
     stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'inbound', ?, ?, ?, ?)").bind(pid, locationId, q, code, note, user.sub));
   }
@@ -136,7 +143,7 @@ export async function receive(request, env, ctx, user) {
     'SELECT pa.*, c.name AS client_name, l.code AS location_code, (SELECT COUNT(*) FROM aviz_files af WHERE af.pallet_id=pa.id) AS has_aviz FROM pallets pa LEFT JOIN clients c ON c.id=pa.client_id LEFT JOIN locations l ON l.id=pa.location_id WHERE pa.id=?'
   ).bind(id).first();
   const { results: itemsOut } = await env.DB.prepare(
-    'SELECT pi.quantity, pr.sku, pr.name AS product_name, pr.unit FROM pallet_items pi JOIN products pr ON pr.id=pi.product_id WHERE pi.pallet_id=?'
+    'SELECT pi.quantity, pi.boxes, pi.per_box, pr.sku, pr.name AS product_name, pr.unit FROM pallet_items pi JOIN products pr ON pr.id=pi.product_id WHERE pi.pallet_id=?'
   ).bind(id).all();
   return json({ ok: true, pallet, items: itemsOut });
 }

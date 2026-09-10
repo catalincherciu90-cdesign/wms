@@ -2075,8 +2075,9 @@ window.palletReceiveUI = function(kind){
     + '<div class="row"><div style="flex:1"><label>Cod '+kind+' (opțional)</label><input id="pal_code" placeholder="auto: '+(isPal?'PAL':'COL')+'-xxxxx"></div>'
     + '<div style="flex:1"><label>Aviz scanat (poză/PDF)</label><input id="pal_avizfile" type="file" accept="image/*,application/pdf" onchange="palReadAviz(this)"><div id="pal_aviz_info" class="muted" style="font-size:11.5px;margin-top:3px"></div></div></div>'
     + '<h2 style="font-size:14px;margin:16px 0 6px">Produse '+(isPal?'pe palet':'în colet')+'</h2>'
-    + '<div class="row" style="align-items:flex-end"><div style="flex:2"><label>Produs</label><select id="pal_prod"></select></div>'
-    + '<div style="width:110px"><label>Cantitate</label><input id="pal_qty" type="number" min="1" value="1"></div>'
+    + '<div class="row" style="align-items:flex-end;flex-wrap:wrap"><div style="flex:2;min-width:150px"><label>Produs</label><select id="pal_prod"></select></div>'
+    + '<div style="width:90px"><label>Nr. cutii</label><input id="pal_boxes" type="number" min="1" value="1"></div>'
+    + '<div style="width:90px"><label>Buc/cutie</label><input id="pal_perbox" type="number" min="1" value="1"></div>'
     + '<button class="sm" onclick="palrAddLine()">Adaugă</button></div>'
     + '<div id="pal_lines" style="margin-top:10px"></div>'
     + '<button class="big" style="margin-top:16px" onclick="palReceiveSubmit()">Recepționează '+(isPal?'paletul':'coletul')+'</button></div>');
@@ -2109,21 +2110,26 @@ window.palReadAviz = function(inp){
   }
 };
 window.palrAddLine = function(){
-  var pid=el("pal_prod")?Number(el("pal_prod").value):0, qty=el("pal_qty")?Number(el("pal_qty").value):0;
+  var pid=el("pal_prod")?Number(el("pal_prod").value):0;
+  var boxes=el("pal_boxes")?Number(el("pal_boxes").value):0;
+  var per=el("pal_perbox")?Number(el("pal_perbox").value):0;
   if(!pid){ toast("Alege un produs","bad"); return; }
-  if(!(qty>0)){ toast("Cantitate invalidă","bad"); return; }
+  if(!(boxes>0)||!(per>0)){ toast("Completează nr. cutii și buc/cutie","bad"); return; }
   var p=(_palRec.products||[]).find(function(x){return x.id===pid;});
   var ex=_palRec.lines.find(function(l){return l.product_id===pid;});
-  if(ex) ex.quantity+=qty; else _palRec.lines.push({product_id:pid, quantity:qty, name:(p?p.name:("#"+pid)), code:(p?(p.barcode||p.sku):"")});
-  if(el("pal_qty")) el("pal_qty").value=1;
+  if(ex){ ex.boxes=(ex.boxes||0)+boxes; ex.per_box=per; ex.quantity=ex.boxes*ex.per_box; }
+  else _palRec.lines.push({product_id:pid, boxes:boxes, per_box:per, quantity:boxes*per, name:(p?p.name:("#"+pid)), code:(p?(p.barcode||p.sku):"")});
+  if(el("pal_boxes")) el("pal_boxes").value=1;
   palrRenderLines();
 };
 window.palrDelLine = function(pid){ _palRec.lines=_palRec.lines.filter(function(l){return l.product_id!==pid;}); palrRenderLines(); };
 function palrRenderLines(){
   var host=el("pal_lines"); if(!host) return;
   if(!_palRec.lines.length){ host.innerHTML='<div class="muted" style="font-size:13px">Niciun produs adăugat.</div>'; return; }
-  host.innerHTML='<table><thead><tr><th>Produs</th><th class="right">Cant.</th><th></th></tr></thead><tbody>'
-    +_palRec.lines.map(function(l){ return '<tr><td>'+esc(l.name)+' <span class="muted" style="font-size:11.5px">'+esc(l.code)+'</span></td><td class="right">'+l.quantity+'</td><td class="right"><button class="danger sm" onclick="palrDelLine('+l.product_id+')">✕</button></td></tr>'; }).join("")
+  var tot=_palRec.lines.reduce(function(a,l){return a+(l.quantity||0);},0);
+  host.innerHTML='<table><thead><tr><th>Produs</th><th class="right">Cutii × buc</th><th class="right">Total</th><th></th></tr></thead><tbody>'
+    +_palRec.lines.map(function(l){ return '<tr><td>'+esc(l.name)+' <span class="muted" style="font-size:11.5px">'+esc(l.code)+'</span></td><td class="right">'+(l.boxes&&l.per_box?(l.boxes+' × '+l.per_box):'—')+'</td><td class="right"><b>'+l.quantity+'</b></td><td class="right"><button class="danger sm" onclick="palrDelLine('+l.product_id+')">✕</button></td></tr>'; }).join("")
+    +'<tr><td colspan="2" class="right"><b>Total bucăți</b></td><td class="right"><b>'+tot+'</b></td><td></td></tr>'
     +'</tbody></table>';
 }
 window.palReceiveSubmit = function(){
@@ -2138,7 +2144,7 @@ window.palReceiveSubmit = function(){
     received_at: el("pal_recv")&&el("pal_recv").value?el("pal_recv").value:null,
     code: el("pal_code")&&el("pal_code").value.trim()?el("pal_code").value.trim():null,
     aviz_file: _palRec.avizFile || null,
-    items:_palRec.lines.map(function(l){return {product_id:l.product_id, quantity:l.quantity};}) };
+    items:_palRec.lines.map(function(l){return {product_id:l.product_id, boxes:l.boxes, per_box:l.per_box, quantity:l.quantity};}) };
   api("POST","/api/pallets/receive",body).then(function(r){
     toast((_palRec.kind==="colet"?"Colet":"Palet")+" recepționat: "+r.pallet.code);
     printPalletLabel(r.pallet, r.items);
@@ -2147,7 +2153,7 @@ window.palReceiveSubmit = function(){
 };
 window.printPalletLabel = function(pallet, items){
   var bc = lblBarcodeURL(pallet.code);
-  var rows=(items||[]).map(function(i){ return '<tr><td>'+esc(i.product_name)+' <span style="color:#666">'+esc(i.sku||"")+'</span></td><td style="text-align:right">'+esc(i.quantity)+' '+esc(i.unit||"")+'</td></tr>'; }).join("");
+  var rows=(items||[]).map(function(i){ var bx=(i.boxes&&i.per_box)?(i.boxes+'×'+i.per_box+' = '):''; return '<tr><td>'+esc(i.product_name)+' <span style="color:#666">'+esc(i.sku||"")+'</span></td><td style="text-align:right">'+bx+esc(i.quantity)+' '+esc(i.unit||"")+'</td></tr>'; }).join("");
   var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi eticheta","bad"); return; }
   var kindLbl = (pallet.kind==="colet") ? "COLET" : "PALET";
   var html='<html><head><meta charset="utf-8"><title>Etichetă '+esc(pallet.code)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:16px}h1{font-size:22px;margin:0}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}td{border-bottom:1px solid #ddd;padding:4px 6px}.meta{font-size:14px;margin:6px 0;line-height:1.5}.code{font-size:24px;font-weight:bold;letter-spacing:1px}</style></head><body>'
@@ -2188,7 +2194,7 @@ window.palShipFind = function(){
   }).catch(function(e){ toast(e.message,"bad"); });
 };
 function palShipRender(p, items){
-  var rows=(items||[]).map(function(it){ return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td></tr>'; }).join("");
+  var rows=(items||[]).map(function(it){ var bx=(it.boxes&&it.per_box)?('<span class="muted" style="font-size:11.5px"> ('+it.boxes+'×'+it.per_box+')</span>'):''; return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+bx+'</td></tr>'; }).join("");
   var meta='<div class="muted" style="font-size:13px;line-height:1.7;margin-top:4px">'
     +'Tip: <b>'+(p.kind==="colet"?"Colet":"Palet")+'</b> · Client: <b>'+esc(p.client_name||"—")+'</b> · Locație: <b>'+esc(p.location_code||"—")+'</b><br>'
     +(p.colete?('Nr. colete: <b>'+esc(p.colete)+'</b> · '):'')+(p.lot?('Lot: <b>'+esc(p.lot)+'</b> · '):'')
@@ -2211,7 +2217,7 @@ window.palletDetail = function(id){
   api("GET","/api/pallets/"+id).then(function(d){
     var p=d.pallet;
     var items='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th>'+(can("operator")?'<th></th>':'')+'</tr></thead><tbody>'
-      + d.items.map(function(it){ return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+'</td>'+(can("operator")?'<td class="right"><button class="ghost sm" onclick="palDelItem('+id+','+it.id+')">✕</button></td>':'')+'</tr>'; }).join("")
+      + d.items.map(function(it){ var bx=(it.boxes&&it.per_box)?('<span class="muted" style="font-size:11.5px"> ('+it.boxes+'×'+it.per_box+')</span>'):''; return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+bx+'</td>'+(can("operator")?'<td class="right"><button class="ghost sm" onclick="palDelItem('+id+','+it.id+')">✕</button></td>':'')+'</tr>'; }).join("")
       + '</tbody></table>';
     var actions='';
     if(can("operator")){
