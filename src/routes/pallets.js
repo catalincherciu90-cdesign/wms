@@ -25,7 +25,8 @@ export async function list(request, env) {
 export async function get(request, env, ctx, user, params) {
   const id = Number(params.id);
   const pallet = await env.DB.prepare(`
-    SELECT pa.*, c.name AS client_name, l.code AS location_code
+    SELECT pa.*, c.name AS client_name, l.code AS location_code,
+      (SELECT COUNT(*) FROM aviz_files af WHERE af.pallet_id = pa.id) AS has_aviz
     FROM pallets pa LEFT JOIN clients c ON c.id = pa.client_id LEFT JOIN locations l ON l.id = pa.location_id
     WHERE pa.id = ?`).bind(id).first();
   if (!pallet) return error('Palet inexistent', 404);
@@ -73,36 +74,43 @@ export async function create(request, env, ctx, user) {
   }
 }
 
-// Recepție pe palet: creează paletul (cod auto), salvează nr. colete + produsele
-// ȘI încarcă stocul în locație (inbound), ca să fie gata de printat eticheta.
+// Recepție pe palet SAU colet: creează unitatea (cod auto), salvează nr. colete/lot/aviz
+// + produsele ȘI încarcă stocul în locație (inbound). Opțional atașează avizul scanat.
 export async function receive(request, env, ctx, user) {
   const b = await readJson(request);
+  const kind = b.kind === 'colet' ? 'colet' : 'palet';
   const locationId = b.location_id ? Number(b.location_id) : null;
   if (!locationId) return error('Alege locația de recepție', 400);
   const items = Array.isArray(b.items) ? b.items.filter((i) => i.product_id && Number(i.quantity) > 0) : [];
-  if (!items.length) return error('Adaugă cel puțin un produs pe palet', 400);
-  if (!(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
+  if (!items.length) return error('Adaugă cel puțin un produs', 400);
+  // capacitatea locației e în „spații de palet" — o verificăm doar pentru paleți
+  if (kind === 'palet' && !(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
+
   const colete = Number(b.colete) > 0 ? Math.round(Number(b.colete)) : null;
   const lot = (b.lot || '').toString().trim() || null;
+  const aviz = (b.aviz || '').toString().trim() || null;
+  const receivedAt = (b.received_at || '').toString().trim() || null;
   const clientId = b.client_id ? Number(b.client_id) : null;
+  const prefix = kind === 'colet' ? 'COL-' : 'PAL-';
 
   let code = (b.code || '').toString().trim();
   const tmp = code || ('TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase());
   let id;
   try {
     const res = await env.DB.prepare(
-      "INSERT INTO pallets (code, client_id, location_id, status, colete, lot, notes) VALUES (?, ?, ?, 'stored', ?, ?, ?)"
-    ).bind(tmp, clientId, locationId, colete, lot, b.notes || null).run();
+      "INSERT INTO pallets (code, client_id, location_id, status, kind, colete, lot, aviz, received_at, notes) VALUES (?, ?, ?, 'stored', ?, ?, ?, ?, ?, ?)"
+    ).bind(tmp, clientId, locationId, kind, colete, lot, aviz, receivedAt, b.notes || null).run();
     id = res.meta.last_row_id;
   } catch (e) {
-    if (String(e).includes('UNIQUE')) return error('Cod palet deja existent', 409);
+    if (String(e).includes('UNIQUE')) return error('Cod deja existent', 409);
     throw e;
   }
   if (!code) {
-    code = 'PAL-' + String(id).padStart(5, '0');
+    code = prefix + String(id).padStart(5, '0');
     await env.DB.prepare('UPDATE pallets SET code = ? WHERE id = ?').bind(code, id).run();
   }
-  const note = 'recepție palet ' + code + (colete ? (' · ' + colete + ' colete') : '') + (lot ? (' · lot ' + lot) : '');
+  const note = 'recepție ' + kind + ' ' + code
+    + (colete ? (' · ' + colete + ' colete') : '') + (lot ? (' · lot ' + lot) : '') + (aviz ? (' · aviz ' + aviz) : '');
   const stmts = [];
   for (const it of items) {
     const pid = Number(it.product_id), q = Number(it.quantity);
@@ -111,13 +119,39 @@ export async function receive(request, env, ctx, user) {
     stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'inbound', ?, ?, ?, ?)").bind(pid, locationId, q, code, note, user.sub));
   }
   await env.DB.batch(stmts);
+
+  // avizul scanat (opțional): { name, mime, data } — data e un data URL / base64
+  if (b.aviz_file && b.aviz_file.data) {
+    const f = b.aviz_file;
+    if (String(f.data).length > 1400000) return error('Fișierul avizului e prea mare (max ~1MB). Recepția s-a făcut, dar avizul nu s-a atașat.', 413);
+    try {
+      await env.DB.prepare('INSERT INTO aviz_files (pallet_id, name, mime, data) VALUES (?, ?, ?, ?)')
+        .bind(id, (f.name || 'aviz').toString().slice(0, 200), (f.mime || '').toString().slice(0, 100), String(f.data)).run();
+    } catch (e) { /* nu blocăm recepția dacă atașamentul eșuează */ }
+  }
+
   const pallet = await env.DB.prepare(
-    'SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id=pa.client_id LEFT JOIN locations l ON l.id=pa.location_id WHERE pa.id=?'
+    'SELECT pa.*, c.name AS client_name, l.code AS location_code, (SELECT COUNT(*) FROM aviz_files af WHERE af.pallet_id=pa.id) AS has_aviz FROM pallets pa LEFT JOIN clients c ON c.id=pa.client_id LEFT JOIN locations l ON l.id=pa.location_id WHERE pa.id=?'
   ).bind(id).first();
   const { results: itemsOut } = await env.DB.prepare(
     'SELECT pi.quantity, pr.sku, pr.name AS product_name, pr.unit FROM pallet_items pi JOIN products pr ON pr.id=pi.product_id WHERE pi.pallet_id=?'
   ).bind(id).all();
   return json({ ok: true, pallet, items: itemsOut });
+}
+
+// Descarcă avizul scanat atașat unei unități (palet/colet).
+export async function avizFile(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const f = await env.DB.prepare('SELECT name, mime, data FROM aviz_files WHERE pallet_id = ? ORDER BY id DESC LIMIT 1').bind(id).first();
+  if (!f) return error('Niciun aviz atașat', 404);
+  const dataUrl = String(f.data);
+  const comma = dataUrl.indexOf(',');
+  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const mime = f.mime || (dataUrl.startsWith('data:') ? dataUrl.slice(5, dataUrl.indexOf(';')) : 'application/octet-stream');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Response(bytes, { headers: { 'Content-Type': mime, 'Content-Disposition': 'inline; filename="' + (f.name || 'aviz') + '"' } });
 }
 
 export async function update(request, env, ctx, user, params) {

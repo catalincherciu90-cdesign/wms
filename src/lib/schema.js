@@ -12,6 +12,7 @@ export async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS barcode_cache (code TEXT PRIMARY KEY, name TEXT, brand TEXT, category TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS pallets (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, client_id INTEGER, location_id INTEGER, status TEXT NOT NULL DEFAULT 'stored', notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS pallet_items (id INTEGER PRIMARY KEY AUTOINCREMENT, pallet_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 0)",
+    "CREATE TABLE IF NOT EXISTS aviz_files (id INTEGER PRIMARY KEY AUTOINCREMENT, pallet_id INTEGER NOT NULL, name TEXT, mime TEXT, data TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
     "CREATE TABLE IF NOT EXISTS backup_log (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT (datetime('now')), kind TEXT, status TEXT, bytes INTEGER DEFAULT 0, statements INTEGER DEFAULT 0, note TEXT)",
     "CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, unit TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
@@ -27,6 +28,9 @@ export async function ensureSchema(env) {
   try { await env.DB.prepare('ALTER TABLE users ADD COLUMN login_token TEXT').run(); } catch (e) {} // conectare rapidă prin QR
   try { await env.DB.prepare('ALTER TABLE pallets ADD COLUMN colete INTEGER').run(); } catch (e) {} // nr. colete pe palet
   try { await env.DB.prepare('ALTER TABLE pallets ADD COLUMN lot TEXT').run(); } catch (e) {} // număr de lot
+  try { await env.DB.prepare("ALTER TABLE pallets ADD COLUMN kind TEXT NOT NULL DEFAULT 'palet'").run(); } catch (e) {} // palet | colet
+  try { await env.DB.prepare('ALTER TABLE pallets ADD COLUMN aviz TEXT').run(); } catch (e) {} // nr. aviz
+  try { await env.DB.prepare('ALTER TABLE pallets ADD COLUMN received_at TEXT').run(); } catch (e) {} // data recepției (de pe aviz)
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN client_id INTEGER').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE locations ADD COLUMN capacity INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
 
