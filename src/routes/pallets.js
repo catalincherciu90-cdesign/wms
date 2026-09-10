@@ -73,6 +73,52 @@ export async function create(request, env, ctx, user) {
   }
 }
 
+// Recepție pe palet: creează paletul (cod auto), salvează nr. colete + produsele
+// ȘI încarcă stocul în locație (inbound), ca să fie gata de printat eticheta.
+export async function receive(request, env, ctx, user) {
+  const b = await readJson(request);
+  const locationId = b.location_id ? Number(b.location_id) : null;
+  if (!locationId) return error('Alege locația de recepție', 400);
+  const items = Array.isArray(b.items) ? b.items.filter((i) => i.product_id && Number(i.quantity) > 0) : [];
+  if (!items.length) return error('Adaugă cel puțin un produs pe palet', 400);
+  if (!(await hasFreeSpace(env, locationId, null))) return error('Locația e plină (nu mai sunt spații libere)', 409);
+  const colete = Number(b.colete) > 0 ? Math.round(Number(b.colete)) : null;
+  const clientId = b.client_id ? Number(b.client_id) : null;
+
+  let code = (b.code || '').toString().trim();
+  const tmp = code || ('TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase());
+  let id;
+  try {
+    const res = await env.DB.prepare(
+      "INSERT INTO pallets (code, client_id, location_id, status, colete, notes) VALUES (?, ?, ?, 'stored', ?, ?)"
+    ).bind(tmp, clientId, locationId, colete, b.notes || null).run();
+    id = res.meta.last_row_id;
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) return error('Cod palet deja existent', 409);
+    throw e;
+  }
+  if (!code) {
+    code = 'PAL-' + String(id).padStart(5, '0');
+    await env.DB.prepare('UPDATE pallets SET code = ? WHERE id = ?').bind(code, id).run();
+  }
+  const note = 'recepție palet ' + code + (colete ? (' · ' + colete + ' colete') : '');
+  const stmts = [];
+  for (const it of items) {
+    const pid = Number(it.product_id), q = Number(it.quantity);
+    stmts.push(env.DB.prepare('INSERT INTO pallet_items (pallet_id, product_id, quantity) VALUES (?, ?, ?)').bind(id, pid, q));
+    stmts.push(env.DB.prepare("INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')").bind(pid, locationId, q));
+    stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'inbound', ?, ?, ?, ?)").bind(pid, locationId, q, code, note, user.sub));
+  }
+  await env.DB.batch(stmts);
+  const pallet = await env.DB.prepare(
+    'SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id=pa.client_id LEFT JOIN locations l ON l.id=pa.location_id WHERE pa.id=?'
+  ).bind(id).first();
+  const { results: itemsOut } = await env.DB.prepare(
+    'SELECT pi.quantity, pr.sku, pr.name AS product_name, pr.unit FROM pallet_items pi JOIN products pr ON pr.id=pi.product_id WHERE pi.pallet_id=?'
+  ).bind(id).all();
+  return json({ ok: true, pallet, items: itemsOut });
+}
+
 export async function update(request, env, ctx, user, params) {
   const b = await readJson(request);
   const id = Number(params.id);
