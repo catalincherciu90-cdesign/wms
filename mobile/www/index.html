@@ -448,17 +448,23 @@ function pspFind(code){
   }).catch(function(e){ toast(e.message,true); });
 }
 function pspRender(p, items){
-  window._psp={ id:p.id, code:p.code, kind:p.kind };
-  var rows=(items||[]).map(function(it){ var bx=(it.boxes&&it.per_box)?(' <span class="muted" style="font-size:11px">('+it.boxes+'×'+it.per_box+')</span>'):''; return '<div class="row" style="justify-content:space-between;border-top:1px solid #1b2540;padding:6px 0"><span>'+esc(it.product_name)+bx+'</span><b>'+esc(it.quantity)+' '+esc(it.unit||"")+'</b></div>'; }).join("");
+  window._psp={ id:p.id, code:p.code, kind:p.kind, items:(items||[]) };
+  var rows=(items||[]).map(function(it,idx){ var bx=(it.boxes&&it.per_box)?(' <span class="muted" style="font-size:11px">('+it.boxes+'×'+it.per_box+')</span>'):'';
+    return '<div style="border-top:1px solid #1b2540;padding:7px 0"><div class="row" style="justify-content:space-between;align-items:center"><span style="flex:1">'+esc(it.product_name)+bx+'</span>'
+      +'<span class="muted" style="font-size:12px;margin-right:6px">din '+esc(it.quantity)+'</span>'
+      +'<input id="pspq_'+idx+'" type="number" inputmode="numeric" min="0" max="'+it.quantity+'" value="'+it.quantity+'" style="width:70px"></div></div>'; }).join("");
   el("psp_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:19px;font-weight:800">'+esc(p.code)+'</div>'
     +'<div class="muted" style="font-size:12.5px;margin:4px 0 6px">'+(p.kind==="colet"?"Colet":"Palet")+' · '+esc(p.client_name||"intern")+' · loc '+esc(p.location_code||"—")+(p.colete?(" · "+esc(p.colete)+" colete"):"")+(p.lot?(" · lot "+esc(p.lot)):"")+(p.aviz?(" · aviz "+esc(p.aviz)):"")+'</div>'
     +(rows||'<div class="muted">Fără produse</div>')
-    +(p.status==="shipped"?'<div class="card center muted" style="margin-top:10px">Deja expediat</div>':'<button class="big" style="margin-top:12px;background:#7f1d1d" onclick="pspShip()">📤 Expediază</button>')
+    +(p.status==="shipped"?'<div class="card center muted" style="margin-top:10px">Deja expediat</div>':'<div class="op-hint" style="margin-top:6px">Poți trimite tot sau doar o parte (modifică cantitatea).</div><button class="big" style="margin-top:8px;background:#7f1d1d" onclick="pspShip()">📤 Expediază</button>')
     +'</div>';
 }
 window.pspShip=function(){
   if(!window._psp) return;
-  api("POST","/api/pallets/"+_psp.id+"/ship").then(function(r){ feedback(true); toast("Expediat: "+r.code); screenPalletShip(); }).catch(function(e){ feedback(false); toast(e.message,true); });
+  var items=[], total=0;
+  (_psp.items||[]).forEach(function(it,idx){ var v=el("pspq_"+idx); var q=v?Math.max(0,Math.round(Number(v.value)||0)):0; q=Math.min(q, Number(it.quantity)); if(q>0){ items.push({product_id:it.product_id, quantity:q}); total+=q; } });
+  if(!total){ toast("Pune cantități > 0",true); return; }
+  api("POST","/api/pallets/"+_psp.id+"/ship",{items:items}).then(function(r){ feedback(true); toast("Expediat: "+r.code+(r.partial?(" · rest "+r.remaining):"")); screenPalletShip(); }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
 
 /* ---- Transfer ---- */

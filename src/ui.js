@@ -2194,7 +2194,10 @@ window.palShipFind = function(){
   }).catch(function(e){ toast(e.message,"bad"); });
 };
 function palShipRender(p, items){
-  var rows=(items||[]).map(function(it){ var bx=(it.boxes&&it.per_box)?('<span class="muted" style="font-size:11.5px"> ('+it.boxes+'×'+it.per_box+')</span>'):''; return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+bx+'</td></tr>'; }).join("");
+  window._psShip = { id:p.id, code:p.code, kind:p.kind, items:(items||[]) };
+  var rows=(items||[]).map(function(it,idx){ var bx=(it.boxes&&it.per_box)?('<span class="muted" style="font-size:11.5px"> ('+it.boxes+'×'+it.per_box+')</span>'):'';
+    return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+bx+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td>'
+      +'<td class="right"><input id="psq_'+idx+'" type="number" min="0" max="'+it.quantity+'" value="'+it.quantity+'" style="width:80px"></td></tr>'; }).join("");
   var meta='<div class="muted" style="font-size:13px;line-height:1.7;margin-top:4px">'
     +'Tip: <b>'+(p.kind==="colet"?"Colet":"Palet")+'</b> · Client: <b>'+esc(p.client_name||"—")+'</b> · Locație: <b>'+esc(p.location_code||"—")+'</b><br>'
     +(p.colete?('Nr. colete: <b>'+esc(p.colete)+'</b> · '):'')+(p.lot?('Lot: <b>'+esc(p.lot)+'</b> · '):'')
@@ -2202,15 +2205,20 @@ function palShipRender(p, items){
   var shipped = p.status==="shipped";
   if(el("ps_res")) el("ps_res").innerHTML='<div class="card" style="margin-top:12px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">'+esc(p.code)+'</h2>'+(shipped?'<span class="pill mut">expediat</span>':'<span class="pill good">'+esc(p.status)+'</span>')+'</div>'
     + meta
-    + '<table style="margin-top:10px"><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=3 class="muted center">Fără produse</td></tr>')+'</tbody></table>'
+    + '<table style="margin-top:10px"><thead><tr><th>SKU</th><th>Produs</th><th class="right">Pe unitate</th><th class="right">Expediază</th></tr></thead><tbody>'+(rows||'<tr><td colspan=4 class="muted center">Fără produse</td></tr>')+'</tbody></table>'
+    + (shipped?'':'<div class="muted" style="font-size:12.5px;margin-top:6px">Poți expedia <b>tot</b> sau doar o parte (fracție) — modifică valorile din „Expediază". Restul rămâne pe '+(p.kind==="colet"?"colet":"palet")+'.</div>')
     + (p.has_aviz?'<div style="margin-top:8px"><button class="ghost sm" onclick="viewAviz('+p.id+')">📄 Vezi avizul scanat</button></div>':'')
-    + (shipped?'':'<button class="big" style="margin-top:14px;background:var(--bad)" onclick="palShipConfirm('+p.id+',\\''+esc(p.code)+'\\','+(p.kind==="colet"?1:0)+')">📤 Expediază '+(p.kind==="colet"?"coletul":"paletul")+'</button>')
+    + (shipped?'':'<button class="big" style="margin-top:12px;background:var(--bad)" onclick="palShipConfirm()">📤 Expediază</button>')
     + '</div>';
 }
-window.palShipConfirm = function(id, code, isColet){
-  modal("Expediază "+esc(code),
-    '<p>Confirmi expedierea? Se scade <b>tot stocul</b> de pe '+(isColet?"colet":"palet")+' din locație (mișcări outbound), iar unitatea devine «expediată».</p>',
-    function(){ api("POST","/api/pallets/"+id+"/ship").then(function(r){ closeModal(); toast("Expediat: "+r.code); palletShipUI(); }).catch(function(e){ toast(e.message,"bad"); }); });
+window.palShipConfirm = function(){
+  var s=window._psShip; if(!s) return;
+  var items=[], total=0, full=true;
+  s.items.forEach(function(it,idx){ var v=el("psq_"+idx); var q=v?Math.max(0,Number(v.value)||0):0; q=Math.min(q, Number(it.quantity)); if(q>0){ items.push({product_id:it.product_id, quantity:q}); total+=q; } if(q<Number(it.quantity)) full=false; });
+  if(!total){ toast("Pune cantități > 0","bad"); return; }
+  modal("Expediază "+esc(s.code),
+    '<p>Confirmi expedierea a <b>'+total+'</b> bucăți'+(full?' (tot)':' (parțial)')+' din '+(s.kind==="colet"?"colet":"palet")+'?</p>'+(full?'':'<p class="muted" style="font-size:13px">Restul rămâne pe '+(s.kind==="colet"?"colet":"palet")+', disponibil pentru altă expediere.</p>'),
+    function(){ api("POST","/api/pallets/"+s.id+"/ship",{items:items}).then(function(r){ closeModal(); toast("Expediat: "+r.code+(r.partial?(" · rest "+r.remaining+" buc"):"")); palletShipUI(); }).catch(function(e){ toast(e.message,"bad"); }); });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, expediază"; sv.className="danger"; }
 };
 window.palletDetail = function(id){
