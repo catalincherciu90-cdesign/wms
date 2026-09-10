@@ -217,6 +217,78 @@ export async function ship(request, env, ctx, user, params) {
   return json({ ok: true, code: pallet.code, kind: pallet.kind || 'palet', partial: partial && !fully, remaining: left?.q || 0 });
 }
 
+// Spargere / mutare marfă de pe un palet/colet pe altul (existent sau nou).
+// body: { items:[{product_id, quantity}], to_id | to_code | (new_kind, new_location_id) }
+export async function split(request, env, ctx, user, params) {
+  const srcId = Number(params.id);
+  const b = await readJson(request);
+  const src = await env.DB.prepare('SELECT * FROM pallets WHERE id=?').bind(srcId).first();
+  if (!src) return error('Palet/colet sursă inexistent', 404);
+  if (src.status === 'shipped') return error('Sursa e deja expediată', 400);
+
+  const moves = (Array.isArray(b.items) ? b.items : [])
+    .map((i) => ({ product_id: Number(i.product_id), quantity: Number(i.quantity) || 0 }))
+    .filter((i) => i.product_id && i.quantity > 0);
+  if (!moves.length) return error('Alege ce muți (cantități > 0)', 400);
+
+  const { results: srcItems } = await env.DB.prepare('SELECT id, product_id, quantity, per_box FROM pallet_items WHERE pallet_id=?').bind(srcId).all();
+  const srcMap = {}; srcItems.forEach((it) => { srcMap[it.product_id] = it; });
+  for (const m of moves) { const it = srcMap[m.product_id]; if (!it || it.quantity < m.quantity) return error('Cantitate prea mare față de paletul sursă (nu e atât)', 400); }
+
+  // destinație: palet existent (id/cod) sau unul nou
+  let dest = null;
+  if (b.to_id) dest = await env.DB.prepare('SELECT * FROM pallets WHERE id=?').bind(Number(b.to_id)).first();
+  else if (b.to_code) dest = await env.DB.prepare("SELECT * FROM pallets WHERE code=? AND status<>'shipped'").bind(String(b.to_code).trim()).first();
+  if ((b.to_id || b.to_code) && !dest) return error('Paletul destinație nu există (sau e expediat)', 404);
+  if (dest && dest.id === srcId) return error('Destinația trebuie să fie diferită de sursă', 400);
+  if (!dest) {
+    const kind = ['colet', 'ambalaje'].includes(b.new_kind) ? b.new_kind : 'palet';
+    const locId = b.new_location_id ? Number(b.new_location_id) : src.location_id;
+    const prefix = kind === 'colet' ? 'COL-' : (kind === 'ambalaje' ? 'AMB-' : 'PAL-');
+    const tmp = 'TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase();
+    const res = await env.DB.prepare("INSERT INTO pallets (code, client_id, location_id, status, kind) VALUES (?, ?, ?, 'stored', ?)").bind(tmp, src.client_id, locId, kind).run();
+    const nid = res.meta.last_row_id;
+    const code = prefix + String(nid).padStart(5, '0');
+    await env.DB.prepare('UPDATE pallets SET code=? WHERE id=?').bind(code, nid).run();
+    dest = await env.DB.prepare('SELECT * FROM pallets WHERE id=?').bind(nid).first();
+  }
+
+  const srcLoc = src.location_id, dstLoc = dest.location_id;
+  const moveStock = srcLoc && dstLoc && srcLoc !== dstLoc;
+  if (moveStock) {
+    for (const m of moves) {
+      const inv = await env.DB.prepare('SELECT quantity FROM inventory WHERE product_id=? AND location_id=?').bind(m.product_id, srcLoc).first();
+      if ((inv?.quantity || 0) < m.quantity) { const pr = await env.DB.prepare('SELECT sku FROM products WHERE id=?').bind(m.product_id).first(); return error('Stoc insuficient în locația sursă pentru ' + (pr?.sku || ('#' + m.product_id)), 400); }
+    }
+  }
+
+  const { results: destItems } = await env.DB.prepare('SELECT id, product_id, quantity, per_box FROM pallet_items WHERE pallet_id=?').bind(dest.id).all();
+  const destMap = {}; destItems.forEach((it) => { destMap[it.product_id] = it; });
+
+  const ref = 'SPARGERE';
+  const note = 'spargere ' + src.code + ' -> ' + dest.code;
+  const stmts = [];
+  for (const m of moves) {
+    const it = srcMap[m.product_id];
+    const rem = it.quantity - m.quantity;
+    if (rem > 0) { const nb = (it.per_box > 0) ? Math.ceil(rem / it.per_box) : null; stmts.push(env.DB.prepare('UPDATE pallet_items SET quantity=?, boxes=? WHERE id=?').bind(rem, nb, it.id)); }
+    else stmts.push(env.DB.prepare('DELETE FROM pallet_items WHERE id=?').bind(it.id));
+
+    const dIt = destMap[m.product_id];
+    if (dIt) { const nq = dIt.quantity + m.quantity; const nb = (dIt.per_box > 0) ? Math.ceil(nq / dIt.per_box) : null; stmts.push(env.DB.prepare('UPDATE pallet_items SET quantity=?, boxes=? WHERE id=?').bind(nq, nb, dIt.id)); }
+    else stmts.push(env.DB.prepare('INSERT INTO pallet_items (pallet_id, product_id, quantity, per_box) VALUES (?, ?, ?, ?)').bind(dest.id, m.product_id, m.quantity, it.per_box || null));
+
+    if (moveStock) {
+      stmts.push(env.DB.prepare("INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ON CONFLICT(product_id, location_id) DO UPDATE SET quantity=quantity+excluded.quantity, updated_at=datetime('now')").bind(m.product_id, srcLoc, -m.quantity));
+      stmts.push(env.DB.prepare("INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ON CONFLICT(product_id, location_id) DO UPDATE SET quantity=quantity+excluded.quantity, updated_at=datetime('now')").bind(m.product_id, dstLoc, m.quantity));
+      stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'transfer', ?, ?, ?, ?)").bind(m.product_id, srcLoc, -m.quantity, ref, note, user.sub));
+      stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'transfer', ?, ?, ?, ?)").bind(m.product_id, dstLoc, m.quantity, ref, note, user.sub));
+    }
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true, source: src.code, dest: dest.code, moved_stock: moveStock });
+}
+
 // Descarcă avizul scanat atașat unei unități (palet/colet).
 export async function avizFile(request, env, ctx, user, params) {
   const id = Number(params.id);

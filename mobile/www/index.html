@@ -372,13 +372,33 @@ window.pltSetKind=function(k){ _plt.kind=k; var pb=el("pl_kp"), cb=el("pl_kc"), 
 function pltScan(code){
   code=(code||"").trim(); if(!code||!window._plt) return;
   resolveProduct(code).then(function(p){
-    if(!p){ feedback(false); toast("Produs negăsit: "+code,true); return; }
+    if(!p){ feedback(false); pltNewProduct(code); return; }
     feedback(true);
     var ex=_plt.lines.find(function(l){ return l.product_id===p.id; });
     if(ex){ ex.boxes=(ex.boxes||0)+1; } else _plt.lines.push({product_id:p.id, name:p.name, code:(p.barcode||p.sku||""), boxes:1, per_box:1});
     toast(p.name+" +1 cutie"); pltRenderList();
   }).catch(function(e){ toast(e.message,true); });
 }
+function pltNewProduct(code){
+  window._pltNew=code;
+  var h=el("pl_list"); if(!h) return;
+  h.innerHTML='<div class="card"><div style="font-weight:800;margin-bottom:2px">Produs nou</div>'
+    +'<div class="muted" style="font-size:12px;margin-bottom:8px">Cod: '+esc(code)+' — negăsit. Adaugă-l:</div>'
+    +'<label>Nume produs</label><input id="pl_np_name" autocomplete="off">'
+    +'<label>UM</label><input id="pl_np_unit" value="buc">'
+    +'<button class="big" style="margin-top:10px" onclick="pltCreateProduct()">Creează și adaugă</button>'
+    +'<button class="big ghost" style="margin-top:8px" onclick="pltRenderList()">Renunță</button></div>';
+  setTimeout(function(){ if(el("pl_np_name")) el("pl_np_name").focus(); },120);
+}
+window.pltCreateProduct=function(){
+  var name=el("pl_np_name")?el("pl_np_name").value.trim():""; if(!name){ toast("Scrie numele",true); return; }
+  var body={ barcode:window._pltNew||"", name:name, unit:(el("pl_np_unit")&&el("pl_np_unit").value.trim())||"buc" };
+  api("POST","/api/products",body).then(function(r){
+    feedback(true); toast("Produs creat: "+r.product.name);
+    _plt.lines.push({product_id:r.product.id, name:r.product.name, code:(r.product.barcode||r.product.sku||""), boxes:1, per_box:1});
+    pltRenderList();
+  }).catch(function(e){ toast(e.message,true); });
+};
 function pltRenderList(){
   var h=el("pl_list"); if(!h) return;
   if(!_plt.lines.length){ h.innerHTML='<div class="muted center" style="padding:8px;font-size:13px">Scanează produsele care intră pe palet/colet.</div>'; return; }
