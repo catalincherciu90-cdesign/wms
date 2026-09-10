@@ -1341,8 +1341,20 @@ function fillBar(used, cap){
     +'<div style="height:9px;background:var(--panel-2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:6px"></div></div></div>';
 }
 
+window.resetStockConfirm = function(){
+  modal("Resetează tot stocul la 0",
+    '<div class="pill bad" style="display:block;padding:8px 12px;font-size:12.5px">⚠️ Pune pe <b>0</b> stocul TUTUROR produselor, din toate locațiile.</div>'
+    +'<p class="muted" style="font-size:13px;margin-top:8px">Se înregistrează mișcări de ajustare (referință <b>RESET</b>) pentru fiecare poziție, deci rămâne urma în istoric. Acțiunea <b>nu se poate anula automat</b> — stocul se reface prin recepție sau inventar.</p>'
+    +'<div class="field"><label>Scrie <b>RESET</b> ca să confirmi</label><input id="rst_c" placeholder="RESET" autocomplete="off"></div>',
+    function(){
+      if(((el("rst_c")&&el("rst_c").value)||"").trim().toUpperCase()!=="RESET"){ toast("Scrie RESET ca să confirmi","bad"); return; }
+      api("POST","/api/inventory/reset-all",{confirm:"RESET"}).then(function(r){ closeModal(); toast("Stoc resetat: "+r.zeroed+" poziții pe 0"); go("stock"); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Resetează la 0"; sv.className="danger"; }
+};
 VIEWS.stock = function(){
-  var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/inventory/export\\',\\'stoc.csv\\')">Export CSV</button>';
+  var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/inventory/export\\',\\'stoc.csv\\')">Export CSV</button>'
+    + (can("admin")?' <button class="danger" onclick="resetStockConfirm()">⚠ Resetează stoc la 0</button>':'');
   setMain(topbar("Stoc", exp)
     + '<h2 style="margin-top:6px">Ocupare rafturi</h2><div class="card" id="occ" style="margin-bottom:18px;padding:8px 4px">…</div>'
     + '<h2>Total per produs</h2><div class="card" id="sumtbl" style="margin-bottom:18px">…</div><h2>Detaliu pe locație</h2><div class="card" id="stbl">…</div>');

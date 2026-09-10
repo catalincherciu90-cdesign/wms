@@ -163,6 +163,35 @@ export async function transferLocation(request, env, ctx, user) {
   return json({ ok: true, moved_products: rows.length });
 }
 
+// Resetează stocul la 0 (toate produsele sau doar ale unui client). Distructiv — doar admin.
+// Înregistrează o mișcare de ajustare (referință RESET) pentru fiecare poziție, ca audit.
+export async function resetAll(request, env, ctx, user) {
+  const b = await readJson(request);
+  if (b?.confirm !== 'RESET') return error('Confirmare lipsă (confirm:"RESET").', 400);
+  const clientId = b?.client_id ? Number(b.client_id) : null;
+
+  let sql = 'SELECT i.product_id, i.location_id, i.quantity FROM inventory i';
+  const binds = [];
+  if (clientId) { sql += ' JOIN products p ON p.id = i.product_id WHERE i.quantity <> 0 AND p.client_id = ?'; binds.push(clientId); }
+  else { sql += ' WHERE i.quantity <> 0'; }
+  const { results: rows } = await env.DB.prepare(sql).bind(...binds).all();
+  if (!rows.length) return json({ ok: true, zeroed: 0 });
+
+  const movSql = 'INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  const CH = 40;
+  for (let i = 0; i < rows.length; i += CH) {
+    const batch = rows.slice(i, i + CH).map((r) =>
+      env.DB.prepare(movSql).bind(r.product_id, r.location_id, 'adjust', -Number(r.quantity), 'RESET', 'reset stoc la 0', user.sub));
+    await env.DB.batch(batch);
+  }
+  if (clientId) {
+    await env.DB.prepare("UPDATE inventory SET quantity = 0, updated_at = datetime('now') WHERE quantity <> 0 AND product_id IN (SELECT id FROM products WHERE client_id = ?)").bind(clientId).run();
+  } else {
+    await env.DB.prepare("UPDATE inventory SET quantity = 0, updated_at = datetime('now') WHERE quantity <> 0").run();
+  }
+  return json({ ok: true, zeroed: rows.length });
+}
+
 export async function exportStockCsv(request, env) {
   const { results } = await env.DB.prepare(`
     SELECT p.sku, p.name, l.code AS location, i.quantity, i.updated_at
