@@ -1179,7 +1179,7 @@ window.loadProducts = function(){
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right">'+codeBtns
-        + (hasBc && can("operator")?' <button class="ghost sm" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button>':'')
+        + (hasBc && can("operator")?' <button class="ghost sm" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button> <button class="ghost sm" onclick="prodLabelPdf('+p.id+')" title="Descarcă eticheta PDF">PDF</button>':'')
         + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
@@ -2227,6 +2227,71 @@ function stationLog(job){
   var t=new Date().toLocaleTimeString();
   h.innerHTML='<div>'+t+' — printat <b>'+esc(job.code||("#"+job.id))+'</b></div>'+h.innerHTML;
 }
+/* ---- Etichetă -> PDF descărcabil (fără librării: canvas -> JPEG -> PDF minimal) ---- */
+function jpegToPdf(dataUrl, wpx, hpx){
+  var jpg=atob(dataUrl.substring(dataUrl.indexOf(",")+1));
+  var pw=Math.round(wpx*72/96*100)/100, ph=Math.round(hpx*72/96*100)/100;
+  var content="q "+pw+" 0 0 "+ph+" 0 0 cm /Im0 Do Q";
+  var objs=[null,
+    "<</Type/Catalog/Pages 2 0 R>>",
+    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 "+pw+" "+ph+"]/Resources<</XObject<</Im0 5 0 R>>>>/Contents 4 0 R>>",
+    "<</Length "+content.length+">>\\nstream\\n"+content+"\\nendstream",
+    "<</Type/XObject/Subtype/Image/Width "+wpx+"/Height "+hpx+"/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length "+jpg.length+">>\\nstream\\n"+jpg+"\\nendstream"
+  ];
+  var out="%PDF-1.4\\n", off=[];
+  for(var i=1;i<=5;i++){ off[i]=out.length; out+=i+" 0 obj\\n"+objs[i]+"\\nendobj\\n"; }
+  var xref=out.length;
+  out+="xref\\n0 6\\n0000000000 65535 f \\n";
+  for(var j=1;j<=5;j++){ out+=("0000000000"+off[j]).slice(-10)+" 00000 n \\n"; }
+  out+="trailer\\n<</Size 6/Root 1 0 R>>\\nstartxref\\n"+xref+"\\n%%EOF";
+  var arr=new Uint8Array(out.length);
+  for(var k=0;k<out.length;k++) arr[k]=out.charCodeAt(k)&0xff;
+  return new Blob([arr],{type:"application/pdf"});
+}
+function renderLabelCanvas(head, bcUrl, body, cb){
+  var img=new Image();
+  img.onload=function(){
+    var W=520, pad=18;
+    var imgW=Math.min(W-2*pad, img.width), imgH=img.height*(imgW/img.width);
+    var h=pad + head.length*30 + 8 + imgH + 10 + body.length*20 + pad;
+    var c=document.createElement("canvas"); c.width=W; c.height=Math.ceil(h);
+    var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle="#000"; ctx.textAlign="center";
+    var y=pad+22;
+    head.forEach(function(t){ ctx.font="bold 22px Arial"; ctx.fillText(String(t), W/2, y); y+=30; });
+    y+=6; ctx.drawImage(img,(W-imgW)/2,y,imgW,imgH); y+=imgH+14;
+    ctx.font="14px Arial";
+    body.forEach(function(t){ ctx.fillText(String(t), W/2, y); y+=20; });
+    cb(c);
+  };
+  img.onerror=function(){ cb(null); };
+  img.src=bcUrl;
+}
+function downloadLabelPdf(head, code, body, filename){
+  renderLabelCanvas(head, lblBarcodeURL(code||""), (body||[]), function(c){
+    if(!c){ toast("Nu am putut genera eticheta","bad"); return; }
+    var blob=jpegToPdf(c.toDataURL("image/jpeg",0.92), c.width, c.height);
+    var url=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=url; a.download=filename||("eticheta.pdf"); document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+}
+window.prodLabelPdf=function(id){
+  var p=(cache.products||[]).find(function(x){return x.id===id;}); if(!p) return;
+  var code=p.barcode||p.sku; if(!code){ toast("Produsul nu are cod","bad"); return; }
+  downloadLabelPdf([p.name], code, [], "eticheta_"+code+".pdf");
+};
+window.palletLabelPdf=function(pallet, items){
+  var kindLbl=(pallet.kind==="colet")?"COLET":(pallet.kind==="ambalaje"?"PALET AMBALAJE":"PALET");
+  var body=[];
+  if(pallet.client_name) body.push("Client: "+pallet.client_name);
+  if(pallet.location_code) body.push("Locatie: "+pallet.location_code);
+  if(pallet.colete) body.push("Colete: "+pallet.colete);
+  if(pallet.lot) body.push("Lot: "+pallet.lot);
+  if(pallet.aviz) body.push("Aviz: "+pallet.aviz);
+  (items||[]).forEach(function(it){ body.push(it.product_name+": "+it.quantity+(it.boxes&&it.per_box?(" ("+it.boxes+"x"+it.per_box+")"):"")); });
+  downloadLabelPdf([kindLbl, pallet.code], pallet.code, body, "eticheta_"+pallet.code+".pdf");
+};
 function buildProductLabelHTML(barcode, name, autoprint){
   var bc=lblBarcodeURL(barcode||"");
   var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
@@ -2365,7 +2430,7 @@ window.palletDetail = function(id){
       +(p.aviz?(' · aviz '+esc(p.aviz)):'')+(p.received_at?(' · recepție '+esc(p.received_at)):'');
     modal(title,
       '<div class="muted" style="margin-bottom:10px">'+meta+'</div>'
-      +'<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="printPalletLabel(_pdData.pallet,_pdData.items)">🏷️ Printează eticheta</button>'
+      +'<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="printPalletLabel(_pdData.pallet,_pdData.items)">🏷️ Printează eticheta</button> <button class="ghost sm" onclick="palletLabelPdf(_pdData.pallet,_pdData.items)">📄 PDF</button>'
       +(p.has_aviz?' <button class="ghost sm" onclick="viewAviz('+id+')">📄 Vezi avizul scanat</button>':'')
       +'</div>'
       +items+actions, null);
