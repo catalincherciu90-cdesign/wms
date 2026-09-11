@@ -1046,6 +1046,7 @@ function productsView(scope, title){
       + '<label style="margin:0">Mută la client:</label>'
       + '<select id="pbulk_client" style="max-width:220px"><option value="">— intern (al companiei) —</option></select>'
       + '<button class="sm" onclick="reassignSelected()">Mută</button>'
+      + '<button class="sm" onclick="prodPrintSelected()">🖨️ Etichete</button>'
       + (can("admin")?'<button class="danger sm" onclick="deleteSelected()">Șterge selectate</button>':'')
       + '<button class="ghost sm" onclick="pselClear()">Anulează selecția</button>'
       + '</div></div>'
@@ -1178,6 +1179,7 @@ window.loadProducts = function(){
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right">'+codeBtns
+        + (hasBc && can("operator")?' <button class="ghost sm" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button>':'')
         + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
@@ -1223,6 +1225,17 @@ window.deleteSelected = function(){
       }).catch(function(e){ toast(e.message,"bad"); });
     });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge definitiv"; sv.className="danger"; }
+};
+// Trimite eticheta unui produs (cod de bare + nume) către stația de imprimare.
+window.prodPrintLabel = function(id){
+  var p=(cache.products||[]).find(function(x){return x.id===id;}); if(!p) return;
+  var code=p.barcode||p.sku; if(!code){ toast("Produsul nu are cod","bad"); return; }
+  api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:p.name}).then(function(){ toast("Etichetă trimisă la imprimantă"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.prodPrintSelected = function(){
+  var ids=pselIds(); if(!ids.length){ toast("Selectează produse","bad"); return; }
+  var n=0; ids.forEach(function(id){ var p=(cache.products||[]).find(function(x){return x.id===id;}); if(p&&(p.barcode||p.sku)){ api("POST","/api/print/jobs",{type:"product", ref_id:id, code:(p.barcode||p.sku), title:p.name}).catch(function(){}); n++; } });
+  toast(n+" etichete trimise la imprimantă");
 };
 // Generează un cod intern EAN-13 pentru un produs fără cod de bare.
 window.genProductBarcode = function(id){
@@ -2214,9 +2227,15 @@ function stationLog(job){
   var t=new Date().toLocaleTimeString();
   h.innerHTML='<div>'+t+' — printat <b>'+esc(job.code||("#"+job.id))+'</b></div>'+h.innerHTML;
 }
-function stationPrint(pallet, items){
+function buildProductLabelHTML(barcode, name, autoprint){
+  var bc=lblBarcodeURL(barcode||"");
+  var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
+  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(barcode||"")+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:12px;text-align:center}.nm{font-size:15px;font-weight:bold;margin-bottom:6px}img{max-width:100%}.cd{font-size:13px;margin-top:4px;letter-spacing:1px}</style></head><body>'
+    +'<div class="nm">'+esc(name||"")+'</div><img src="'+bc+'"><div class="cd">'+esc(barcode||"")+'</div>'+script+'</body></html>';
+}
+function stationPrintHTML(html){
   var f=el("ps_iframe"); if(!f) return;
-  var doc=f.contentWindow.document; doc.open(); doc.write(buildPalletLabelHTML(pallet, items, false)); doc.close();
+  var doc=f.contentWindow.document; doc.open(); doc.write(html); doc.close();
   setTimeout(function(){ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} }, 400);
 }
 function stationTick(){
@@ -2225,10 +2244,16 @@ function stationTick(){
   api("GET","/api/print/jobs").then(function(d){
     var jobs=d.jobs||[]; if(!jobs.length) return;
     var job=jobs[0]; window._stBusy=true;
-    api("GET","/api/pallets/"+job.ref_id).then(function(pd){
-      stationPrint(pd.pallet, pd.items);
-      return api("POST","/api/print/jobs/"+job.id+"/done");
-    }).then(function(){ stationLog(job); }).catch(function(e){ toast(e.message,"bad"); }).then(function(){ setTimeout(function(){ window._stBusy=false; }, 800); });
+    var step;
+    if(job.type==="product"){
+      step = Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false)); });
+    } else {
+      step = api("GET","/api/pallets/"+job.ref_id).then(function(pd){ stationPrintHTML(buildPalletLabelHTML(pd.pallet, pd.items, false)); });
+    }
+    step.then(function(){ return api("POST","/api/print/jobs/"+job.id+"/done"); })
+      .then(function(){ stationLog(job); })
+      .catch(function(e){ toast(e.message,"bad"); })
+      .then(function(){ setTimeout(function(){ window._stBusy=false; }, 800); });
   }).catch(function(){});
 }
 window.viewAviz = function(id){
