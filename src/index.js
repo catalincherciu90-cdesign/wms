@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v67';
+const APP_VERSION = 'v68';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -19,6 +19,7 @@ import * as barcode from './routes/barcode.js';
 import * as clients from './routes/clients.js';
 import * as portal from './routes/portal.js';
 import * as pallets from './routes/pallets.js';
+import * as print from './routes/print.js';
 import * as pwa from './routes/pwa.js';
 import * as admin from './routes/admin.js';
 import * as services from './routes/services.js';
@@ -136,6 +137,9 @@ const routes = [
   ['GET', '/api/pallets/:id/aviz', pallets.avizFile, 'viewer'],
   ['POST', '/api/pallets/:id/ship', pallets.ship, 'operator'],
   ['POST', '/api/pallets/:id/split', pallets.split, 'operator'],
+  ['POST', '/api/print/jobs', print.create, 'operator'],
+  ['GET', '/api/print/jobs', print.pending, 'viewer'],
+  ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
   ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
   ['DELETE', '/api/pallets/:id/items/:itemId', pallets.removeItem, 'operator'],

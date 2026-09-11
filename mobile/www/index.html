@@ -238,6 +238,7 @@ function renderHome(){
     +tile("ship","📤","Expediere")
     +tile("palletship","🚚","Expediere<br>palet/colet")
     +tile("spargere","✂️","Spargere<br>palet")
+    +tile("printlabel","🖨️","Imprimă<br>etichetă")
     +tile("transfer","🔄","Transfer")
     +tile("stock","✏️","Actualizare<br>stoc")
     +tile("inventory","🧮","Inventar")
@@ -247,7 +248,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -445,7 +446,8 @@ window.pltFinish=function(){
     aviz_file: _plt.aviz||null,
     items:_plt.lines.map(function(l){ return {product_id:l.product_id, boxes:l.boxes, per_box:l.per_box, quantity:(l.boxes||0)*(l.per_box||0)}; }) };
   api("POST","/api/pallets/receive",body).then(function(r){
-    feedback(true); toast(pltKindName(_plt.kind)+" recepționat: "+r.pallet.code);
+    feedback(true); toast(pltKindName(_plt.kind)+" recepționat: "+r.pallet.code+" · etichetă trimisă la imprimantă");
+    api("POST","/api/print/jobs",{type:"pallet", ref_id:r.pallet.id, code:r.pallet.code}).catch(function(){});
     window._plt=null; screenPallet();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
@@ -487,6 +489,29 @@ window.pspShip=function(){
   (_psp.items||[]).forEach(function(it,idx){ var v=el("pspq_"+idx); var q=v?Math.max(0,Math.round(Number(v.value)||0)):0; q=Math.min(q, Number(it.quantity)); if(q>0){ items.push({product_id:it.product_id, quantity:q}); total+=q; } });
   if(!total){ toast("Pune cantități > 0",true); return; }
   api("POST","/api/pallets/"+_psp.id+"/ship",{items:items}).then(function(r){ feedback(true); toast("Expediat: "+r.code+(r.partial?(" · rest "+r.remaining):"")); screenPalletShip(); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
+
+/* ---- Imprimă etichetă (trimite job la stația de imprimare) ---- */
+function screenPrintLabel(){
+  scanTarget=function(code){ prnFind(code); };
+  shell("Imprimă etichetă",
+    '<div class="scanbox"><input id="prn_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează paletul/coletul"></div>'
+    +'<button class="cam" onclick="openCam(function(c){prnFind(c)})">📷 Scanează cu camera</button>'
+    +'<div class="op-hint" style="margin-top:6px">Eticheta iese la imprimanta de pe calculatorul cu pagina „Stație imprimare" deschisă.</div>'
+    +'<div id="prn_res"></div>', {back:"renderHome()"});
+  wireScan("prn_scan", prnFind);
+}
+function prnFind(code){
+  code=(code||"").trim(); if(!code) return;
+  api("GET","/api/pallets?code="+encodeURIComponent(code)).then(function(d){
+    var p=(d.pallets||[])[0];
+    if(!p){ feedback(false); if(el("prn_res")) el("prn_res").innerHTML='<div class="card center muted">Niciun palet/colet activ: '+esc(code)+'</div>'; return; }
+    feedback(true);
+    el("prn_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:18px;font-weight:800">'+esc(p.code)+'</div><div class="muted" style="font-size:12.5px;margin:4px 0 8px">'+(p.kind==="colet"?"colet":"palet")+' · '+esc(p.client_name||"intern")+' · loc '+esc(p.location_code||"—")+'</div><button class="big" onclick="prnSend('+p.id+',\''+esc(p.code)+'\')">🖨️ Trimite la imprimantă</button></div>';
+  }).catch(function(e){ toast(e.message,true); });
+}
+window.prnSend=function(id, code){
+  api("POST","/api/print/jobs",{type:"pallet", ref_id:id, code:code}).then(function(){ feedback(true); toast("Etichetă trimisă la imprimantă: "+code); }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
 
 /* ---- Spargere / mutare marfă de pe un palet pe altul ---- */

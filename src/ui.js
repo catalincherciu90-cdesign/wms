@@ -864,7 +864,7 @@ var NAV = [
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
-  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"] ] },
+  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Stație imprimare","operator"] ] },
   ["orders","Comenzi","viewer"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
@@ -2173,12 +2173,12 @@ window.palReceiveSubmit = function(){
     go("pallets");
   }).catch(function(e){ var m=el("palmsg"); if(m) m.innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; else toast(e.message,"bad"); });
 };
-window.printPalletLabel = function(pallet, items){
+function buildPalletLabelHTML(pallet, items, autoprint){
   var bc = lblBarcodeURL(pallet.code);
   var rows=(items||[]).map(function(i){ var bx=(i.boxes&&i.per_box)?(i.boxes+'×'+i.per_box+' = '):''; return '<tr><td>'+esc(i.product_name)+' <span style="color:#666">'+esc(i.sku||"")+'</span></td><td style="text-align:right">'+bx+esc(i.quantity)+' '+esc(i.unit||"")+'</td></tr>'; }).join("");
-  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi eticheta","bad"); return; }
   var kindLbl = (pallet.kind==="colet") ? "COLET" : (pallet.kind==="ambalaje" ? "PALET AMBALAJE" : "PALET");
-  var html='<html><head><meta charset="utf-8"><title>Etichetă '+esc(pallet.code)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:16px}h1{font-size:22px;margin:0}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}td{border-bottom:1px solid #ddd;padding:4px 6px}.meta{font-size:14px;margin:6px 0;line-height:1.5}.code{font-size:24px;font-weight:bold;letter-spacing:1px}</style></head><body>'
+  var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
+  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(pallet.code)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:16px}h1{font-size:22px;margin:0}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}td{border-bottom:1px solid #ddd;padding:4px 6px}.meta{font-size:14px;margin:6px 0;line-height:1.5}.code{font-size:24px;font-weight:bold;letter-spacing:1px}</style></head><body>'
     +'<h1>'+kindLbl+'</h1><div class="code">'+esc(pallet.code)+'</div>'
     +'<img src="'+bc+'" style="max-width:100%;margin:8px 0">'
     +'<div class="meta">'
@@ -2189,9 +2189,48 @@ window.printPalletLabel = function(pallet, items){
       +(pallet.aviz?('Aviz: <b>'+esc(pallet.aviz)+'</b><br>'):'')
       +(pallet.received_at?('Data recepției: <b>'+esc(pallet.received_at)+'</b><br>'):('Data: '+esc(new Date().toLocaleString())))+'</div>'
     +'<table><thead><tr><td><b>Produs</b></td><td style="text-align:right"><b>Cant.</b></td></tr></thead><tbody>'+(rows||'<tr><td colspan=2>—</td></tr>')+'</tbody></table>'
-    +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt></body></html>';
-  w.document.write(html); w.document.close();
+    +script+'</body></html>';
+}
+window.printPalletLabel = function(pallet, items){
+  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi eticheta","bad"); return; }
+  w.document.write(buildPalletLabelHTML(pallet, items, true)); w.document.close();
 };
+/* ---- Stație imprimare: pagina ținută deschisă pe calculatorul cu imprimanta ---- */
+VIEWS.printstation = function(){
+  setMain(topbar("Stație imprimare")
+    + '<div class="card" style="padding:16px"><p><b>Ține pagina asta deschisă</b> pe calculatorul cu imprimanta de etichete. Etichetele trimise de pe Zebra (sau din WMS) se printează automat aici.</p>'
+    + '<div class="muted" style="font-size:12.5px">Pentru printare fără fereastră de confirmare: pornește Chrome cu <code>--kiosk-printing</code> și pune imprimanta de etichete ca implicită.</div>'
+    + '<div id="st_status" style="margin-top:10px;font-weight:600"></div>'
+    + '<div id="st_log" style="margin-top:10px;font-size:13px"></div></div>'
+    + '<iframe id="ps_iframe" style="position:fixed;left:-9999px;top:0;width:420px;height:640px;border:0"></iframe>');
+  window._stBusy=false;
+  if(el("st_status")) el("st_status").textContent="✅ Ascult... verific la fiecare 4 secunde.";
+  stationTick();
+  if(window._stTimer) clearInterval(window._stTimer);
+  window._stTimer=setInterval(stationTick, 4000);
+};
+function stationLog(job){
+  var h=el("st_log"); if(!h) return;
+  var t=new Date().toLocaleTimeString();
+  h.innerHTML='<div>'+t+' — printat <b>'+esc(job.code||("#"+job.id))+'</b></div>'+h.innerHTML;
+}
+function stationPrint(pallet, items){
+  var f=el("ps_iframe"); if(!f) return;
+  var doc=f.contentWindow.document; doc.open(); doc.write(buildPalletLabelHTML(pallet, items, false)); doc.close();
+  setTimeout(function(){ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} }, 400);
+}
+function stationTick(){
+  if(!el("ps_iframe")){ if(window._stTimer){ clearInterval(window._stTimer); window._stTimer=null; } return; } // am părăsit pagina
+  if(window._stBusy) return;
+  api("GET","/api/print/jobs").then(function(d){
+    var jobs=d.jobs||[]; if(!jobs.length) return;
+    var job=jobs[0]; window._stBusy=true;
+    api("GET","/api/pallets/"+job.ref_id).then(function(pd){
+      stationPrint(pd.pallet, pd.items);
+      return api("POST","/api/print/jobs/"+job.id+"/done");
+    }).then(function(){ stationLog(job); }).catch(function(e){ toast(e.message,"bad"); }).then(function(){ setTimeout(function(){ window._stBusy=false; }, 800); });
+  }).catch(function(){});
+}
 window.viewAviz = function(id){
   fetch(API+"/api/pallets/"+id+"/aviz",{ headers: token?{Authorization:"Bearer "+token}:{} })
     .then(function(r){ if(!r.ok) throw new Error("Nu am putut încărca avizul"); return r.blob(); })
