@@ -585,7 +585,7 @@ function portalFirmHtml(){
     +'</div>';
 }
 window.renderPortal = function(){
-  var nav = [["stock","Stocul meu"],["pallets","Paleții mei"],["orders","Comenzile mele"],["movements","Mișcări"]].map(function(n){
+  var nav = [["stock","Stocul meu"],["pallets","Recepții (paleți/colete)"],["orders","Comenzile mele"],["movements","Mișcări"]].map(function(n){
     return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
   }).join("");
   document.getElementById("root").innerHTML =
@@ -614,20 +614,46 @@ function portalRender(v){
   else portalStock();
 }
 
+var pPalAll=false;
+function pPalKind(k){
+  if(k==="colet") return {ic:"📦", label:"Colet"};
+  if(k==="ambalaje") return {ic:"🧴", label:"Palet cu ambalaje"};
+  return {ic:"🟫", label:"Palet"};
+}
 function portalPallets(){
-  setMain(topbar("Paleții mei") + '<div id="ppal">…</div>');
-  api("GET","/api/portal/pallets").then(function(d){
-    if(!d.pallets.length){ el("ppal").innerHTML='<div class="card" style="padding:18px" class="muted">Nu ai paleți în depozit.</div>'; return; }
-    el("ppal").innerHTML = d.pallets.map(function(p){
-      var items=(p.items||[]).map(function(it){return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td></tr>';}).join("")
-        || '<tr><td colspan=3 class="muted center">Palet gol</td></tr>';
-      return '<div class="card" style="padding:16px;margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">'
-        +'<div><b style="font-size:15px">📦 '+esc(p.code)+'</b> <span class="muted">'+(p.location_code?('· '+esc(p.location_code)):'· neplasat')+'</span></div>'
-        +'<span class="pill mut">'+esc(p.status)+'</span></div>'
+  var tgl='<button class="ghost sm" onclick="pPalToggleAll()">'+(pPalAll?"Ascunde expediate":"Arată și expediate")+'</button>';
+  setMain(topbar("Recepțiile mele (paleți/colete)", tgl) + '<div id="ppal">…</div>');
+  api("GET","/api/portal/pallets"+(pPalAll?"?all=1":"")).then(function(d){
+    var list=d.pallets||[];
+    if(!list.length){ el("ppal").innerHTML='<div class="card muted center" style="padding:18px">Nu ai recepții în depozit.</div>'; return; }
+    // sumar pe tip
+    var cnt={palet:0,colet:0,ambalaje:0};
+    list.forEach(function(p){ var k=(p.kind||"palet"); if(cnt[k]==null) cnt[k]=0; cnt[k]++; });
+    var sumar='<div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">'
+      + kpi(cnt.palet||0,"Paleți") + kpi(cnt.colet||0,"Colete") + kpi(cnt.ambalaje||0,"Paleți cu ambalaje")+'</div>';
+    el("ppal").innerHTML = sumar + list.map(function(p){
+      var ki=pPalKind(p.kind||"palet");
+      var items=(p.items||[]).map(function(it){
+        var box=(it.boxes||it.per_box)?('<span class="muted"> ('+(it.boxes?esc(it.boxes)+' cutii':'')+(it.boxes&&it.per_box?' × ':'')+(it.per_box?esc(it.per_box)+' buc/cutie':'')+')</span>'):'';
+        return '<tr><td><b>'+esc(it.sku)+'</b></td><td>'+esc(it.product_name)+box+'</td><td class="right">'+esc(it.quantity)+' '+esc(it.unit||"")+'</td></tr>';
+      }).join("") || '<tr><td colspan=3 class="muted center">Gol</td></tr>';
+      // rând cu detaliile de recepție
+      var meta=[];
+      var dt=p.received_at||p.created_at; if(dt) meta.push('📅 Recepție: '+esc(String(dt).slice(0,10)));
+      if(p.aviz) meta.push('📄 Aviz: '+esc(p.aviz));
+      if(p.lot) meta.push('🔖 Lot: '+esc(p.lot));
+      if(p.colete) meta.push('📦 '+esc(p.colete)+' colete');
+      var metaHtml=meta.length?('<div class="muted" style="font-size:12.5px;margin:2px 0 10px">'+meta.join(' · ')+'</div>'):'';
+      var statusPill=(p.status==="shipped")?'<span class="pill bad">expediat</span>':'<span class="pill good">în depozit</span>';
+      return '<div class="card" style="padding:16px;margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">'
+        +'<div><b style="font-size:15px">'+ki.ic+' '+esc(p.code)+'</b> <span class="pill mut" style="font-size:11px">'+esc(ki.label)+'</span> <span class="muted">'+(p.location_code?('· '+esc(p.location_code)):'· neplasat')+'</span></div>'
+        +statusPill+'</div>'
+        +metaHtml
         +'<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+items+'</tbody></table></div>';
     }).join("");
-  });
+  }).catch(function(e){ el("ppal").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
 }
+window.pPalToggleAll = function(){ pPalAll=!pPalAll; portalPallets(); };
 
 function portalStock(){
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/portal/export\\',\\'stocul-meu.csv\\')">Export CSV</button>';

@@ -58,16 +58,21 @@ export async function products(request, env, ctx, user) {
   return json({ products: out });
 }
 
-// Paleții clientului + ce produse sunt pe fiecare
+// Recepțiile clientului (paleți / colete / ambalaje) + ce produse sunt pe fiecare.
+// Include detaliile de recepție: nr. aviz, lot, data recepției, nr. colete, cutii/buc.
 export async function pallets(request, env, ctx, user) {
+  const url = new URL(request.url);
+  // implicit: doar marfa aflată încă în depozit; ?all=1 arată și recepțiile expediate (istoric)
+  const all = url.searchParams.get('all') === '1';
   const { results: pals } = await env.DB.prepare(`
-    SELECT pa.id, pa.code, pa.status, l.code AS location_code, pa.created_at
+    SELECT pa.id, pa.code, pa.status, pa.kind, pa.colete, pa.lot, pa.aviz,
+           pa.received_at, pa.created_at, l.code AS location_code
     FROM pallets pa LEFT JOIN locations l ON l.id = pa.location_id
-    WHERE pa.client_id = ? AND pa.status <> 'shipped'
-    ORDER BY pa.code`).bind(user.client_id).all();
+    WHERE pa.client_id = ?${all ? '' : " AND pa.status <> 'shipped'"}
+    ORDER BY COALESCE(pa.received_at, pa.created_at) DESC, pa.id DESC`).bind(user.client_id).all();
 
   const { results: items } = await env.DB.prepare(`
-    SELECT pi.pallet_id, pr.sku, pr.name AS product_name, pr.unit, pi.quantity
+    SELECT pi.pallet_id, pr.sku, pr.name AS product_name, pr.unit, pi.quantity, pi.boxes, pi.per_box
     FROM pallet_items pi JOIN products pr ON pr.id = pi.product_id
     JOIN pallets pa ON pa.id = pi.pallet_id
     WHERE pa.client_id = ? ORDER BY pr.name`).bind(user.client_id).all();
