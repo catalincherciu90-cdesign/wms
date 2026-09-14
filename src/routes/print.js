@@ -170,6 +170,16 @@ async function labelValues(env, job) {
 
 const mmToDots = (mm) => Math.round((Number(mm) || 0) / 25.4 * 300); // 300 dpi (ZT411)
 
+// Lățimea aproximativă a unui cod Code128 (dots), ca să-l putem centra manual
+// (^FB centrează textul, dar NU centrează codul de bare pe multe imprimante).
+function code128Width(data, moduleW) {
+  const s = String(data == null ? '' : data);
+  const allDigits = /^[0-9]+$/.test(s) && s.length > 0;
+  const codewords = (allDigits ? Math.ceil(s.length / 2) : s.length) + 2; // start + date + checksum
+  const modules = 11 * codewords + 13; // + stop
+  return modules * (moduleW || 3);
+}
+
 // Construiește ZPL dintr-un șablon, folosind dimensiunea fizică a etichetei (mm)
 // și alinierea pe verticală (sus / centru / distribuit), ca să iasă exact ca în preview.
 async function jobToZpl(env, job, wFallback) {
@@ -222,15 +232,24 @@ async function jobToZpl(env, job, wFallback) {
   //    Fizic: portret PW=wd, LL=hd; landscape PW=hd, LL=wd.
   const PW = landscape ? (hd > 0 ? hd : wd) : wd;
   let s = '^XA^CI28^PW' + PW + (h > 0 ? ('^LL' + (landscape ? wd : hd)) : '');
+  const alignX = (align, boxW, span) => (align === 'L' ? 0 : (align === 'R' ? Math.max(0, span - boxW) : Math.max(0, Math.round((span - boxW) / 2))));
   blocks.forEach((b) => {
     if (!landscape) {
-      if (b.isBc) s += '^FO0,' + y + '^FB' + w + ',1,0,' + b.align + ',0^BY3^BCN,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
-      else s += '^FO0,' + y + '^FB' + w + ',' + b.maxLines + ',4,' + b.align + ',0^A0N,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
+      if (b.isBc) {
+        const bx = alignX(b.align, code128Width(b.val, 3), w); // centrare calculată
+        s += '^BY3^FO' + bx + ',' + y + '^BCN,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
+      } else {
+        s += '^FO0,' + y + '^FB' + w + ',' + b.maxLines + ',4,' + b.align + ',0^A0N,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
+      }
     } else {
       // 90° în sens orar: originea pe axa scurtă (hd) = hd - y - grosime bloc
       const px = Math.max(0, (hd > 0 ? hd : (contentH + 2 * pad)) - y - b.h);
-      if (b.isBc) s += '^FO' + px + ',0^FB' + wd + ',1,0,' + b.align + ',0^BY3^BCR,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
-      else s += '^FO' + px + ',0^FB' + wd + ',' + b.maxLines + ',4,' + b.align + ',0^A0R,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
+      if (b.isBc) {
+        const py = alignX(b.align, code128Width(b.val, 3), wd); // centrare pe lungime (axa rotită)
+        s += '^BY3^FO' + px + ',' + py + '^BCR,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
+      } else {
+        s += '^FO' + px + ',0^FB' + wd + ',' + b.maxLines + ',4,' + b.align + ',0^A0R,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
+      }
     }
     y += b.h + b.gap + extra;
   });
