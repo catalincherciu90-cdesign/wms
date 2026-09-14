@@ -2371,11 +2371,42 @@ window.agentDownload = function(){
 /* ================= Editor de etichetă (admin) ================= */
 var _le = { type:"product", fields:[], tpl:{elements:[]} };
 var LE_TYPES = [["product","Produs"],["pallet","Palet / colet"],["box","Cutie"]];
+// Presetări gata făcute per tip (le aplici, apoi Salvezi).
+var LE_PRESETS = {
+  product:[
+    {name:"Complet (nume + cod + lot/dată)", elements:[{field:"title",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"lg",align:"C"},{field:"meta",render:"text",size:"sm",align:"C"}]},
+    {name:"Doar cod de bare mare", elements:[{field:"code",render:"barcode",size:"lg",align:"C"}]},
+    {name:"Nume + cod de bare", elements:[{field:"title",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"}]},
+    {name:"Compact (etichetă mică)", elements:[{field:"title",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"sm",align:"C"}]},
+    {name:"Cu lot pe rând separat", elements:[{field:"title",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"lot",render:"text",size:"md",align:"C"},{field:"date",render:"text",size:"sm",align:"C"}]}
+  ],
+  pallet:[
+    {name:"Complet", elements:[{field:"kind",render:"text",size:"lg",align:"C"},{field:"code",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"client",render:"text",size:"sm",align:"C"},{field:"lot",render:"text",size:"sm",align:"C"},{field:"date",render:"text",size:"sm",align:"C"}]},
+    {name:"Doar cod palet (mare)", elements:[{field:"kind",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"lg",align:"C"}]},
+    {name:"Cod + client + lot", elements:[{field:"code",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"client",render:"text",size:"sm",align:"C"},{field:"lot",render:"text",size:"sm",align:"C"}]},
+    {name:"Cu listă produse", elements:[{field:"kind",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"items",render:"text",size:"sm",align:"L"}]}
+  ],
+  box:[
+    {name:"Ambele coduri (cutie + produs)", elements:[{field:"box_code",render:"barcode",size:"md",align:"C"},{field:"product_name",render:"text",size:"md",align:"C"},{field:"product_barcode",render:"barcode",size:"md",align:"C"},{field:"meta",render:"text",size:"sm",align:"C"}]},
+    {name:"Doar cod cutie (mare)", elements:[{field:"box_code",render:"barcode",size:"lg",align:"C"}]},
+    {name:"Cutie + produs + lot", elements:[{field:"box_code",render:"barcode",size:"md",align:"C"},{field:"product_name",render:"text",size:"md",align:"C"},{field:"lot",render:"text",size:"sm",align:"C"},{field:"qty",render:"text",size:"sm",align:"C"}]}
+  ]
+};
+window.leApplyPreset = function(idx){
+  if(idx===""||idx==null) return;
+  var p=(LE_PRESETS[_le.type]||[])[Number(idx)]; if(!p) return;
+  _le.tpl={elements:JSON.parse(JSON.stringify(p.elements))};
+  leRenderRows(); lePreview();
+  toast("Model aplicat — apasă Salvează ca să-l păstrezi");
+};
 VIEWS.labeleditor = function(){
   var tabs = LE_TYPES.map(function(t){ return '<button class="sm'+(_le.type===t[0]?'':' ghost')+'" onclick="leSetType(\\''+t[0]+'\\')">'+esc(t[1])+'</button>'; }).join(" ");
+  var presets=(LE_PRESETS[_le.type]||[]);
+  var presetSel = presets.length ? ('<div class="row" style="gap:6px;align-items:center;margin-bottom:10px"><span style="font-size:12.5px">Presetare:</span><select id="le_preset" onchange="leApplyPreset(this.value)" style="max-width:260px"><option value="">— alege un model —</option>'+presets.map(function(p,i){return '<option value="'+i+'">'+esc(p.name)+'</option>';}).join("")+'</select></div>') : '';
   setMain(topbar("Editor etichetă")
     + '<div class="card" style="padding:14px"><div class="row" style="gap:6px;margin-bottom:10px">'+tabs+'</div>'
-    + '<div class="muted" style="font-size:12.5px;margin-bottom:10px">Alege ce apare pe etichetă, mărimea și alinierea. Data și ora se pun automat la print. Modificările se aplică tuturor etichetelor de acest tip (produs / palet / cutie).</div>'
+    + presetSel
+    + '<div class="muted" style="font-size:12.5px;margin-bottom:10px">Alege un model gata făcut din „Presetare" sau construiește-ți eticheta pe rânduri. Data și ora se pun automat la print. Modificările se aplică tuturor etichetelor de acest tip.</div>'
     + '<div class="grid" style="grid-template-columns:1fr 320px;gap:16px;align-items:start">'
     + '<div><div id="le_rows"></div><button class="sm" style="margin-top:8px" onclick="leAdd()">+ Adaugă rând</button></div>'
     + '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">Previzualizare</div><div style="border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff"><canvas id="le_canvas" style="width:100%;display:block"></canvas></div>'
