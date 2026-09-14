@@ -269,13 +269,21 @@ function opLookup(code){
       var rows=(d.stock||[]).map(function(s){return '<tr><td>'+esc(s.location_code)+'</td><td class="center"><b>'+esc(s.quantity)+'</b> '+esc(s.unit||"")+'</td></tr>';}).join("");
       var total=(d.stock||[]).reduce(function(a,s){return a+Number(s.quantity||0);},0);
       var host=el("s_res"); if(!host){ screenLookup(); host=el("s_res"); }
-      host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div>'
+      var bc=p.barcode||p.sku||"";
+      var printBtn = bc
+        ? '<button class="sm" onclick="lkPrint('+p.id+',\''+esc(bc)+'\',\''+esc(String(p.name||"")).replace(/'/g,"")+'\')">🖨️ Printează eticheta</button>'
+        : '<span class="muted" style="font-size:12px">Fără cod de bare (generează-i unul în WMS)</span>';
+      host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(bc)+'</div>'
         +'<div style="font-size:18px;font-weight:800;margin:2px 0 8px">'+esc(p.name)+'</div>'
         +'<div class="big-num">'+total+' <span style="font-size:15px" class="muted">'+esc(p.unit||"buc")+' total</span></div>'
-        +'<table style="margin-top:10px"><thead><tr><th>Locație</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Fără stoc</td></tr>')+'</tbody></table></div>';
+        +'<table style="margin-top:10px"><thead><tr><th>Locație</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Fără stoc</td></tr>')+'</tbody></table>'
+        +'<div class="row" style="margin-top:10px">'+printBtn+'</div></div>';
     });
   }).catch(function(e){ toast(e.message,true); });
 }
+window.lkPrint=function(id, code, name){
+  api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:name}).then(function(){ feedback(true); toast("Etichetă trimisă la imprimantă: "+code); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Recepție / Expediere ---- */
 function screenMove(kind){
