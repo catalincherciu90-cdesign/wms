@@ -13,9 +13,11 @@ database_id = "547695ef-25a7-410e-b256-354650edd00f"
 [observability]
 enabled = true
 
-# Cron orar: handler-ul `scheduled` decide dacă e scadent (intervalul e setat din admin).
-[triggers]
-crons = ["0 * * * *"]
+# Fără cron trigger — contul e pe planul Free (max 5 cron/cont, deja atinse).
+# Backup-ul rulează „leneș" la trafic (vezi maybeBackup în index.js), deci nu e nevoie de cron.
+# (handler-ul `scheduled` rămâne în cod; dacă se trece pe Workers Paid, se poate readăuga:)
+#   [triggers]
+#   crons = ["0 * * * *"]
 
 # Permite importul fișierelor .txt din src/vendor ca string (ex: biblioteca ZXing)
 [[rules]]
