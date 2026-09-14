@@ -82,72 +82,143 @@ export async function done(request, env, ctx, user, params) {
 
 function zplEsc(s) { return String(s == null ? '' : s).replace(/[\^~]/g, ' '); }
 
-// Construiește ZPL pentru un job (produs / palet-colet / test). {{DT}} = data/ora, pusă de agent (ora locală).
+// ---- Editor de etichetă: șabloane configurabile din admin ----
+export const LBL_FONT = { sm: 24, md: 32, lg: 46, xl: 62 };
+export const LBL_BC = { sm: 90, md: 150, lg: 210 };
+const LBL_ALIGN = { L: 'L', C: 'C', R: 'R' };
+
+// Câmpurile disponibile pe fiecare tip de etichetă (value, label, poate-fi-cod-de-bare).
+export function labelFields(type) {
+  if (type === 'pallet') return [
+    ['kind', 'Tip (PALET/COLET)', 0], ['code', 'Cod palet', 1], ['client', 'Client', 0],
+    ['location', 'Locatie', 0], ['lot', 'Lot', 0], ['aviz', 'Aviz', 0], ['date', 'Data si ora', 0],
+    ['items', 'Lista produse', 0], ['fixed', 'Text fix', 0],
+  ];
+  if (type === 'box') return [
+    ['box_code', 'Cod cutie', 1], ['product_barcode', 'Cod produs', 1], ['product_name', 'Nume produs', 0],
+    ['lot', 'Lot', 0], ['qty', 'Buc/cutie', 0], ['date', 'Data si ora', 0], ['meta', 'Lot + data', 0], ['fixed', 'Text fix', 0],
+  ];
+  return [ // product
+    ['title', 'Nume produs', 0], ['code', 'Cod produs', 1], ['lot', 'Lot', 0],
+    ['date', 'Data si ora', 0], ['meta', 'Lot + data', 0], ['fixed', 'Text fix', 0],
+  ];
+}
+const BARCODE_FIELDS = { code: 1, box_code: 1, product_barcode: 1 };
+
+export function defaultTemplate(type) {
+  if (type === 'pallet') return { elements: [
+    { field: 'kind', render: 'text', size: 'lg', align: 'C' },
+    { field: 'code', render: 'text', size: 'md', align: 'C' },
+    { field: 'code', render: 'barcode', size: 'md', align: 'C' },
+    { field: 'client', render: 'text', size: 'sm', align: 'C' },
+    { field: 'lot', render: 'text', size: 'sm', align: 'C' },
+    { field: 'date', render: 'text', size: 'sm', align: 'C' },
+  ] };
+  if (type === 'box') return { elements: [
+    { field: 'box_code', render: 'barcode', size: 'md', align: 'C' },
+    { field: 'product_name', render: 'text', size: 'md', align: 'C' },
+    { field: 'product_barcode', render: 'barcode', size: 'md', align: 'C' },
+    { field: 'meta', render: 'text', size: 'sm', align: 'C' },
+  ] };
+  return { elements: [ // product
+    { field: 'title', render: 'text', size: 'lg', align: 'C' },
+    { field: 'code', render: 'barcode', size: 'lg', align: 'C' },
+    { field: 'meta', render: 'text', size: 'sm', align: 'C' },
+  ] };
+}
+
+export async function getTemplate(env, type) {
+  try {
+    const r = await env.DB.prepare("SELECT value FROM settings WHERE key = ?").bind('label_tpl_' + type).first();
+    if (r?.value) { const t = JSON.parse(r.value); if (t && Array.isArray(t.elements)) return t; }
+  } catch (e) {}
+  return defaultTemplate(type);
+}
+
+// Valorile câmpurilor pentru un job (după tip). DT = {{DT}} (ora locală, pusă de agent).
+async function labelValues(env, job) {
+  const DT = '{{DT}}';
+  if (job.type === 'product') {
+    return { title: job.title || '', code: job.code || '', lot: job.lot || '', date: DT,
+      meta: (job.lot ? ('Lot: ' + job.lot + '   ') : '') + DT };
+  }
+  if (job.type === 'box') {
+    const b = await env.DB.prepare('SELECT bx.code, bx.quantity, bx.lot, pr.name AS product_name, COALESCE(pr.barcode, pr.sku) AS product_barcode FROM boxes bx JOIN products pr ON pr.id = bx.product_id WHERE bx.id = ?').bind(job.ref_id).first() || {};
+    return { box_code: b.code || job.code || '', product_barcode: b.product_barcode || '', product_name: b.product_name || job.title || '',
+      lot: b.lot || '', qty: b.quantity != null ? String(b.quantity) : '', date: DT,
+      meta: (b.lot ? ('Lot: ' + b.lot + '   ') : '') + (b.quantity ? ('Buc/cutie: ' + b.quantity + '   ') : '') + DT };
+  }
+  // pallet / colet / ambalaje
+  const pallet = await env.DB.prepare('SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id = pa.client_id LEFT JOIN locations l ON l.id = pa.location_id WHERE pa.id = ?').bind(job.ref_id).first() || {};
+  const { results: items } = await env.DB.prepare('SELECT pi.quantity, pr.name AS product_name FROM pallet_items pi JOIN products pr ON pr.id = pi.product_id WHERE pi.pallet_id = ? ORDER BY pr.name').bind(pallet.id || 0).all();
+  const kind = pallet.kind === 'colet' ? 'COLET' : (pallet.kind === 'ambalaje' ? 'PALET AMBALAJE' : 'PALET');
+  const itemsTxt = (items || []).slice(0, 8).map((it) => it.product_name + '  ' + it.quantity).join('\\&');
+  return { kind, code: pallet.code || job.code || '', client: pallet.client_name || '', location: pallet.location_code || '',
+    lot: pallet.lot || '', aviz: pallet.aviz || '', date: DT, items: itemsTxt };
+}
+
+// Construiește ZPL dintr-un șablon (elemente stivuite pe verticală, aliniate).
 async function jobToZpl(env, job, w) {
   w = w > 0 ? w : 1200;
   const DT = '{{DT}}';
-  // Centrat pe toată lățimea etichetei (^FB ... ,C) — ca eticheta din browser.
-  const C = (y, h, txt) => '^FO0,' + y + '^FB' + w + ',2,4,C,0^A0N,' + h + ',' + h + '^FD' + txt + '^FS';
-  const Cbc = (y, hgt, code) => '^FO0,' + y + '^FB' + w + ',1,0,C,0^BY3^BCN,' + hgt + ',Y,N,N^FD' + code + '^FS';
-  const Csmall = (y, txt) => '^FO0,' + y + '^FB' + w + ',1,0,C,0^A0N,26,26^FD' + txt + '^FS';
-
   if (job.type === 'test') {
     return '^XA^CI28^PW' + w
-      + C(50, 50, 'TEST PRINT')
-      + Cbc(150, 160, 'TEST-OK')
-      + Csmall(360, DT)
+      + '^FO0,50^FB' + w + ',1,0,C,0^A0N,50,50^FDTEST PRINT^FS'
+      + '^FO0,150^FB' + w + ',1,0,C,0^BY3^BCN,160,Y,N,N^FDTEST-OK^FS'
+      + '^FO0,360^FB' + w + ',1,0,C,0^A0N,26,26^FD' + DT + '^FS'
       + '^XZ';
   }
-  if (job.type === 'product') {
-    const meta = (job.lot ? ('Lot: ' + zplEsc(job.lot) + '   ') : '') + DT;
-    return '^XA^CI28^PW' + w
-      + C(35, 46, zplEsc(job.title))       // nume produs (mare, centrat, până la 2 rânduri)
-      + Cbc(185, 170, zplEsc(job.code))     // cod de bare centrat + numărul dedesubt
-      + Csmall(410, meta)                   // lot + data/ora (mic, jos)
-      + '^XZ';
+  const tpl = await getTemplate(env, job.type === 'inbound' || job.type === 'outbound' ? 'pallet' : job.type);
+  const vals = await labelValues(env, job);
+  let y = 24, s = '^XA^CI28^PW' + w;
+  for (const e of (tpl.elements || [])) {
+    const align = LBL_ALIGN[e.align] || 'C';
+    const isBc = e.render === 'barcode' && BARCODE_FIELDS[e.field];
+    const val = e.field === 'fixed' ? (e.text || '') : (vals[e.field] != null ? vals[e.field] : '');
+    if (val === '' && e.field !== 'fixed') continue;
+    if (isBc) {
+      const h = LBL_BC[e.size] || LBL_BC.md;
+      s += '^FO0,' + y + '^FB' + w + ',1,0,' + align + ',0^BY3^BCN,' + h + ',Y,N,N^FD' + zplEsc(val) + '^FS';
+      y += h + 44; // cod de bare + numărul (HRI) + spațiu
+    } else {
+      const fh = LBL_FONT[e.size] || LBL_FONT.md;
+      const maxLines = e.field === 'items' ? 8 : 2;
+      s += '^FO0,' + y + '^FB' + w + ',' + maxLines + ',4,' + align + ',0^A0N,' + fh + ',' + fh + '^FD' + zplEsc(val) + '^FS';
+      const lineCount = e.field === 'items' ? Math.min(8, (String(val).split('\\&').length)) : 1;
+      y += fh * lineCount + 14;
+    }
   }
-  if (job.type === 'box') {
-    // etichetă de cutie: cod unic de cutie + codul produsului (ambele coduri de bare)
-    const box = await env.DB.prepare(
-      'SELECT bx.code, bx.quantity, bx.lot, pr.name AS product_name, COALESCE(pr.barcode, pr.sku) AS product_barcode, pa.code AS pallet_code FROM boxes bx JOIN products pr ON pr.id = bx.product_id LEFT JOIN pallets pa ON pa.id = bx.pallet_id WHERE bx.id = ?'
-    ).bind(job.ref_id).first();
-    if (!box) return '^XA^CI28^PW' + w + C(35, 40, zplEsc(job.code)) + Cbc(120, 150, zplEsc(job.code)) + '^XZ';
-    const meta = (box.lot ? ('Lot: ' + zplEsc(box.lot) + '   ') : '') + (box.quantity ? ('Buc/cutie: ' + box.quantity + '   ') : '') + DT;
-    return '^XA^CI28^PW' + w
-      + C(20, 28, 'CUTIE')
-      + Cbc(60, 110, zplEsc(box.code))
-      + C(230, 34, zplEsc(box.product_name))
-      + Cbc(285, 120, zplEsc(box.product_barcode))
-      + Csmall(440, meta)
-      + '^XZ';
-  }
-  // palet / colet / ambalaje
-  const pallet = await env.DB.prepare(
-    'SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id = pa.client_id LEFT JOIN locations l ON l.id = pa.location_id WHERE pa.id = ?'
-  ).bind(job.ref_id).first();
-  if (!pallet) {
-    return '^XA^CI28^PW' + w + C(35, 44, zplEsc(job.code)) + Cbc(120, 160, zplEsc(job.code)) + '^XZ';
-  }
-  const { results: items } = await env.DB.prepare(
-    'SELECT pi.quantity, pr.name AS product_name, pr.sku FROM pallet_items pi JOIN products pr ON pr.id = pi.product_id WHERE pi.pallet_id = ? ORDER BY pr.name'
-  ).bind(pallet.id).all();
-  const kind = pallet.kind === 'colet' ? 'COLET' : (pallet.kind === 'ambalaje' ? 'PALET AMBALAJE' : 'PALET');
-  let s = '^XA^CI28^PW' + w;
-  s += C(25, 44, kind);
-  s += C(80, 40, zplEsc(pallet.code));
-  s += Cbc(135, 150, zplEsc(pallet.code));
-  let y = 330;
-  const metaLines = [];
-  if (pallet.client_name) metaLines.push('Client: ' + zplEsc(pallet.client_name));
-  if (pallet.location_code) metaLines.push('Locatie: ' + zplEsc(pallet.location_code));
-  if (pallet.lot) metaLines.push('Lot: ' + zplEsc(pallet.lot));
-  if (pallet.aviz) metaLines.push('Aviz: ' + zplEsc(pallet.aviz));
-  metaLines.push('Data: ' + DT);
-  for (const t of metaLines) { s += '^FO30,' + y + '^A0N,28,28^FD' + t + '^FS'; y += 34; }
-  y += 6;
-  for (const it of items.slice(0, 12)) { s += '^FO30,' + y + '^A0N,26,26^FB' + (w - 60) + ',1,0,L^FD' + zplEsc(it.product_name) + '  ' + it.quantity + '^FS'; y += 32; }
   s += '^XZ';
   return s;
+}
+
+// Admin: citește / salvează șablonul de etichetă pentru un tip.
+export async function labelTemplateGet(request, env) {
+  const url = new URL(request.url);
+  const type = ['product', 'pallet', 'box'].includes(url.searchParams.get('type')) ? url.searchParams.get('type') : 'product';
+  return json({ type, template: await getTemplate(env, type), fields: labelFields(type) });
+}
+export async function labelTemplateSave(request, env) {
+  const b = await readJson(request);
+  const type = ['product', 'pallet', 'box'].includes(b?.type) ? b.type : null;
+  if (!type) return error('Tip invalid (product/pallet/box)', 400);
+  const els = Array.isArray(b?.template?.elements) ? b.template.elements.slice(0, 20).map((e) => ({
+    field: String(e.field || '').slice(0, 30),
+    render: e.render === 'barcode' ? 'barcode' : 'text',
+    size: ['sm', 'md', 'lg', 'xl'].includes(e.size) ? e.size : 'md',
+    align: ['L', 'C', 'R'].includes(e.align) ? e.align : 'C',
+    text: e.field === 'fixed' ? String(e.text || '').slice(0, 60) : undefined,
+  })) : [];
+  await env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .bind('label_tpl_' + type, JSON.stringify({ elements: els })).run();
+  return json({ ok: true });
+}
+export async function labelTemplateReset(request, env) {
+  const b = await readJson(request);
+  const type = ['product', 'pallet', 'box'].includes(b?.type) ? b.type : null;
+  if (!type) return error('Tip invalid', 400);
+  await env.DB.prepare("DELETE FROM settings WHERE key = ?").bind('label_tpl_' + type).run();
+  return json({ ok: true, template: defaultTemplate(type) });
 }
 
 async function getAgentToken(env, create) {
