@@ -1,0 +1,8 @@
+{
+  "appId": "ro.wsd.wms",
+  "appName": "WSD WMS",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

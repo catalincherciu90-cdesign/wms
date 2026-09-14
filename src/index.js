@@ -1,4 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
+const APP_VERSION = 'v86';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -9,23 +10,46 @@ import * as locations from './routes/locations.js';
 import * as inventory from './routes/inventory.js';
 import * as dashboard from './routes/dashboard.js';
 import * as users from './routes/users.js';
+import * as partners from './routes/partners.js';
+import * as orders from './routes/orders.js';
+import * as reports from './routes/reports.js';
+import * as qr from './routes/qr.js';
+import * as vendor from './routes/vendor.js';
+import * as barcode from './routes/barcode.js';
+import * as clients from './routes/clients.js';
+import * as portal from './routes/portal.js';
+import * as pallets from './routes/pallets.js';
+import * as boxes from './routes/boxes.js';
+import * as print from './routes/print.js';
+import * as pwa from './routes/pwa.js';
+import * as admin from './routes/admin.js';
+import * as services from './routes/services.js';
+import * as offers from './routes/offers.js';
+import { ensureSchema } from './lib/schema.js';
 
 // role: null = public, altfel rolul minim necesar (viewer < operator < admin)
 const routes = [
   ['POST', '/api/auth/login', auth.login, null],
-  ['GET', '/api/auth/me', auth.me, 'viewer'],
+  ['POST', '/api/auth/qr', auth.qrLogin, null],
+  ['GET', '/api/auth/me', auth.me, 'authed'],
 
   ['GET', '/api/dashboard', dashboard.stats, 'viewer'],
 
   ['GET', '/api/products', products.list, 'viewer'],
   ['GET', '/api/products/export', products.exportCsv, 'viewer'],
   ['POST', '/api/products', products.create, 'operator'],
+  ['POST', '/api/products/import', products.importProducts, 'operator'],
+  ['POST', '/api/products/gen-barcodes', products.genBarcodesBulk, 'operator'],
+  ['POST', '/api/products/:id/gen-barcode', products.genBarcode, 'operator'],
+  ['POST', '/api/products/reassign', products.reassign, 'operator'],
+  ['POST', '/api/products/bulk-delete', products.bulkDelete, 'admin'],
   ['PUT', '/api/products/:id', products.update, 'operator'],
   ['DELETE', '/api/products/:id', products.remove, 'admin'],
 
   ['GET', '/api/locations', locations.list, 'viewer'],
   ['POST', '/api/locations', locations.create, 'operator'],
   ['PUT', '/api/locations/:id', locations.update, 'operator'],
+  ['POST', '/api/locations/:id/reactivate', locations.reactivate, 'operator'],
   ['DELETE', '/api/locations/:id', locations.remove, 'admin'],
 
   ['GET', '/api/inventory/stock', inventory.stock, 'viewer'],
@@ -36,10 +60,113 @@ const routes = [
   ['POST', '/api/inventory/ship', inventory.ship, 'operator'],
   ['POST', '/api/inventory/adjust', inventory.adjust, 'operator'],
   ['POST', '/api/inventory/transfer', inventory.transfer, 'operator'],
+  ['POST', '/api/inventory/transfer-location', inventory.transferLocation, 'operator'],
+  ['POST', '/api/inventory/reset-all', inventory.resetAll, 'admin'],
 
   ['GET', '/api/users', users.list, 'admin'],
   ['POST', '/api/users', users.create, 'admin'],
   ['PUT', '/api/users/:id', users.update, 'admin'],
+  ['POST', '/api/users/:id/login-token', users.genLoginToken, 'admin'],
+  ['DELETE', '/api/users/:id/login-token', users.revokeLoginToken, 'admin'],
+
+  ['GET', '/api/admin/backup.sql', admin.backupSql, 'admin'],
+  ['POST', '/api/admin/backup-push', admin.backupPush, 'admin'],
+  ['GET', '/api/admin/backup-settings', admin.backupSettingsGet, 'admin'],
+  ['PUT', '/api/admin/backup-settings', admin.backupSettingsSet, 'admin'],
+  ['GET', '/api/admin/backup.json', admin.backupJson, 'admin'],
+  ['POST', '/api/admin/restore', admin.restore, 'admin'],
+  ['GET', '/api/admin/backup-log', admin.backupLog, 'admin'],
+  ['GET', '/api/admin/cron', admin.cronRun, null],
+  ['GET', '/api/site-content', admin.siteContentGet, null],
+  ['PUT', '/api/admin/site-content', admin.siteContentSet, 'admin'],
+
+  ['GET', '/api/partners', partners.list, 'viewer'],
+  ['POST', '/api/partners', partners.create, 'operator'],
+  ['PUT', '/api/partners/:id', partners.update, 'operator'],
+  ['DELETE', '/api/partners/:id', partners.remove, 'admin'],
+
+  ['GET', '/api/orders', orders.list, 'viewer'],
+  ['GET', '/api/orders/:id', orders.get, 'viewer'],
+  ['POST', '/api/orders', orders.create, 'operator'],
+  ['PUT', '/api/orders/:id/status', orders.setStatus, 'operator'],
+  ['POST', '/api/orders/:id/complete', orders.complete, 'operator'],
+  ['POST', '/api/orders/:id/depart', orders.depart, 'operator'],
+  ['POST', '/api/orders/:id/lock', orders.lock, 'operator'],
+  ['POST', '/api/orders/:id/unlock', orders.unlock, 'operator'],
+  ['DELETE', '/api/orders/:id', orders.remove, 'operator'],
+
+  ['GET', '/api/reports/stock-by-category', reports.stockByCategory, 'viewer'],
+  ['GET', '/api/reports/low-stock', reports.lowStock, 'viewer'],
+  ['GET', '/api/reports/low-stock/export', reports.exportLowStockCsv, 'viewer'],
+  ['GET', '/api/reports/movements-by-period', reports.movementsByPeriod, 'viewer'],
+  ['GET', '/api/reports/top-products', reports.topProducts, 'viewer'],
+
+  // Servicii (catalog) + servicii atașate la comenzi
+  ['GET', '/api/services', services.list, 'operator'],
+  ['POST', '/api/services', services.create, 'admin'],
+  ['PUT', '/api/services/:id', services.update, 'admin'],
+  ['DELETE', '/api/services/:id', services.remove, 'admin'],
+  ['GET', '/api/orders/:id/services', services.listForOrder, 'viewer'],
+  ['POST', '/api/orders/:id/services', services.addToOrder, 'operator'],
+  ['DELETE', '/api/orders/:id/services/:lineId', services.removeFromOrder, 'operator'],
+
+  // Modul comercial: oferte
+  ['GET', '/api/offers', offers.list, 'operator'],
+  ['GET', '/api/offers/:id', offers.get, 'operator'],
+  ['POST', '/api/offers', offers.create, 'operator'],
+  ['PUT', '/api/offers/:id/status', offers.setStatus, 'operator'],
+  ['DELETE', '/api/offers/:id', offers.remove, 'operator'],
+
+  ['GET', '/api/qr', qr.svg, 'viewer'],
+
+  ['GET', '/api/barcode-lookup', barcode.lookup, 'operator'],
+
+  // Clienți de depozitare + conturile lor (staff)
+  ['GET', '/api/clients', clients.list, 'operator'],
+  ['GET', '/api/clients/:id/overview', clients.overview, 'operator'],
+  ['POST', '/api/clients', clients.create, 'admin'],
+  ['PUT', '/api/clients/:id', clients.update, 'admin'],
+  ['DELETE', '/api/clients/:id', clients.remove, 'admin'],
+  ['GET', '/api/clients/:id/users', clients.listUsers, 'admin'],
+  ['POST', '/api/clients/:id/users', clients.createUser, 'admin'],
+  ['DELETE', '/api/clients/:id/users/:userId', clients.removeUser, 'admin'],
+
+  // Paleți (staff)
+  ['GET', '/api/pallets', pallets.list, 'viewer'],
+  ['GET', '/api/pallets/:id', pallets.get, 'viewer'],
+  ['POST', '/api/pallets', pallets.create, 'operator'],
+  ['POST', '/api/pallets/receive', pallets.receive, 'operator'],
+  ['GET', '/api/pallets/:id/aviz', pallets.avizFile, 'viewer'],
+  ['POST', '/api/pallets/:id/ship', pallets.ship, 'operator'],
+  ['POST', '/api/pallets/:id/split', pallets.split, 'operator'],
+  ['POST', '/api/pallets/:id/boxes', boxes.create, 'operator'],
+  ['GET', '/api/pallets/:id/boxes', boxes.listForPallet, 'viewer'],
+  ['GET', '/api/boxes/:code', boxes.resolve, 'viewer'],
+  ['POST', '/api/print/jobs', print.create, 'operator'],
+  ['GET', '/api/print/jobs', print.pending, 'viewer'],
+  ['GET', '/api/print/status', print.status, 'viewer'],
+  ['POST', '/api/print/test', print.test, 'operator'],
+  ['GET', '/api/print/agent-token', print.agentToken, 'admin'],
+  ['POST', '/api/print/agent-token/regen', print.agentTokenRegen, 'admin'],
+  ['GET', '/api/print/agent/next', print.agentNext, null],
+  ['POST', '/api/print/agent/done', print.agentDone, null],
+  ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
+  ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
+  ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
+  ['DELETE', '/api/pallets/:id/items/:itemId', pallets.removeItem, 'operator'],
+  ['DELETE', '/api/pallets/:id', pallets.remove, 'operator'],
+
+  // Portal client (acces doar la datele proprii)
+  ['GET', '/api/portal/me', portal.me, 'client'],
+  ['GET', '/api/portal/summary', portal.summary, 'client'],
+  ['GET', '/api/portal/products', portal.products, 'client'],
+  ['GET', '/api/portal/pallets', portal.pallets, 'client'],
+  ['GET', '/api/portal/movements', portal.movements, 'client'],
+  ['GET', '/api/portal/export', portal.exportCsv, 'client'],
+  ['GET', '/api/portal/orders', portal.orders, 'client'],
+  ['POST', '/api/portal/orders', portal.orderCreate, 'client'],
+  ['GET', '/api/portal/orders/:id', portal.orderGet, 'client'],
+  ['POST', '/api/portal/orders/:id/cancel', portal.orderCancel, 'client'],
 ];
 
 function match(routePath, actualPath) {
@@ -54,6 +181,8 @@ function match(routePath, actualPath) {
   return params;
 }
 
+let lastLazyBackupCheck = 0; // throttle per-isolate pentru backup-ul „leneș"
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -63,6 +192,15 @@ export default {
 
     // API
     if (path.startsWith('/api/')) {
+      await ensureSchema(env); // migrare idempotentă (clienți, portal, coloane noi)
+
+      // Backup automat „leneș": dacă e scadent, îl declanșăm în fundal când e folosită aplicația.
+      // Așa merge sigur chiar dacă Cron Trigger-ul Cloudflare nu se declanșează.
+      const nowT = Date.now();
+      if (nowT - lastLazyBackupCheck > 5 * 60 * 1000) {
+        lastLazyBackupCheck = nowT;
+        ctx.waitUntil(admin.maybeBackup(env, 'auto').catch(() => {}));
+      }
       for (const [method, pattern, handler, role] of routes) {
         if (method !== request.method) continue;
         const params = match(pattern, path);
@@ -72,7 +210,14 @@ export default {
         if (role !== null) {
           user = await authenticate(request, env);
           if (!user) return error('Neautentificat', 401);
-          if (!hasRole(user, role)) return error('Permisiuni insuficiente', 403);
+          if (role === 'client') {
+            if (user.kind !== 'client') return error('Doar conturi de client', 403);
+          } else if (role === 'authed') {
+            // orice utilizator autentificat (staff SAU client) — ex. /api/auth/me la boot
+          } else {
+            // rutele de staff nu sunt accesibile conturilor de client
+            if (user.kind === 'client' || !hasRole(user, role)) return error('Permisiuni insuficiente', 403);
+          }
         }
         try {
           return await handler(request, env, ctx, user, params);
@@ -83,10 +228,52 @@ export default {
       return error('Endpoint inexistent', 404);
     }
 
-    // Health check
-    if (path === '/health') return json({ ok: true, service: 'wms', ts: new Date().toISOString() });
+    // Biblioteci client servite de Worker
+    if (path === '/vendor/zxing.js') return vendor.zxing();
+    if (path === '/vendor/xlsx.js') return vendor.xlsx();
+    if (path === '/vendor/pdf.js') return vendor.pdf();
+    if (path === '/vendor/pdf.worker.js') return vendor.pdfworker();
+    if (path.startsWith('/assets/') && path.endsWith('.png')) return vendor.image(path.slice(8, -4));
 
-    // Interfața web (SPA) pentru orice altă cale
-    return new Response(renderUI(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    // PWA (instalabil pe Android / bază pentru APK)
+    if (path === '/manifest.webmanifest') return pwa.manifest();
+    if (path === '/sw.js') return pwa.sw();
+    if (path === '/icon-192.png') return pwa.icon192();
+    if (path === '/icon-512.png') return pwa.icon512();
+
+    // Pagină de instalare cu QR (de scanat cu Zebra)
+    if (path === '/instalare' || path === '/install') return pwa.installPage(env, url);
+
+    // Digital Asset Links pentru APK (TWA) — leagă APK-ul de site ca să ascundă bara de adrese.
+    // Setează TWA_PACKAGE și TWA_FINGERPRINT (SHA-256 din PWABuilder) ca variabile în Cloudflare.
+    if (path === '/.well-known/assetlinks.json') {
+      const pkg = env.TWA_PACKAGE || 'ro.wsd.wms';
+      const fp = env.TWA_FINGERPRINT || '';
+      const body = fp
+        ? JSON.stringify([{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: fp.split(',').map((s) => s.trim()).filter(Boolean) } }])
+        : '[]';
+      return new Response(body, { headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders } });
+    }
+
+    // Agent de imprimare local (.bat descărcabil) — imprimare directă ZPL în Zebra.
+    if (path === '/print-agent.bat') { await ensureSchema(env); return print.agentBat(request, env); }
+
+    // Health check
+    if (path === '/health') return json({ ok: true, service: 'wms', version: APP_VERSION, ts: new Date().toISOString() });
+
+    // Interfața web (SPA) pentru orice altă cale.
+    // no-store: browserul ia mereu versiunea nouă (evită UI vechi din cache).
+    return new Response(renderUI(), { headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    } });
+  },
+
+  // Backup automat programat (Cron Trigger — vezi wrangler.toml [triggers]).
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      try { await ensureSchema(env); } catch (e) { /* schema poate exista deja */ }
+      await admin.scheduledBackup(env);
+    })());
   },
 };

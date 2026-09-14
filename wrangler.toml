@@ -8,10 +8,26 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "wms-db"
-database_id = "PLACEHOLDER_DATABASE_ID"
+database_id = "547695ef-25a7-410e-b256-354650edd00f"
 
 [observability]
 enabled = true
+
+# Cron orar: handler-ul `scheduled` decide dacă e scadent (intervalul e setat din admin).
+[triggers]
+crons = ["0 * * * *"]
+
+# Permite importul fișierelor .txt din src/vendor ca string (ex: biblioteca ZXing)
+[[rules]]
+type = "Text"
+globs = ["**/vendor/*.txt"]
+fallthrough = true
+
+# Imagini vendorizate importate ca binar (ex: fundal login)
+[[rules]]
+type = "Data"
+globs = ["**/vendor/*.png"]
+fallthrough = true
 
 # JWT_SECRET se setează ca secret, NU aici:
 #   wrangler secret put JWT_SECRET

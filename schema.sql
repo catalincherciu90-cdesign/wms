@@ -24,10 +24,33 @@ CREATE TABLE IF NOT EXISTS products (
   category     TEXT,
   unit         TEXT NOT NULL DEFAULT 'buc',
   reorder_point INTEGER NOT NULL DEFAULT 0,
+  client_id    INTEGER,              -- proprietarul mărfii (NULL = intern / al companiei)
   active       INTEGER NOT NULL DEFAULT 1,
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_client ON products(client_id);
+
+-- ── Clienți de depozitare (3PL) + conturile lor de portal ───────────────
+CREATE TABLE IF NOT EXISTS clients (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  email      TEXT,
+  phone      TEXT,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS client_users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id     INTEGER NOT NULL REFERENCES clients(id),
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_client_users_client ON client_users(client_id);
 
 -- ── Locații de depozit ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS locations (
@@ -35,6 +58,7 @@ CREATE TABLE IF NOT EXISTS locations (
   code       TEXT NOT NULL UNIQUE,   -- ex: A-01-03 (zonă-raft-nivel)
   name       TEXT,
   zone       TEXT,
+  capacity   INTEGER NOT NULL DEFAULT 0,  -- nr. de spații/capacitate (0 = nedefinit)
   active     INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -102,3 +126,36 @@ CREATE TABLE IF NOT EXISTS order_lines (
   qty_done    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_order_lines_order ON order_lines(order_id);
+
+-- ── Memorie proprie: cache identificări coduri de bare ──────────────────
+-- (se creează și automat la runtime dacă lipsește)
+CREATE TABLE IF NOT EXISTS barcode_cache (
+  code       TEXT PRIMARY KEY,
+  name       TEXT,
+  brand      TEXT,
+  category   TEXT,
+  source     TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ── Paleți: fiecare palet ocupă un spațiu într-o locație, aparține unui
+--    client și conține produse (pallet_items). ────────────────────────────
+CREATE TABLE IF NOT EXISTS pallets (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code        TEXT NOT NULL UNIQUE,        -- eticheta paletului (LPN)
+  client_id   INTEGER REFERENCES clients(id),
+  location_id INTEGER REFERENCES locations(id),
+  status      TEXT NOT NULL DEFAULT 'stored' CHECK (status IN ('draft','stored','shipped')),
+  notes       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pallets_location ON pallets(location_id);
+CREATE INDEX IF NOT EXISTS idx_pallets_client ON pallets(client_id);
+
+CREATE TABLE IF NOT EXISTS pallet_items (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  pallet_id  INTEGER NOT NULL REFERENCES pallets(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  quantity   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pallet_items_pallet ON pallet_items(pallet_id);

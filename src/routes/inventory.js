@@ -13,24 +13,32 @@ export async function stock(request, env) {
     JOIN products p  ON p.id = i.product_id
     JOIN locations l ON l.id = i.location_id
     WHERE i.quantity <> 0`;
+  const clientId = url.searchParams.get('client_id');
   const binds = [];
   if (productId) { sql += ' AND p.id = ?'; binds.push(Number(productId)); }
+  if (clientId) { sql += ' AND p.client_id = ?'; binds.push(Number(clientId)); }
   sql += ' ORDER BY p.name, l.code';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return json({ stock: results });
 }
 
-// Stoc total per produs (pentru dashboard / listă)
+// Stoc total per produs (pentru dashboard / listă). Opțional filtrat pe client.
 export async function summary(request, env) {
-  const { results } = await env.DB.prepare(`
+  const clientId = new URL(request.url).searchParams.get('client_id');
+  let sql = `
     SELECT p.id AS product_id, p.sku, p.name, p.unit, p.reorder_point,
            COALESCE(SUM(i.quantity), 0) AS total,
+           (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id = ol.order_id
+              WHERE ol.product_id = p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved,
            CASE WHEN COALESCE(SUM(i.quantity),0) <= p.reorder_point THEN 1 ELSE 0 END AS low
     FROM products p
     LEFT JOIN inventory i ON i.product_id = p.id
-    WHERE p.active = 1
-    GROUP BY p.id
-    ORDER BY p.name`).all();
+    WHERE p.active = 1`;
+  const binds = [];
+  if (clientId) { sql += ' AND p.client_id = ?'; binds.push(Number(clientId)); }
+  sql += ' GROUP BY p.id ORDER BY p.name';
+  const { results } = await env.DB.prepare(sql).bind(...binds).all();
+  for (const r of results) r.available = (r.total || 0) - (r.reserved || 0);
   return json({ summary: results });
 }
 
@@ -128,6 +136,65 @@ export async function transfer(request, env, ctx, user) {
     });
     return json({ ok: true });
   } catch (e) { return error(String(e.message || e), 400); }
+}
+
+// Mută TOT stocul dintr-o locație în alta (toate produsele, cantitățile întregi), dintr-o singură operație.
+export async function transferLocation(request, env, ctx, user) {
+  const b = await readJson(request);
+  const from = Number(b?.from_location_id), to = Number(b?.to_location_id);
+  if (!from || !to) return error('from_location_id și to_location_id obligatorii', 400);
+  if (from === to) return error('Locațiile trebuie să difere', 400);
+  const src = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(from).first();
+  const dst = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(to).first();
+  if (!src) return error('Locația sursă inexistentă', 404);
+  if (!dst) return error('Locația destinație inexistentă', 404);
+
+  const { results: rows } = await env.DB.prepare('SELECT product_id, quantity FROM inventory WHERE location_id = ? AND quantity > 0').bind(from).all();
+  if (!rows.length) return error('Locația sursă nu are stoc de mutat', 400);
+
+  const note = 'mutare locație #' + from + ' → #' + to;
+  const stmts = [];
+  const upsert = 'INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?) ' +
+    "ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')";
+  const mov = 'INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  for (const r of rows) {
+    const q = Number(r.quantity);
+    stmts.push(env.DB.prepare(upsert).bind(r.product_id, from, -q));
+    stmts.push(env.DB.prepare(upsert).bind(r.product_id, to, q));
+    stmts.push(env.DB.prepare(mov).bind(r.product_id, from, 'transfer', -q, 'MUTARE', note, user.sub));
+    stmts.push(env.DB.prepare(mov).bind(r.product_id, to, 'transfer', q, 'MUTARE', note, user.sub));
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true, moved_products: rows.length });
+}
+
+// Resetează stocul la 0 (toate produsele sau doar ale unui client). Distructiv — doar admin.
+// Înregistrează o mișcare de ajustare (referință RESET) pentru fiecare poziție, ca audit.
+export async function resetAll(request, env, ctx, user) {
+  const b = await readJson(request);
+  if (b?.confirm !== 'RESET') return error('Confirmare lipsă (confirm:"RESET").', 400);
+  const clientId = b?.client_id ? Number(b.client_id) : null;
+
+  let sql = 'SELECT i.product_id, i.location_id, i.quantity FROM inventory i';
+  const binds = [];
+  if (clientId) { sql += ' JOIN products p ON p.id = i.product_id WHERE i.quantity <> 0 AND p.client_id = ?'; binds.push(clientId); }
+  else { sql += ' WHERE i.quantity <> 0'; }
+  const { results: rows } = await env.DB.prepare(sql).bind(...binds).all();
+  if (!rows.length) return json({ ok: true, zeroed: 0 });
+
+  const movSql = 'INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  const CH = 40;
+  for (let i = 0; i < rows.length; i += CH) {
+    const batch = rows.slice(i, i + CH).map((r) =>
+      env.DB.prepare(movSql).bind(r.product_id, r.location_id, 'adjust', -Number(r.quantity), 'RESET', 'reset stoc la 0', user.sub));
+    await env.DB.batch(batch);
+  }
+  if (clientId) {
+    await env.DB.prepare("UPDATE inventory SET quantity = 0, updated_at = datetime('now') WHERE quantity <> 0 AND product_id IN (SELECT id FROM products WHERE client_id = ?)").bind(clientId).run();
+  } else {
+    await env.DB.prepare("UPDATE inventory SET quantity = 0, updated_at = datetime('now') WHERE quantity <> 0").run();
+  }
+  return json({ ok: true, zeroed: rows.length });
 }
 
 export async function exportStockCsv(request, env) {
