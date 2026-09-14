@@ -750,7 +750,7 @@ window.invFinish=function(){
 };
 
 /* ---- Comenzi de pregătit (picking scanat) ---- */
-function ordStatus(s){ if(s==="completed")return '<span class="pill good">expediată</span>'; if(s==="cancelled")return '<span class="pill bad">anulată</span>'; return '<span class="pill" style="background:#3a3f1a;color:#f0c651">de pregătit</span>'; }
+function ordStatus(s){ if(s==="completed")return '<span class="pill good">expediată</span>'; if(s==="cancelled")return '<span class="pill bad">anulată</span>'; if(s==="prepared")return '<span class="pill" style="background:#14532d;color:#bbf7d0">pregătită 🚚</span>'; return '<span class="pill" style="background:#3a3f1a;color:#f0c651">de pregătit</span>'; }
 function screenOrders(){
   scanTarget=null;
   shell("Comenzi de pregătit",'<div id="ord_list" class="muted center" style="padding:20px">Se încarcă…</div>',{back:"renderHome()"});
@@ -761,13 +761,15 @@ function screenOrders(){
       var who = o.source==="portal" ? (esc(o.client_name||"client")+(o.recipient_name?(' → '+esc(o.recipient_name)):'')) : esc(o.partner_name||"—");
       var mine = me && Number(o.locked_by)===Number(me.id);
       var busy = o.lock_active && !mine;
+      var prepared = o.status==="prepared";
       var badge = busy
         ? '<span style="background:#7f1d1d;color:#fecaca;border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap">🔒 '+esc(o.locked_name||"în procesare")+'</span>'
         : (mine ? '<span style="background:#14532d;color:#bbf7d0;border-radius:6px;padding:2px 8px;font-size:12px">tu procesezi</span>' : ordStatus(o.status));
-      return '<div class="card" onclick="screenPick('+o.id+')" style="margin-bottom:10px;cursor:pointer'+(busy?';opacity:.6':'')+'">'
+      var act = prepared ? ('screenDepart('+o.id+')') : ('screenPick('+o.id+')');
+      return '<div class="card" onclick="'+act+'" style="margin-bottom:10px;cursor:pointer'+(busy?';opacity:.6':'')+'">'
         +'<div class="row" style="justify-content:space-between;align-items:center"><b>'+esc(o.code)+'</b>'+badge+'</div>'
         +'<div class="muted" style="font-size:13px;margin-top:4px">'+who+'</div>'
-        +'<div class="muted" style="font-size:12.5px;margin-top:2px">'+esc(o.line_count)+' produse · '+esc(o.total_qty)+' buc.</div></div>';
+        +'<div class="muted" style="font-size:12.5px;margin-top:2px">'+esc(o.line_count)+' produse · '+esc(o.total_qty)+' buc.'+(prepared?' · <b style="color:#bbf7d0">apasă pentru «Marfa a plecat»</b>':'')+'</div></div>';
     }).join("");
   }).catch(function(e){ el("ord_list").innerHTML='<div class="card center" style="color:#f88">'+esc(e.message)+'</div>'; });
 }
@@ -844,8 +846,9 @@ function pickRender(){
   var host=el("pk_done"); if(!host) return;
   if(allScanned && allPacked){
     host.innerHTML='<div class="card center" style="background:rgba(34,197,94,.12);margin-bottom:12px"><b>Tot cules și pus în colet ✓</b></div>'
-      +'<label>Expediază din locația</label><select id="pk_loc">'+locOptions()+'</select>'
-      +'<button class="big" onclick="completePick()">Finalizează &amp; expediază</button>';
+      +'<label>Pregătește din locația</label><select id="pk_loc">'+locOptions()+'</select>'
+      +'<div class="muted" style="font-size:12px;margin:6px 0">Stocul se rezervă acum. Va scădea când marfa pleacă din depozit («Marfa a plecat»).</div>'
+      +'<button class="big" onclick="completePick()">Pregătită (rezervă stocul)</button>';
   } else if(allScanned && !allPacked){
     host.innerHTML='<div class="card center" style="background:rgba(240,198,81,.14);color:#f0c651"><b>Bifează „Pus în colet" la toate produsele ca să poți expedia</b></div>';
   } else { host.innerHTML=''; }
@@ -867,8 +870,32 @@ window.completePick=function(){
   if(!_pick) return;
   var loc=el("pk_loc")?Number(el("pk_loc").value):0;
   if(!loc){ toast("Alege locația de expediere",true); return; }
-  api("POST","/api/orders/"+_pick.id+"/complete",{location_id:loc}).then(function(){
-    feedback(true); toast("Comandă expediată ✓"); pickStopHb(); _pick=null; screenOrders();
+  api("POST","/api/orders/"+_pick.id+"/complete",{location_id:loc}).then(function(r){
+    feedback(true); toast(r&&r.status==="prepared"?"Pregătită ✓ (stoc rezervat)":"Comandă expediată ✓"); pickStopHb(); _pick=null; screenOrders();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
+/* Comandă pregătită → confirmă plecarea din depozit (aici scade stocul). */
+window.screenDepart=function(id){
+  scanTarget=null;
+  api("GET","/api/orders/"+id).then(function(d){
+    var o=d.order;
+    var recip = o.source==="portal" ? ('<div class="muted" style="font-size:13px;margin-bottom:8px">Livrare: <b>'+esc(o.recipient_name||"—")+'</b>'+(o.recipient_address?(', '+esc(o.recipient_address)):'')+(o.recipient_city?(', '+esc(o.recipient_city)):'')+'</div>') : '';
+    var lines=(d.lines||[]).map(function(l){
+      return '<div class="card" style="margin-bottom:8px"><div class="row" style="justify-content:space-between;align-items:center">'
+        +'<div><b>'+esc(l.product_name)+'</b><div class="muted" style="font-size:12px">'+esc(l.sku||"")+'</div></div>'
+        +'<div style="text-align:right"><b style="font-size:20px">'+esc(l.quantity)+'</b><span class="muted"> '+esc(l.unit||"")+'</span></div></div></div>';
+    }).join("");
+    shell("Marfă pregătită "+esc(o.code),
+      recip
+      +'<div class="card center" style="background:rgba(34,197,94,.12);margin-bottom:12px"><b>Comandă pregătită — stoc rezervat</b><div class="muted" style="font-size:12.5px;margin-top:4px">Stocul NU a scăzut încă. Apasă „Marfa a plecat" doar când marfa iese fizic din depozit.</div></div>'
+      +lines
+      +'<button class="big" style="margin-top:8px" onclick="departOrder('+id+')">🚚 Marfa a plecat (scade stocul)</button>'
+    , {back:"screenOrders()"});
+  }).catch(function(e){ toast(e.message,true); });
+};
+window.departOrder=function(id){
+  api("POST","/api/orders/"+id+"/depart",{}).then(function(){
+    feedback(true); toast("Marfa a plecat — stoc actualizat ✓"); screenOrders();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
 

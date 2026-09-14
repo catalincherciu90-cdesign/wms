@@ -675,6 +675,7 @@ function portalMovements(){
 /* ---- Comenzi de livrare (portal client) ---- */
 function porderStatusPill(s){
   if(s==="completed") return '<span class="pill good">Expediată</span>';
+  if(s==="prepared") return '<span class="pill warn">Pregătită</span>';
   if(s==="cancelled") return '<span class="pill bad">Anulată</span>';
   if(s==="confirmed") return '<span class="pill warn">În așteptare</span>';
   return '<span class="pill mut">Ciornă</span>';
@@ -1009,7 +1010,7 @@ function catBars(rows){
   }).join("");
 }
 function orderStatusPill(s){
-  var m={draft:["mut","ciornă"],confirmed:["warn","confirmată"],completed:["good","finalizată"],cancelled:["bad","anulată"]};
+  var m={draft:["mut","ciornă"],confirmed:["warn","confirmată"],prepared:["warn","pregătită"],completed:["good","finalizată"],cancelled:["bad","anulată"]};
   var x=m[s]||["mut",s]; return '<span class="pill '+x[0]+'">'+x[1]+'</span>';
 }
 function kpi(n,l,kind){ return '<div class="card kpi"><div class="n'+(kind?' ':'')+'" '+(kind==="bad"?'style="color:var(--bad)"':'')+'>'+esc(n)+'</div><div class="l">'+esc(l)+'</div></div>'; }
@@ -2641,10 +2642,18 @@ window.orderDetail = function(id){
       + d.lines.map(function(l){ return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td></tr>'; }).join("")
       + '</tbody></table>';
     var actions='';
-    if(can("operator") && o.status!=="completed" && o.status!=="cancelled"){
-      actions='<div class="field" style="margin-top:14px"><label>Finalizează în locația</label>'
+    if(can("operator") && o.status==="prepared"){
+      // Comandă de ieșire pregătită (stoc rezervat) — stocul scade doar la plecare.
+      actions='<div class="card" style="margin-top:14px;padding:12px;background:var(--panel-2)"><div class="muted" style="font-size:12.5px;margin-bottom:8px">📦 Marfa e <b>pregătită</b> și rezervată. Stocul <b>nu a scăzut</b> încă — scade doar când marfa pleacă din depozit.</div>'
+        + '<button onclick="departOrder('+o.id+')">🚚 Marfa a plecat (scade stocul)</button></div>'
+        + '<div class="row" style="margin-top:8px">'
+        + '<button class="ghost sm" onclick="orderCancel('+o.id+',\\''+o.code+'\\')">Anulează</button>'
+        + '<button class="danger sm" onclick="deleteOrder('+o.id+',\\''+o.code+'\\',0)">Șterge</button></div>';
+    } else if(can("operator") && o.status!=="completed" && o.status!=="cancelled"){
+      actions='<div class="field" style="margin-top:14px"><label>'+(o.type==="inbound"?"Recepționează în locația":"Pregătește (picking) din locația")+'</label>'
         + '<div class="row"><select id="od_loc" style="flex:1"></select>'
-        + '<button onclick="completeOrder('+o.id+')">'+(o.type==="inbound"?"Recepționează":"Expediază (picking)")+'</button></div></div>'
+        + '<button onclick="completeOrder('+o.id+')">'+(o.type==="inbound"?"Recepționează":"Pregătește")+'</button></div>'
+        + (o.type!=="inbound"?'<div class="fhint">La pregătire, stocul se rezervă dar NU scade. Va scădea când apeși «Marfa a plecat».</div>':'')+'</div>'
         + '<div class="row" style="margin-top:8px">'
         + (o.status==="draft"?'<button class="ghost sm" onclick="orderStatus('+o.id+',\\'confirmed\\')">Confirmă</button>':'')
         + '<button class="ghost sm" onclick="orderCancel('+o.id+',\\''+o.code+'\\')">Anulează</button>'
@@ -2709,7 +2718,12 @@ window.odRemoveService = function(orderId, lineId, status){
 window.completeOrder = function(id){
   var loc=el("od_loc"); if(!loc) return;
   api("POST","/api/orders/"+id+"/complete",{ location_id:Number(loc.value) })
-    .then(function(){ closeModal(); toast("Comandă finalizată — stoc actualizat"); loadOrders(); })
+    .then(function(r){ closeModal(); toast(r&&r.status==="prepared"?"Comandă pregătită — stoc rezervat (nu a scăzut)":"Comandă finalizată — stoc actualizat"); loadOrders(); })
+    .catch(function(e){ toast(e.message,"bad"); });
+};
+window.departOrder = function(id){
+  api("POST","/api/orders/"+id+"/depart",{})
+    .then(function(){ closeModal(); toast("Marfa a plecat — stoc actualizat"); loadOrders(); })
     .catch(function(e){ toast(e.message,"bad"); });
 };
 window.orderStatus = function(id,status){

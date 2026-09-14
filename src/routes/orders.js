@@ -109,7 +109,10 @@ export async function unlock(request, env, ctx, user, params) {
 }
 
 // Finalizează comanda: aplică mișcările de stoc într-o locație aleasă.
-// inbound => intrare (+), outbound => ieșire (−, cu verificare de stoc).
+// inbound => intrare (+, stocul crește imediat).
+// outbound => „stoc tampon": marfa se PREGĂTEȘTE (se rezervă) în locație, dar
+//   stocul fizic NU scade până nu pleacă efectiv din depozit. Comanda devine
+//   „prepared"; scăderea propriu-zisă se face din depart() („Marfa a plecat").
 export async function complete(request, env, ctx, user, params) {
   const b = await readJson(request);
   const id = Number(params.id);
@@ -131,10 +134,8 @@ export async function complete(request, env, ctx, user, params) {
   const { results: lines } = await env.DB.prepare('SELECT * FROM order_lines WHERE order_id = ?').bind(id).all();
   if (!lines.length) return error('Comanda nu are linii', 400);
 
-  const sign = order.type === 'inbound' ? 1 : -1;
-
-  // Pentru outbound: verifică stocul disponibil în locație pentru fiecare linie
-  if (sign < 0) {
+  // --- OUTBOUND: pregătire (stoc tampon) — verifică disponibilul, dar NU scade ---
+  if (order.type !== 'inbound') {
     for (const l of lines) {
       const inv = await env.DB.prepare('SELECT quantity FROM inventory WHERE product_id = ? AND location_id = ?')
         .bind(l.product_id, locationId).first();
@@ -144,11 +145,16 @@ export async function complete(request, env, ctx, user, params) {
         return error('Stoc insuficient pentru ' + (pr?.sku || ('#' + l.product_id)) + ' (disponibil: ' + avail + ', necesar: ' + l.quantity + ')', 400);
       }
     }
+    const stmts = lines.map((l) => env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
+    stmts.push(env.DB.prepare("UPDATE orders SET status = 'prepared', prepared_location_id = ?, locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(locationId, id));
+    await env.DB.batch(stmts);
+    return json({ ok: true, status: 'prepared' });
   }
 
+  // --- INBOUND: intrare imediată în stoc ---
   const stmts = [];
   for (const l of lines) {
-    const delta = sign * l.quantity;
+    const delta = l.quantity;
     stmts.push(env.DB.prepare(`
       INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?)
       ON CONFLICT(product_id, location_id)
@@ -161,6 +167,52 @@ export async function complete(request, env, ctx, user, params) {
     stmts.push(env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
   }
   stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(id));
+  await env.DB.batch(stmts);
+
+  return json({ ok: true, status: 'completed' });
+}
+
+// „Marfa a plecat": scade efectiv stocul unei comenzi de ieșire pregătite.
+// Folosește locația unde a fost pregătită; re-verifică disponibilul înainte de scădere.
+export async function depart(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.type === 'inbound') return error('Doar comenzile de ieșire pot pleca din depozit', 400);
+  if (order.status === 'cancelled') return error('Comanda e anulată', 400);
+  if (order.status === 'completed') return error('Comanda a plecat deja', 400);
+  if (order.status !== 'prepared') return error('Comanda trebuie pregătită mai întâi (picking)', 400);
+  const locationId = Number(order.prepared_location_id);
+  if (!locationId) return error('Comanda nu are locație de pregătire', 400);
+
+  const { results: lines } = await env.DB.prepare('SELECT * FROM order_lines WHERE order_id = ?').bind(id).all();
+  if (!lines.length) return error('Comanda nu are linii', 400);
+
+  // re-verifică stocul (poate s-a schimbat între pregătire și plecare)
+  for (const l of lines) {
+    const inv = await env.DB.prepare('SELECT quantity FROM inventory WHERE product_id = ? AND location_id = ?')
+      .bind(l.product_id, locationId).first();
+    const avail = inv?.quantity || 0;
+    if (avail < l.quantity) {
+      const pr = await env.DB.prepare('SELECT sku FROM products WHERE id = ?').bind(l.product_id).first();
+      return error('Stoc insuficient pentru ' + (pr?.sku || ('#' + l.product_id)) + ' (disponibil: ' + avail + ', necesar: ' + l.quantity + ')', 400);
+    }
+  }
+
+  const stmts = [];
+  for (const l of lines) {
+    const delta = -l.quantity;
+    stmts.push(env.DB.prepare(`
+      INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?)
+      ON CONFLICT(product_id, location_id)
+      DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')`)
+      .bind(l.product_id, locationId, delta));
+    stmts.push(env.DB.prepare(`
+      INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .bind(l.product_id, locationId, order.type, delta, order.code, 'plecare marfă ' + order.code, user.sub));
+  }
+  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now') WHERE id = ?").bind(id));
   await env.DB.batch(stmts);
 
   return json({ ok: true, status: 'completed' });

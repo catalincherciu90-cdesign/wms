@@ -51,6 +51,8 @@ export async function ensureSchema(env) {
     'locked_by INTEGER',
     'locked_name TEXT',
     'locked_at TEXT',
+    // stoc tampon: locația unde marfa e pregătită (rezervată) până pleacă din depozit
+    'prepared_location_id INTEGER',
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
