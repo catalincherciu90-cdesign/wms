@@ -2317,50 +2317,39 @@ function buildPalletLabelHTML(pallet, items, autoprint){
     +'<table><thead><tr><td><b>Produs</b></td><td style="text-align:right"><b>Cant.</b></td></tr></thead><tbody>'+(rows||'<tr><td colspan=2>—</td></tr>')+'</tbody></table>'
     +script+'</body></html>';
 }
+// Trimite eticheta de palet/colet la imprimantă prin agent (coadă de printare).
 window.printPalletLabel = function(pallet, items){
-  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi eticheta","bad"); return; }
-  w.document.write(buildPalletLabelHTML(pallet, items, true)); w.document.close();
+  if(!pallet||!pallet.id) return;
+  api("POST","/api/print/jobs",{type:"pallet", ref_id:pallet.id, code:pallet.code}).then(function(){ toast("Etichetă trimisă la imprimantă: "+pallet.code); }).catch(function(e){ toast(e.message,"bad"); });
 };
-/* ---- Stație imprimare: pagina ținută deschisă pe calculatorul cu imprimanta ---- */
-function stationName(){ try{ return localStorage.getItem("wms_station")||""; }catch(e){ return ""; } }
+/* ---- Imprimare etichete: prin agentul local ZPL (fără browser) ---- */
 VIEWS.printstation = function(){
-  var nm=stationName();
-  setMain(topbar("Stație imprimare")
+  setMain(topbar("Imprimare etichete")
     + '<div class="card" style="padding:16px">'
-    + '<p><b>Ține pagina asta deschisă</b> pe calculatorul cu imprimanta. Etichetele trimise de pe Zebra (sau din WMS) se printează automat aici.</p>'
-    + '<div class="field" style="max-width:320px"><label>Numele acestei stații (opțional)</label>'
-    + '<div class="row"><input id="st_name" placeholder="ex: Depozit 1 – birou" value="'+esc(nm)+'" style="flex:1"><button class="sm" onclick="stationSaveName()">Salvează</button></div>'
-    + '<div class="fhint">Apare pe Zebra ca să știi care calculator printează.</div></div>'
-    + '<div id="st_status" style="margin-top:6px;font-weight:600"></div>'
-    + '<div class="row" style="margin-top:10px"><button onclick="stationTestPrint()">🖨️ Test print (aici)</button></div>'
-    + '<div class="card" style="margin-top:12px;background:var(--panel-2);padding:12px"><b>🖨️ Ca să printeze DIRECT, fără fereastra de confirmare</b>'
-    + '<div class="muted" style="font-size:13px;margin-top:4px">Trebuie pornit browserul cu opțiunea <b>kiosk-printing</b>. O faci o singură dată:</div>'
-    + '<ol style="font-size:13px;line-height:1.75;margin:8px 0 0 18px">'
-    + '<li><b>Închide tot Chrome</b> (toate ferestrele).</li>'
-    + '<li>Setează imprimanta de etichete ca <b>implicită</b>: Windows → Setări → Bluetooth și dispozitive → Imprimante → alege ZDesigner → «Setează ca implicită». (Debifează „Permite Windows să gestioneze imprimanta implicită".)</li>'
-    + '<li>Click dreapta pe scurtătura de Chrome → <b>Properties</b> → în câmpul <b>Target</b>, la sfârșit (după ghilimele), adaugă un spațiu și: <code>--kiosk-printing</code></li>'
-    + '<li>Exemplu Target: <code>"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe" --kiosk-printing</code> → Apply → OK.</li>'
-    + '<li>Deschide Chrome <b>din acea scurtătură</b> și intră pe pagina asta.</li>'
-    + '<li>Apasă <b>Test print</b> — trebuie să iasă eticheta <b>fără</b> nicio fereastră.</li>'
-    + '</ol>'
-    + '<div class="muted" style="font-size:12px;margin-top:6px">Merge la fel cu Edge (<code>msedge.exe --kiosk-printing</code>) sau Brave (<code>brave.exe --kiosk-printing</code>). Cât timp lași fila deschisă, apare „online" pe Zebra.</div></div>'
-    + (can("admin") ? ('<div class="card" style="margin-top:12px;border:1px solid var(--brand);padding:12px"><b>⭐ Sau: imprimare directă în Zebra (agent, fără browser)</b>'
-      + '<div class="muted" style="font-size:12.5px;margin:4px 0 10px">Cel mai stabil pentru Zebra ZT411. Rulează un programel pe PC-ul cu imprimanta — trimite etichetele direct (ZPL), fără browser și fără nicio fereastră.</div>'
+    + '<p>Etichetele trimise de pe Zebra sau din WMS se printează prin <b>agentul local</b> instalat pe calculatorul cu imprimanta Zebra.</p>'
+    + '<div id="st_status" style="margin:8px 0;font-weight:600">Verific agentul…</div>'
+    + '<div class="row" style="margin-top:6px"><button onclick="stationTest()">🖨️ Test print</button></div>'
+    + (can("admin") ? ('<div class="card" style="margin-top:14px;border:1px solid var(--brand);padding:12px"><b>⚙️ Agent de imprimare (pe PC-ul cu imprimanta)</b>'
+      + '<div class="muted" style="font-size:12.5px;margin:4px 0 10px">Rulează un programel pe PC-ul cu imprimanta Zebra — trimite etichetele direct (ZPL), fără browser și fără nicio fereastră.</div>'
       + '<div class="field"><label>Numele imprimantei (exact ca în Windows)</label><input id="ag_printer" value="ZDesigner ZT411-300dpi">'+fhint("Îl vezi la Windows → Imprimante. Copiază-l exact.")+'</div>'
       + '<div class="field" style="max-width:220px"><label>Lățime etichetă (mm)</label><input id="ag_w" type="number" min="20" value="100">'+fhint("Lățimea rolei de etichete. Implicit 100 mm.")+'</div>'
       + '<div id="ag_token" class="muted" style="font-size:11.5px;margin:2px 0 8px">Token: …</div>'
       + '<div class="row"><button onclick="agentDownload()">⬇️ Descarcă agentul (.bat)</button> <button class="ghost sm" onclick="agentRegen()">Regenerează token</button></div>'
       + '<ol class="muted" style="font-size:12.5px;line-height:1.7;margin:8px 0 0 18px"><li>Descarcă fișierul și pune-l pe PC-ul cu imprimanta.</li><li>Dublu-click pe el. Dacă Windows avertizează: <b>More info → Run anyway</b>.</li><li>Rămâne o fereastră neagră deschisă = agentul merge. O lași deschisă (o poți minimiza).</li><li>Ca să pornească singur la deschiderea calculatorului: pune fișierul în folderul <code>shell:startup</code>.</li></ol></div>') : '')
-    + '<div id="st_log" style="margin-top:12px;font-size:13px"></div></div>'
-    + '<iframe id="ps_iframe" style="position:fixed;left:-9999px;top:0;width:420px;height:640px;border:0"></iframe>');
-  window._stBusy=false;
-  if(el("st_status")) el("st_status").textContent="✅ Ascult… verific la fiecare 4 secunde.";
-  stationTick();
+    + '</div>');
+  stationStatusTick();
   if(window._stTimer) clearInterval(window._stTimer);
-  window._stTimer=setInterval(stationTick, 4000);
+  window._stTimer=setInterval(stationStatusTick, 5000);
   if(can("admin")) agentLoadToken();
 };
-window.stationSaveName = function(){ try{ localStorage.setItem("wms_station", el("st_name")?el("st_name").value.trim():""); toast("Salvat"); }catch(e){ toast("Nu am putut salva","bad"); } };
+function stationStatusTick(){
+  var host=el("st_status"); if(!host){ if(window._stTimer){ clearInterval(window._stTimer); window._stTimer=null; } return; }
+  api("GET","/api/print/status").then(function(s){
+    if(s.online){ host.innerHTML='<span style="color:var(--good)">● Agent online</span>'+(s.station?(' <span class="muted" style="font-weight:400">· '+esc(s.station)+'</span>'):'')+(s.pending?(' <span class="muted" style="font-weight:400">· '+esc(s.pending)+' în coadă</span>'):''); }
+    else { host.innerHTML='<span style="color:var(--bad)">● Agent offline</span> <span class="muted" style="font-weight:400">— pornește agentul pe PC-ul cu imprimanta</span>'; }
+  }).catch(function(){ host.textContent="Nu am putut verifica agentul."; });
+}
+window.stationTest = function(){ api("POST","/api/print/test",{}).then(function(){ toast("Test trimis la imprimantă (prin agent)"); stationStatusTick(); }).catch(function(e){ toast(e.message,"bad"); }); };
 var _agentToken="";
 function agentLoadToken(){ api("GET","/api/print/agent-token").then(function(r){ _agentToken=r.token||""; if(el("ag_token")) el("ag_token").textContent="Token: "+_agentToken; }).catch(function(){ if(el("ag_token")) el("ag_token").textContent="Token: (indisponibil)"; }); }
 window.agentRegen = function(){
@@ -2378,17 +2367,6 @@ window.agentDownload = function(){
   window.location.href=u; // răspunsul e attachment -> se descarcă
   toast("Se descarcă agentul…");
 };
-function buildTestLabelHTML(title, autoprint){
-  var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
-  return '<html><head><meta charset="utf-8"><title>Test print</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:10px;text-align:center;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}h1{font-size:20px;margin:0 0 4px}img{max-width:100%;max-height:120px}.d{font-size:13px;margin-top:4px}</style></head><body>'
-    +'<h1>✔ TEST PRINT</h1><img src="'+lblBarcodeURL("TEST-OK")+'"><div class="d">'+esc(title||"WSD WMS")+'</div>'+script+'</body></html>';
-}
-window.stationTestPrint = function(){ stationPrintHTML(buildTestLabelHTML("Test local stație", false)); toast("Am trimis un test la imprimantă"); };
-function stationLog(job){
-  var h=el("st_log"); if(!h) return;
-  var t=new Date().toLocaleTimeString();
-  h.innerHTML='<div>'+t+' — printat <b>'+esc(job.code||("#"+job.id))+'</b></div>'+h.innerHTML;
-}
 /* ---- Etichetă -> PDF descărcabil (fără librării: canvas -> JPEG -> PDF minimal) ---- */
 function jpegToPdf(dataUrl, wpx, hpx){
   var jpg=atob(dataUrl.substring(dataUrl.indexOf(",")+1));
@@ -2518,11 +2496,9 @@ function buildBoxLabelBody(box){
 }
 window.boxLabelsPrint = function(){
   if(!_boxSet.length){ toast("Generează întâi etichetele","bad"); return; }
-  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi","bad"); return; }
-  var body=_boxSet.map(buildBoxLabelBody).join("");
-  w.document.write('<html><head><meta charset="utf-8"><title>Etichete cutii</title><style>'+boxLabelCss()+'</style></head><body>'+body
-    +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},350)}</scr'+'ipt></body></html>');
-  w.document.close();
+  var n=0;
+  _boxSet.forEach(function(b){ if(b.id){ api("POST","/api/print/jobs",{type:"box", ref_id:b.id, code:b.code, title:b.product_name, lot:b.lot||null}).catch(function(){}); n++; } });
+  toast(n+" etichete de cutie trimise la imprimantă");
 };
 // Canvas cu 2 coduri de bare (pentru PDF)
 function renderBoxLabelCanvas(box, cb){
@@ -2594,32 +2570,6 @@ window.boxLabelsPdf = function(){
     toast(pages.length+" etichete în PDF");
   }
 };
-function stationPrintHTML(html){
-  var f=el("ps_iframe"); if(!f) return;
-  var doc=f.contentWindow.document; doc.open(); doc.write(html); doc.close();
-  setTimeout(function(){ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} }, 400);
-}
-function stationTick(){
-  if(!el("ps_iframe")){ if(window._stTimer){ clearInterval(window._stTimer); window._stTimer=null; } return; } // am părăsit pagina
-  if(window._stBusy) return;
-  var qs = stationName() ? ("?station="+encodeURIComponent(stationName())) : "";
-  api("GET","/api/print/jobs"+qs).then(function(d){
-    var jobs=d.jobs||[]; if(!jobs.length) return;
-    var job=jobs[0]; window._stBusy=true;
-    var step;
-    if(job.type==="test"){
-      step = Promise.resolve().then(function(){ stationPrintHTML(buildTestLabelHTML(job.title, false)); });
-    } else if(job.type==="product"){
-      step = Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false, job.lot)); });
-    } else {
-      step = api("GET","/api/pallets/"+job.ref_id).then(function(pd){ stationPrintHTML(buildPalletLabelHTML(pd.pallet, pd.items, false)); });
-    }
-    step.then(function(){ return api("POST","/api/print/jobs/"+job.id+"/done"); })
-      .then(function(){ stationLog(job); })
-      .catch(function(e){ toast(e.message,"bad"); })
-      .then(function(){ setTimeout(function(){ window._stBusy=false; }, 800); });
-  }).catch(function(){});
-}
 window.viewAviz = function(id){
   fetch(API+"/api/pallets/"+id+"/aviz",{ headers: token?{Authorization:"Bearer "+token}:{} })
     .then(function(r){ if(!r.ok) throw new Error("Nu am putut încărca avizul"); return r.blob(); })

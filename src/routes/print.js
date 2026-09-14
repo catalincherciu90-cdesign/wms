@@ -106,6 +106,21 @@ async function jobToZpl(env, job, w) {
       + Csmall(410, meta)                   // lot + data/ora (mic, jos)
       + '^XZ';
   }
+  if (job.type === 'box') {
+    // etichetă de cutie: cod unic de cutie + codul produsului (ambele coduri de bare)
+    const box = await env.DB.prepare(
+      'SELECT bx.code, bx.quantity, bx.lot, pr.name AS product_name, COALESCE(pr.barcode, pr.sku) AS product_barcode, pa.code AS pallet_code FROM boxes bx JOIN products pr ON pr.id = bx.product_id LEFT JOIN pallets pa ON pa.id = bx.pallet_id WHERE bx.id = ?'
+    ).bind(job.ref_id).first();
+    if (!box) return '^XA^CI28^PW' + w + C(35, 40, zplEsc(job.code)) + Cbc(120, 150, zplEsc(job.code)) + '^XZ';
+    const meta = (box.lot ? ('Lot: ' + zplEsc(box.lot) + '   ') : '') + (box.quantity ? ('Buc/cutie: ' + box.quantity + '   ') : '') + DT;
+    return '^XA^CI28^PW' + w
+      + C(20, 28, 'CUTIE')
+      + Cbc(60, 110, zplEsc(box.code))
+      + C(230, 34, zplEsc(box.product_name))
+      + Cbc(285, 120, zplEsc(box.product_barcode))
+      + Csmall(440, meta)
+      + '^XZ';
+  }
   // palet / colet / ambalaje
   const pallet = await env.DB.prepare(
     'SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id = pa.client_id LEFT JOIN locations l ON l.id = pa.location_id WHERE pa.id = ?'
