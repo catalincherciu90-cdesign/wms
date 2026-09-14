@@ -2336,12 +2336,68 @@ VIEWS.printstation = function(){
       + '<div id="ag_token" class="muted" style="font-size:11.5px;margin:2px 0 8px">Token: …</div>'
       + '<div class="row"><button onclick="agentDownload()">⬇️ Descarcă agentul (.bat)</button> <button class="ghost sm" onclick="agentRegen()">Regenerează token</button></div>'
       + '<ol class="muted" style="font-size:12.5px;line-height:1.7;margin:8px 0 0 18px"><li>Descarcă fișierul și pune-l pe PC-ul cu imprimanta.</li><li>Dublu-click pe el. Dacă Windows avertizează: <b>More info → Run anyway</b>.</li><li>Rămâne o fereastră neagră deschisă = agentul merge. O lași deschisă (o poți minimiza).</li><li>Ca să pornească singur la deschiderea calculatorului: pune fișierul în folderul <code>shell:startup</code>.</li></ol></div>') : '')
+    + '<div class="card" style="margin-top:14px;padding:12px"><b>🖨️ Sau: printare prin browser (fără agent)</b>'
+    + '<div class="muted" style="font-size:12.5px;margin:4px 0 8px">Ține pagina asta deschisă pe calculatorul cu imprimanta; etichetele din coadă se printează automat aici. <b>Folosește ori agentul, ori browserul — nu amândouă în același timp</b> (altfel se printează dublu).</div>'
+    + '<div id="bst_status" class="muted" style="font-size:12.5px;margin-bottom:8px">Oprit.</div>'
+    + '<div class="row"><button onclick="startBrowserStation()">▶️ Pornește printarea prin browser</button> <button class="ghost sm" onclick="stopBrowserStation()">⏹️ Oprește</button></div>'
+    + '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600">Cum printez fără fereastra de confirmare</summary>'
+    + '<div class="muted" style="font-size:12px;line-height:1.6;margin-top:6px">Deschide pagina în <b>Google Chrome</b> pornit cu <code>--kiosk-printing</code> și pune imprimanta ca implicită. Atunci etichetele ies direct, fără dialog. (Merge și cu Edge/Brave.)</div></details>'
+    + '</div>'
     + '</div>');
   stationStatusTick();
   if(window._stTimer) clearInterval(window._stTimer);
   window._stTimer=setInterval(stationStatusTick, 5000);
+  if(window._bstTimer){ clearInterval(window._bstTimer); window._bstTimer=null; } // oprit la (re)intrare
   if(can("admin")) agentLoadToken();
 };
+window.startBrowserStation = function(){
+  if(!el("ps_iframe")){ var f=document.createElement("iframe"); f.id="ps_iframe"; f.style.cssText="position:fixed;left:-9999px;top:0;width:520px;height:760px;border:0"; document.body.appendChild(f); }
+  window._stBusy=false;
+  if(el("bst_status")) el("bst_status").innerHTML='<span style="color:var(--good)">● Pornit</span> — verific la fiecare 4 secunde. Ține fila deschisă.';
+  stationTick();
+  if(window._bstTimer) clearInterval(window._bstTimer);
+  window._bstTimer=setInterval(stationTick, 4000);
+  toast("Printare prin browser pornită");
+};
+window.stopBrowserStation = function(){
+  if(window._bstTimer){ clearInterval(window._bstTimer); window._bstTimer=null; }
+  var f=el("ps_iframe"); if(f) f.remove();
+  if(el("bst_status")) el("bst_status").textContent="Oprit.";
+  toast("Printare prin browser oprită");
+};
+function stationPrintHTML(html){
+  var f=el("ps_iframe"); if(!f) return;
+  var doc=f.contentWindow.document; doc.open(); doc.write(html); doc.close();
+  setTimeout(function(){ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} }, 400);
+}
+function stationLog(job){
+  var h=el("bst_status"); if(!h) return;
+  h.innerHTML='<span style="color:var(--good)">● Pornit</span> — ultima: <b>'+esc(job.code||("#"+job.id))+'</b> ('+new Date().toLocaleTimeString()+')';
+}
+function buildTestLabelHTML(title){
+  return '<html><head><meta charset="utf-8"><title>Test</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial;color:#000;padding:10px;text-align:center}h1{font-size:20px;margin:0 0 4px}img{max-width:100%;max-height:120px}</style></head><body>'
+    +'<h1>TEST PRINT</h1><img src="'+lblBarcodeURL("TEST-OK")+'"><div>'+esc(title||"")+'</div></body></html>';
+}
+function stationBoxHTML(box){
+  return '<html><head><meta charset="utf-8"><title>Cutie</title><style>'+boxLabelCss()+'</style></head><body>'+buildBoxLabelBody(box)+'</body></html>';
+}
+function stationTick(){
+  if(!el("ps_iframe")){ if(window._bstTimer){ clearInterval(window._bstTimer); window._bstTimer=null; } return; }
+  if(window._stBusy) return;
+  api("GET","/api/print/jobs").then(function(d){
+    var jobs=d.jobs||[]; if(!jobs.length) return;
+    var job=jobs[0]; window._stBusy=true;
+    var step;
+    if(job.type==="test"){ step=Promise.resolve().then(function(){ stationPrintHTML(buildTestLabelHTML(job.title)); }); }
+    else if(job.type==="product"){ step=Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false, job.lot)); }); }
+    else if(job.type==="box"){ step=api("GET","/api/boxes/"+encodeURIComponent(job.code)).then(function(r){ stationPrintHTML(stationBoxHTML(r.box)); }); }
+    else { step=api("GET","/api/pallets/"+job.ref_id).then(function(pd){ stationPrintHTML(buildPalletLabelHTML(pd.pallet, pd.items, false)); }); }
+    step.then(function(){ return api("POST","/api/print/jobs/"+job.id+"/done"); })
+      .then(function(){ stationLog(job); })
+      .catch(function(e){ toast(e.message,"bad"); })
+      .then(function(){ setTimeout(function(){ window._stBusy=false; }, 900); });
+  }).catch(function(){});
+}
 function stationStatusTick(){
   var host=el("st_status"); if(!host){ if(window._stTimer){ clearInterval(window._stTimer); window._stTimer=null; } return; }
   api("GET","/api/print/status").then(function(s){
