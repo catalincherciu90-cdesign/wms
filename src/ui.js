@@ -2338,8 +2338,9 @@ VIEWS.printstation = function(){
       + '<ol class="muted" style="font-size:12.5px;line-height:1.7;margin:8px 0 0 18px"><li>Descarcă fișierul și pune-l pe PC-ul cu imprimanta.</li><li>Dublu-click pe el. Dacă Windows avertizează: <b>More info → Run anyway</b>.</li><li>Rămâne o fereastră neagră deschisă = agentul merge. O lași deschisă (o poți minimiza).</li><li>Ca să pornească singur la deschiderea calculatorului: pune fișierul în folderul <code>shell:startup</code>.</li></ol></div>') : '')
     + '<div class="card" style="margin-top:14px;padding:12px"><b>🖨️ Sau: printare prin browser (fără agent)</b>'
     + '<div class="muted" style="font-size:12.5px;margin:4px 0 8px">Ține pagina asta deschisă pe calculatorul cu imprimanta; etichetele din coadă se printează automat aici. <b>Folosește ori agentul, ori browserul — nu amândouă în același timp</b> (altfel se printează dublu).</div>'
-    + '<div id="bst_status" class="muted" style="font-size:12.5px;margin-bottom:8px">Oprit.</div>'
-    + '<div class="row"><button onclick="startBrowserStation()">▶️ Pornește printarea prin browser</button> <button class="ghost sm" onclick="stopBrowserStation()">⏹️ Oprește</button></div>'
+    + '<div id="bst_status" class="muted" style="font-size:12.5px;margin-bottom:4px">Oprit.</div>'
+    + '<div id="bst_count" style="font-size:13px;font-weight:600;margin-bottom:8px">În coadă: …</div>'
+    + '<div class="row"><button onclick="printNow()">🖨️ Printează acum</button> <button class="ghost sm" onclick="startBrowserStation()">▶️ Pornește automat</button> <button class="ghost sm" onclick="stopBrowserStation()">⏹️ Oprește</button></div>'
     + '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600">Cum printez fără fereastra de confirmare</summary>'
     + '<div class="muted" style="font-size:12px;line-height:1.6;margin-top:6px">Deschide pagina în <b>Google Chrome</b> pornit cu <code>--kiosk-printing</code> și pune imprimanta ca implicită. Atunci etichetele ies direct, fără dialog. (Merge și cu Edge/Brave.)</div></details>'
     + '</div>'
@@ -2421,8 +2422,17 @@ function stationStatusTick(){
   api("GET","/api/print/status").then(function(s){
     if(s.online){ host.innerHTML='<span style="color:var(--good)">● Agent online</span>'+(s.station?(' <span class="muted" style="font-weight:400">· '+esc(s.station)+'</span>'):'')+(s.pending?(' <span class="muted" style="font-weight:400">· '+esc(s.pending)+' în coadă</span>'):''); }
     else { host.innerHTML='<span style="color:var(--bad)">● Agent offline</span> <span class="muted" style="font-weight:400">— pornește agentul pe PC-ul cu imprimanta</span>'; }
+    var cc=el("bst_count"); if(cc) cc.textContent="În coadă: "+(s.pending||0)+" etichetă/e";
   }).catch(function(){ host.textContent="Nu am putut verifica agentul."; });
 }
+// Printează manual, o singură dată, tot ce e în coadă (fără să pornești bucla automată).
+window.printNow = function(){
+  if(!el("ps_iframe")){ var f=document.createElement("iframe"); f.id="ps_iframe"; f.style.cssText="position:fixed;left:-9999px;top:0;width:520px;height:760px;border:0"; document.body.appendChild(f); }
+  window._stBusy=false;
+  stationTick();
+  toast("Trimit la imprimantă ce e în coadă…");
+  setTimeout(stationStatusTick, 1500);
+};
 window.stationTest = function(){ api("POST","/api/print/test",{}).then(function(){ toast("Test trimis la imprimantă (prin agent)"); stationStatusTick(); }).catch(function(e){ toast(e.message,"bad"); }); };
 var _agentToken="";
 function agentLoadToken(){ api("GET","/api/print/agent-token").then(function(r){ _agentToken=r.token||""; if(el("ag_token")) el("ag_token").textContent="Token: "+_agentToken; }).catch(function(){ if(el("ag_token")) el("ag_token").textContent="Token: (indisponibil)"; }); }
