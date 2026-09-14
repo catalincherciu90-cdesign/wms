@@ -2392,6 +2392,138 @@ function buildProductLabelHTML(barcode, name, autoprint){
   return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(barcode||"")+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:12px;text-align:center}.nm{font-size:15px;font-weight:bold;margin-bottom:6px}img{max-width:100%}.cd{font-size:13px;margin-top:4px;letter-spacing:1px}</style></head><body>'
     +'<div class="nm">'+esc(name||"")+'</div><img src="'+bc+'"><div class="cd">'+esc(barcode||"")+'</div>'+script+'</body></html>';
 }
+
+/* ---- Etichete de cutie: cod unic de cutie (CUT-...) + codul produsului, ambele scanabile ---- */
+window.palBoxLabels = function(id){
+  api("GET","/api/pallets/"+id).then(function(d){
+    var p=d.pallet;
+    if(!(d.items||[]).length){ toast("Paletul nu are produse","bad"); return; }
+    var rows=d.items.map(function(it){
+      return '<tr><td><b>'+esc(it.sku)+'</b><br><span class="muted" style="font-size:12px">'+esc(it.product_name)+'</span></td>'
+        +'<td><input id="bxq_'+it.product_id+'" type="number" min="0" value="'+esc(it.per_box||1)+'" style="width:78px"></td>'
+        +'<td><input id="bxn_'+it.product_id+'" type="number" min="1" value="'+esc(it.boxes||1)+'" style="width:78px"></td>'
+        +'<td><button class="sm" onclick="palBoxGen('+id+','+it.product_id+')">Generează</button></td></tr>';
+    }).join("");
+    modal("Etichete cutii — "+esc(p.code),
+      '<div class="muted" style="font-size:12.5px;margin-bottom:10px">Fiecare cutie primește un cod unic <b>CUT-...</b> (scanabil). Eticheta arată codul cutiei ȘI codul produsului. Alege câte etichete printezi pe fiecare produs.</div>'
+      +'<table><thead><tr><th>Produs</th><th>Buc/cutie</th><th>Nr. etichete</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<div id="bxresult" style="margin-top:12px"></div>', null);
+    var sv=el("modalSave"); if(sv) sv.style.display="none";
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+var _boxSet=[];
+window.palBoxGen = function(palletId, productId){
+  var q=el("bxq_"+productId), n=el("bxn_"+productId);
+  var quantity=q?Number(q.value):0, count=n?Number(n.value):0;
+  if(!(count>0)){ toast("Pune nr. de etichete","bad"); return; }
+  api("POST","/api/pallets/"+palletId+"/boxes",{product_id:productId, count:count, quantity:quantity}).then(function(r){
+    _boxSet=r.boxes||[];
+    if(!_boxSet.length){ toast("Nicio etichetă generată","bad"); return; }
+    var first=_boxSet[0].code, last=_boxSet[_boxSet.length-1].code;
+    var host=el("bxresult"); if(host){
+      host.innerHTML='<div class="card" style="padding:12px;background:var(--panel-2)"><b>'+_boxSet.length+' etichete generate</b> <span class="muted">('+esc(first)+(first!==last?(' … '+esc(last)):'')+')</span>'
+        +'<div class="row" style="margin-top:8px"><button class="sm" onclick="boxLabelsPrint()">🖨️ Printează</button> <button class="ghost sm" onclick="boxLabelsPdf()">📄 PDF</button></div></div>';
+    }
+    toast(_boxSet.length+" etichete generate");
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+function boxLabelCss(){
+  return 'body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0}'
+    +'.lbl{page-break-after:always;text-align:center;padding:14px 10px;box-sizing:border-box}'
+    +'.lbl:last-child{page-break-after:auto}'
+    +'.t{font-size:12px;letter-spacing:2px;color:#555}.c{font-size:22px;font-weight:bold;letter-spacing:1px;margin:2px 0 4px}'
+    +'.nm{font-size:14px;font-weight:bold;margin:10px 0 2px}.c2{font-size:12px;letter-spacing:1px;margin-top:2px}'
+    +'.meta{font-size:12px;color:#333;margin-top:8px}img{max-width:100%}';
+}
+function buildBoxLabelBody(box){
+  return '<div class="lbl">'
+    +'<div class="t">CUTIE</div><div class="c">'+esc(box.code)+'</div>'
+    +'<img src="'+lblBarcodeURL(box.code)+'">'
+    +'<div class="nm">'+esc(box.product_name||"")+'</div>'
+    +'<img src="'+lblBarcodeURL(box.product_barcode||box.code)+'">'
+    +'<div class="c2">'+esc(box.product_barcode||"")+'</div>'
+    +'<div class="meta">'+(box.quantity?('Buc/cutie: <b>'+esc(box.quantity)+'</b>'):'')
+      +(box.lot?(' · Lot: '+esc(box.lot)):'')+(box.pallet_code?(' · '+esc(box.pallet_code)):'')+'</div>'
+    +'</div>';
+}
+window.boxLabelsPrint = function(){
+  if(!_boxSet.length){ toast("Generează întâi etichetele","bad"); return; }
+  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi","bad"); return; }
+  var body=_boxSet.map(buildBoxLabelBody).join("");
+  w.document.write('<html><head><meta charset="utf-8"><title>Etichete cutii</title><style>'+boxLabelCss()+'</style></head><body>'+body
+    +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},350)}</scr'+'ipt></body></html>');
+  w.document.close();
+};
+// Canvas cu 2 coduri de bare (pentru PDF)
+function renderBoxLabelCanvas(box, cb){
+  var imgB=new Image(), imgP=new Image(), loaded=0, ok=true;
+  function step(){ loaded++; if(loaded<2) return; if(!ok){ cb(null); return; } draw(); }
+  imgB.onload=step; imgP.onload=step;
+  imgB.onerror=function(){ ok=false; step(); }; imgP.onerror=function(){ ok=false; step(); };
+  function draw(){
+    var W=520, pad=18;
+    var bw=Math.min(W-2*pad,imgB.width), bh=imgB.height*(bw/imgB.width);
+    var pw=Math.min(W-2*pad,imgP.width), ph=imgP.height*(pw/imgP.width);
+    var meta=[]; if(box.quantity) meta.push("Buc/cutie: "+box.quantity); if(box.lot) meta.push("Lot: "+box.lot); if(box.pallet_code) meta.push(box.pallet_code);
+    var h=pad+18+26+8+bh+10 + 22+ph+18 + (meta.length?20:0) + pad;
+    var c=document.createElement("canvas"); c.width=W; c.height=Math.ceil(h);
+    var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,c.height);
+    ctx.fillStyle="#000"; ctx.textAlign="center";
+    var y=pad+14;
+    ctx.font="12px Arial"; ctx.fillText("CUTIE", W/2, y); y+=22;
+    ctx.font="bold 22px Arial"; ctx.fillText(String(box.code||""), W/2, y); y+=10;
+    ctx.drawImage(imgB,(W-bw)/2,y,bw,bh); y+=bh+22;
+    ctx.font="bold 14px Arial"; ctx.fillText(String(box.product_name||""), W/2, y); y+=8;
+    ctx.drawImage(imgP,(W-pw)/2,y,pw,ph); y+=ph+16;
+    ctx.font="12px Arial"; ctx.fillText(String(box.product_barcode||""), W/2, y); y+=18;
+    if(meta.length){ ctx.fillText(meta.join(" · "), W/2, y); }
+    cb(c);
+  }
+  imgB.src=lblBarcodeURL(box.code||"");
+  imgP.src=lblBarcodeURL(box.product_barcode||box.code||"");
+}
+// PDF cu mai multe pagini (o etichetă pe pagină)
+function jpegsToPdf(pages){
+  var objList=[]; objList[1]="<</Type/Catalog/Pages 2 0 R>>";
+  var kids=[];
+  pages.forEach(function(pg,i){
+    var pageNo=3+i*3, contentNo=pageNo+1, imageNo=pageNo+2;
+    kids.push(pageNo+" 0 R");
+    var pw=Math.round(pg.wpx*72/96*100)/100, ph=Math.round(pg.hpx*72/96*100)/100;
+    var content="q "+pw+" 0 0 "+ph+" 0 0 cm /Im0 Do Q";
+    objList[pageNo]="<</Type/Page/Parent 2 0 R/MediaBox[0 0 "+pw+" "+ph+"]/Resources<</XObject<</Im0 "+imageNo+" 0 R>>>>/Contents "+contentNo+" 0 R>>";
+    objList[contentNo]="<</Length "+content.length+">>\\nstream\\n"+content+"\\nendstream";
+    objList[imageNo]="<</Type/XObject/Subtype/Image/Width "+pg.wpx+"/Height "+pg.hpx+"/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length "+pg.jpg.length+">>\\nstream\\n"+pg.jpg+"\\nendstream";
+  });
+  objList[2]="<</Type/Pages/Kids["+kids.join(" ")+"]/Count "+pages.length+">>";
+  var total=2+pages.length*3;
+  var out="%PDF-1.4\\n", off=[];
+  for(var n=1;n<=total;n++){ off[n]=out.length; out+=n+" 0 obj\\n"+objList[n]+"\\nendobj\\n"; }
+  var xref=out.length;
+  out+="xref\\n0 "+(total+1)+"\\n0000000000 65535 f \\n";
+  for(var m=1;m<=total;m++){ out+=("0000000000"+off[m]).slice(-10)+" 00000 n \\n"; }
+  out+="trailer\\n<</Size "+(total+1)+"/Root 1 0 R>>\\nstartxref\\n"+xref+"\\n%%EOF";
+  var arr=new Uint8Array(out.length);
+  for(var k=0;k<out.length;k++) arr[k]=out.charCodeAt(k)&0xff;
+  return new Blob([arr],{type:"application/pdf"});
+}
+window.boxLabelsPdf = function(){
+  if(!_boxSet.length){ toast("Generează întâi etichetele","bad"); return; }
+  var pages=[], i=0;
+  (function next(){
+    if(i>=_boxSet.length){ finish(); return; }
+    renderBoxLabelCanvas(_boxSet[i], function(c){
+      if(c){ var jpg=atob(c.toDataURL("image/jpeg",0.92).split(",")[1]); pages.push({jpg:jpg, wpx:c.width, hpx:c.height}); }
+      i++; next();
+    });
+  })();
+  function finish(){
+    if(!pages.length){ toast("Nu am putut genera PDF-ul","bad"); return; }
+    var blob=jpegsToPdf(pages), url=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=url; a.download="etichete_cutii.pdf"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast(pages.length+" etichete în PDF");
+  }
+};
 function stationPrintHTML(html){
   var f=el("ps_iframe"); if(!f) return;
   var doc=f.contentWindow.document; doc.open(); doc.write(html); doc.close();
@@ -2524,7 +2656,8 @@ window.palletDetail = function(id){
       +(p.aviz?(' · aviz '+esc(p.aviz)):'')+(p.received_at?(' · recepție '+esc(p.received_at)):'');
     modal(title,
       '<div class="muted" style="margin-bottom:10px">'+meta+'</div>'
-      +'<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="printPalletLabel(_pdData.pallet,_pdData.items)">🏷️ Printează eticheta</button> <button class="ghost sm" onclick="palletLabelPdf(_pdData.pallet,_pdData.items)">📄 PDF</button>'
+      +'<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="printPalletLabel(_pdData.pallet,_pdData.items)">🏷️ Etichetă palet</button> <button class="ghost sm" onclick="palletLabelPdf(_pdData.pallet,_pdData.items)">📄 PDF</button>'
+      +(can("operator")?' <button class="ghost sm" onclick="palBoxLabels('+id+')">📦 Etichete cutii</button>':'')
       +(p.has_aviz?' <button class="ghost sm" onclick="viewAviz('+id+')">📄 Vezi avizul scanat</button>':'')
       +'</div>'
       +items+actions, null);
