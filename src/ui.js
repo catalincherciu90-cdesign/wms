@@ -2344,6 +2344,13 @@ VIEWS.printstation = function(){
     + '<li>Apasă <b>Test print</b> — trebuie să iasă eticheta <b>fără</b> nicio fereastră.</li>'
     + '</ol>'
     + '<div class="muted" style="font-size:12px;margin-top:6px">Merge la fel cu Edge (<code>msedge.exe --kiosk-printing</code>) sau Brave (<code>brave.exe --kiosk-printing</code>). Cât timp lași fila deschisă, apare „online" pe Zebra.</div></div>'
+    + (can("admin") ? ('<div class="card" style="margin-top:12px;border:1px solid var(--brand);padding:12px"><b>⭐ Sau: imprimare directă în Zebra (agent, fără browser)</b>'
+      + '<div class="muted" style="font-size:12.5px;margin:4px 0 10px">Cel mai stabil pentru Zebra ZT411. Rulează un programel pe PC-ul cu imprimanta — trimite etichetele direct (ZPL), fără browser și fără nicio fereastră.</div>'
+      + '<div class="field"><label>Numele imprimantei (exact ca în Windows)</label><input id="ag_printer" value="ZDesigner ZT411-300dpi">'+fhint("Îl vezi la Windows → Imprimante. Copiază-l exact.")+'</div>'
+      + '<div class="field" style="max-width:220px"><label>Lățime etichetă (mm)</label><input id="ag_w" type="number" min="20" value="100">'+fhint("Lățimea rolei de etichete. Implicit 100 mm.")+'</div>'
+      + '<div id="ag_token" class="muted" style="font-size:11.5px;margin:2px 0 8px">Token: …</div>'
+      + '<div class="row"><button onclick="agentDownload()">⬇️ Descarcă agentul (.bat)</button> <button class="ghost sm" onclick="agentRegen()">Regenerează token</button></div>'
+      + '<ol class="muted" style="font-size:12.5px;line-height:1.7;margin:8px 0 0 18px"><li>Descarcă fișierul și pune-l pe PC-ul cu imprimanta.</li><li>Dublu-click pe el. Dacă Windows avertizează: <b>More info → Run anyway</b>.</li><li>Rămâne o fereastră neagră deschisă = agentul merge. O lași deschisă (o poți minimiza).</li><li>Ca să pornească singur la deschiderea calculatorului: pune fișierul în folderul <code>shell:startup</code>.</li></ol></div>') : '')
     + '<div id="st_log" style="margin-top:12px;font-size:13px"></div></div>'
     + '<iframe id="ps_iframe" style="position:fixed;left:-9999px;top:0;width:420px;height:640px;border:0"></iframe>');
   window._stBusy=false;
@@ -2351,8 +2358,26 @@ VIEWS.printstation = function(){
   stationTick();
   if(window._stTimer) clearInterval(window._stTimer);
   window._stTimer=setInterval(stationTick, 4000);
+  if(can("admin")) agentLoadToken();
 };
 window.stationSaveName = function(){ try{ localStorage.setItem("wms_station", el("st_name")?el("st_name").value.trim():""); toast("Salvat"); }catch(e){ toast("Nu am putut salva","bad"); } };
+var _agentToken="";
+function agentLoadToken(){ api("GET","/api/print/agent-token").then(function(r){ _agentToken=r.token||""; if(el("ag_token")) el("ag_token").textContent="Token: "+_agentToken; }).catch(function(){ if(el("ag_token")) el("ag_token").textContent="Token: (indisponibil)"; }); }
+window.agentRegen = function(){
+  modal("Regenerează token agent","<p>Token-ul vechi nu va mai funcționa. Agenții existenți trebuie descărcați din nou. Continui?</p>", function(){
+    api("POST","/api/print/agent-token/regen",{}).then(function(r){ _agentToken=r.token||""; if(el("ag_token")) el("ag_token").textContent="Token: "+_agentToken; closeModal(); toast("Token nou generat — redescarcă agentul"); }).catch(function(e){ toast(e.message,"bad"); });
+  });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, regenerează"; sv.className="danger"; sv.style.display=""; }
+};
+window.agentDownload = function(){
+  if(!_agentToken){ toast("Aștept token-ul…","bad"); return; }
+  var printer=el("ag_printer")?el("ag_printer").value.trim():"ZDesigner ZT411-300dpi";
+  var mm=el("ag_w")?Number(el("ag_w").value)||100:100;
+  var dots=Math.round(mm/25.4*300);
+  var u=API+"/print-agent.bat?token="+encodeURIComponent(_agentToken)+"&printer="+encodeURIComponent(printer)+"&w="+dots;
+  window.location.href=u; // răspunsul e attachment -> se descarcă
+  toast("Se descarcă agentul…");
+};
 function buildTestLabelHTML(title, autoprint){
   var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
   return '<html><head><meta charset="utf-8"><title>Test print</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:10px;text-align:center;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}h1{font-size:20px;margin:0 0 4px}img{max-width:100%;max-height:120px}.d{font-size:13px;margin-top:4px}</style></head><body>'

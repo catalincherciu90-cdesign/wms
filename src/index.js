@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v83';
+const APP_VERSION = 'v84';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -146,6 +146,10 @@ const routes = [
   ['GET', '/api/print/jobs', print.pending, 'viewer'],
   ['GET', '/api/print/status', print.status, 'viewer'],
   ['POST', '/api/print/test', print.test, 'operator'],
+  ['GET', '/api/print/agent-token', print.agentToken, 'admin'],
+  ['POST', '/api/print/agent-token/regen', print.agentTokenRegen, 'admin'],
+  ['GET', '/api/print/agent/next', print.agentNext, null],
+  ['POST', '/api/print/agent/done', print.agentDone, null],
   ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
   ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
@@ -250,6 +254,9 @@ export default {
         : '[]';
       return new Response(body, { headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders } });
     }
+
+    // Agent de imprimare local (.bat descărcabil) — imprimare directă ZPL în Zebra.
+    if (path === '/print-agent.bat') { await ensureSchema(env); return print.agentBat(request, env); }
 
     // Health check
     if (path === '/health') return json({ ok: true, service: 'wms', version: APP_VERSION, ts: new Date().toISOString() });
