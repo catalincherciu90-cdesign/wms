@@ -956,6 +956,7 @@ VIEWS.dashboard = function(){
     var quick = '<div class="card" style="padding:16px;margin-bottom:16px"><h2 style="margin:0 0 12px">Acces rapid</h2><div class="dgrid">'
       + dashTile("receive","📥","Recepție","operator")
       + dashTile("ship","📤","Expediere","operator")
+      + dashTile("departures","🚚","Marfa a plecat","operator")
       + dashTile("transfer","🔄","Transfer","operator")
       + dashTile("orders","📋","Comenzi","viewer")
       + dashTile("products","📦","Produse","viewer")
@@ -1026,6 +1027,39 @@ window.dashDepart = function(id, code){
     +'<p class="muted" style="font-size:13px">Stocul rezervat se scade acum definitiv, iar comanda devine «finalizată».</p>',
     function(){
       api("POST","/api/orders/"+id+"/depart",{}).then(function(){ closeModal(); toast("Marfa a plecat — stoc actualizat"); dashLoadPrepared(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, a plecat"; sv.className=""; sv.style.display=""; }
+};
+// Pagină dedicată „Marfa a plecat" (din Acces rapid) — toate comenzile pregătite + buton de plecare.
+VIEWS.departures = function(){
+  setMain(topbar("Marfa a plecat") + '<div class="card" id="dep_view">Se încarcă…</div>');
+  loadDepartures();
+};
+function loadDepartures(){
+  var host=el("dep_view"); if(!host) return;
+  api("GET","/api/orders?type=outbound&status=prepared").then(function(d){
+    var list=d.orders||[];
+    if(!list.length){ host.innerHTML='<div class="muted center" style="padding:24px">Nicio comandă pregătită de plecare.<br><span style="font-size:12.5px">Comenzile apar aici după picking (când marfa e pregătită și rezervată).</span></div>'; return; }
+    var rows=list.map(function(o){
+      var who = o.source==="portal"
+        ? esc(o.client_name||"client")+(o.recipient_name?(' <span class="muted">→ '+esc(o.recipient_name)+'</span>'):'')
+        : esc(o.partner_name||"—");
+      return '<tr><td><b>'+esc(o.code)+'</b></td><td>'+who+'</td>'
+        +'<td class="right">'+esc(o.total_qty)+' buc.</td>'
+        +'<td>'+orderStatusPill(o.status)+'</td>'
+        +'<td class="right"><button class="sm" onclick="departView('+o.id+',\\''+o.code+'\\')">🚚 Marfa a plecat</button>'
+        +' <button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
+    }).join("");
+    host.innerHTML='<div class="muted" style="font-size:12.5px;margin-bottom:10px">Comenzi pregătite (stoc rezervat). Când confirmi plecarea, stocul scade definitiv și comanda se finalizează.</div>'
+      +'<table><thead><tr><th>Cod</th><th>Client</th><th class="right">Cant.</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }).catch(function(e){ host.innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+}
+window.departView = function(id, code){
+  modal("Marfa a plecat — "+esc(code||("#"+id)),
+    '<p>Confirmi că marfa comenzii <b>'+esc(code||("#"+id))+'</b> a plecat din depozit?</p>'
+    +'<p class="muted" style="font-size:13px">Stocul rezervat se scade acum definitiv, iar comanda devine «finalizată».</p>',
+    function(){
+      api("POST","/api/orders/"+id+"/depart",{}).then(function(){ closeModal(); toast("Marfa a plecat — stoc actualizat"); loadDepartures(); }).catch(function(e){ toast(e.message,"bad"); });
     });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, a plecat"; sv.className=""; sv.style.display=""; }
 };
