@@ -106,7 +106,8 @@ export function labelFields(type) {
 const BARCODE_FIELDS = { code: 1, box_code: 1, product_barcode: 1 };
 
 export function defaultTemplate(type) {
-  if (type === 'pallet') return { elements: [
+  const dim = { width_mm: 100, height_mm: 150, valign: 'center' };
+  if (type === 'pallet') return { ...dim, elements: [
     { field: 'kind', render: 'text', size: 'lg', align: 'C' },
     { field: 'code', render: 'text', size: 'md', align: 'C' },
     { field: 'code', render: 'barcode', size: 'md', align: 'C' },
@@ -114,13 +115,13 @@ export function defaultTemplate(type) {
     { field: 'lot', render: 'text', size: 'sm', align: 'C' },
     { field: 'date', render: 'text', size: 'sm', align: 'C' },
   ] };
-  if (type === 'box') return { elements: [
+  if (type === 'box') return { ...dim, elements: [
     { field: 'box_code', render: 'barcode', size: 'md', align: 'C' },
     { field: 'product_name', render: 'text', size: 'md', align: 'C' },
     { field: 'product_barcode', render: 'barcode', size: 'md', align: 'C' },
     { field: 'meta', render: 'text', size: 'sm', align: 'C' },
   ] };
-  return { elements: [ // product
+  return { ...dim, elements: [ // product
     { field: 'title', render: 'text', size: 'lg', align: 'C' },
     { field: 'code', render: 'barcode', size: 'lg', align: 'C' },
     { field: 'meta', render: 'text', size: 'sm', align: 'C' },
@@ -130,7 +131,16 @@ export function defaultTemplate(type) {
 export async function getTemplate(env, type) {
   try {
     const r = await env.DB.prepare("SELECT value FROM settings WHERE key = ?").bind('label_tpl_' + type).first();
-    if (r?.value) { const t = JSON.parse(r.value); if (t && Array.isArray(t.elements)) return t; }
+    if (r?.value) {
+      const t = JSON.parse(r.value);
+      if (t && Array.isArray(t.elements)) {
+        // completează dimensiunile lipsă (șabloane vechi salvate fără mm/valign)
+        if (!t.width_mm) t.width_mm = 100;
+        if (!t.height_mm) t.height_mm = 150;
+        if (!['top', 'center', 'spread'].includes(t.valign)) t.valign = 'center';
+        return t;
+      }
+    }
   } catch (e) {}
   return defaultTemplate(type);
 }
@@ -157,37 +167,62 @@ async function labelValues(env, job) {
     lot: pallet.lot || '', aviz: pallet.aviz || '', date: DT, items: itemsTxt };
 }
 
-// Construiește ZPL dintr-un șablon (elemente stivuite pe verticală, aliniate).
-async function jobToZpl(env, job, w) {
-  w = w > 0 ? w : 1200;
+const mmToDots = (mm) => Math.round((Number(mm) || 0) / 25.4 * 300); // 300 dpi (ZT411)
+
+// Construiește ZPL dintr-un șablon, folosind dimensiunea fizică a etichetei (mm)
+// și alinierea pe verticală (sus / centru / distribuit), ca să iasă exact ca în preview.
+async function jobToZpl(env, job, wFallback) {
   const DT = '{{DT}}';
   if (job.type === 'test') {
-    return '^XA^CI28^PW' + w
-      + '^FO0,50^FB' + w + ',1,0,C,0^A0N,50,50^FDTEST PRINT^FS'
-      + '^FO0,150^FB' + w + ',1,0,C,0^BY3^BCN,160,Y,N,N^FDTEST-OK^FS'
-      + '^FO0,360^FB' + w + ',1,0,C,0^A0N,26,26^FD' + DT + '^FS'
+    const w0 = wFallback > 0 ? wFallback : 1200;
+    return '^XA^CI28^PW' + w0
+      + '^FO0,50^FB' + w0 + ',1,0,C,0^A0N,50,50^FDTEST PRINT^FS'
+      + '^FO0,150^FB' + w0 + ',1,0,C,0^BY3^BCN,160,Y,N,N^FDTEST-OK^FS'
+      + '^FO0,360^FB' + w0 + ',1,0,C,0^A0N,26,26^FD' + DT + '^FS'
       + '^XZ';
   }
   const tpl = await getTemplate(env, job.type === 'inbound' || job.type === 'outbound' ? 'pallet' : job.type);
   const vals = await labelValues(env, job);
-  let y = 24, s = '^XA^CI28^PW' + w;
+  const w = tpl.width_mm ? mmToDots(tpl.width_mm) : (wFallback > 0 ? wFallback : 1181);
+  const h = tpl.height_mm ? mmToDots(tpl.height_mm) : 0; // 0 = lasă imprimanta să folosească lungimea calibrată
+  const valign = ['top', 'center', 'spread'].includes(tpl.valign) ? tpl.valign : 'top';
+
+  // 1) rezolvă elementele vizibile + înălțimea fiecărui bloc
+  const blocks = [];
   for (const e of (tpl.elements || [])) {
     const align = LBL_ALIGN[e.align] || 'C';
     const isBc = e.render === 'barcode' && BARCODE_FIELDS[e.field];
     const val = e.field === 'fixed' ? (e.text || '') : (vals[e.field] != null ? vals[e.field] : '');
     if (val === '' && e.field !== 'fixed') continue;
     if (isBc) {
-      const h = LBL_BC[e.size] || LBL_BC.md;
-      s += '^FO0,' + y + '^FB' + w + ',1,0,' + align + ',0^BY3^BCN,' + h + ',Y,N,N^FD' + zplEsc(val) + '^FS';
-      y += h + 44; // cod de bare + numărul (HRI) + spațiu
+      const bh = LBL_BC[e.size] || LBL_BC.md;
+      blocks.push({ isBc: true, align, val, bh, h: bh + 30 /* + HRI */, gap: 20 });
     } else {
       const fh = LBL_FONT[e.size] || LBL_FONT.md;
-      const maxLines = e.field === 'items' ? 8 : 2;
-      s += '^FO0,' + y + '^FB' + w + ',' + maxLines + ',4,' + align + ',0^A0N,' + fh + ',' + fh + '^FD' + zplEsc(val) + '^FS';
-      const lineCount = e.field === 'items' ? Math.min(8, (String(val).split('\\&').length)) : 1;
-      y += fh * lineCount + 14;
+      const lines = e.field === 'items' ? Math.min(8, String(val).split('\\&').length || 1) : 1;
+      blocks.push({ isBc: false, align, val, fh, maxLines: e.field === 'items' ? 8 : 2, h: fh * lines, gap: 12 });
     }
   }
+  const contentH = blocks.reduce((a, b, i) => a + b.h + (i < blocks.length - 1 ? b.gap : 0), 0);
+
+  // 2) poziția de start + spațiul suplimentar între blocuri (pentru „distribuit")
+  const pad = 24;
+  let y = pad, extra = 0;
+  if (h > 0) {
+    if (valign === 'center') y = Math.max(pad, Math.round((h - contentH) / 2));
+    else if (valign === 'spread' && blocks.length > 1) extra = Math.max(0, Math.round((h - contentH - 2 * pad) / (blocks.length - 1)));
+  }
+
+  // 3) generează ZPL
+  let s = '^XA^CI28^PW' + w + (h > 0 ? ('^LL' + h) : '');
+  blocks.forEach((b, i) => {
+    if (b.isBc) {
+      s += '^FO0,' + y + '^FB' + w + ',1,0,' + b.align + ',0^BY3^BCN,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
+    } else {
+      s += '^FO0,' + y + '^FB' + w + ',' + b.maxLines + ',4,' + b.align + ',0^A0N,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
+    }
+    y += b.h + b.gap + extra;
+  });
   s += '^XZ';
   return s;
 }
@@ -209,8 +244,11 @@ export async function labelTemplateSave(request, env) {
     align: ['L', 'C', 'R'].includes(e.align) ? e.align : 'C',
     text: e.field === 'fixed' ? String(e.text || '').slice(0, 60) : undefined,
   })) : [];
+  const width_mm = Math.max(20, Math.min(300, Number(b?.template?.width_mm) || 100));
+  const height_mm = Math.max(20, Math.min(400, Number(b?.template?.height_mm) || 150));
+  const valign = ['top', 'center', 'spread'].includes(b?.template?.valign) ? b.template.valign : 'center';
   await env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-    .bind('label_tpl_' + type, JSON.stringify({ elements: els })).run();
+    .bind('label_tpl_' + type, JSON.stringify({ width_mm, height_mm, valign, elements: els })).run();
   return json({ ok: true });
 }
 export async function labelTemplateReset(request, env) {

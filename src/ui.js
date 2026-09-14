@@ -2395,7 +2395,7 @@ var LE_PRESETS = {
 window.leApplyPreset = function(idx){
   if(idx===""||idx==null) return;
   var p=(LE_PRESETS[_le.type]||[])[Number(idx)]; if(!p) return;
-  _le.tpl={elements:JSON.parse(JSON.stringify(p.elements))};
+  _le.tpl={ width_mm:_le.tpl.width_mm||100, height_mm:_le.tpl.height_mm||150, valign:_le.tpl.valign||"center", elements:JSON.parse(JSON.stringify(p.elements)) };
   leRenderRows(); lePreview();
   toast("Model aplicat — apasă Salvează ca să-l păstrezi");
 };
@@ -2406,7 +2406,15 @@ VIEWS.labeleditor = function(){
   setMain(topbar("Editor etichetă")
     + '<div class="card" style="padding:14px"><div class="row" style="gap:6px;margin-bottom:10px">'+tabs+'</div>'
     + presetSel
-    + '<div class="muted" style="font-size:12.5px;margin-bottom:10px">Alege un model gata făcut din „Presetare" sau construiește-ți eticheta pe rânduri. Data și ora se pun automat la print. Modificările se aplică tuturor etichetelor de acest tip.</div>'
+    + '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+    + '<div class="field" style="width:110px;margin:0"><label>Lățime (mm)</label><input id="le_w" type="number" min="20" max="300" value="'+esc((_le.tpl.width_mm||100))+'" oninput="leSetDim(\\'width_mm\\',this.value)"></div>'
+    + '<div class="field" style="width:110px;margin:0"><label>Înălțime (mm)</label><input id="le_h" type="number" min="20" max="400" value="'+esc((_le.tpl.height_mm||150))+'" oninput="leSetDim(\\'height_mm\\',this.value)"></div>'
+    + '<div class="field" style="width:150px;margin:0"><label>Aliniere verticală</label><select id="le_valign" onchange="leSetDim(\\'valign\\',this.value)">'
+    + [["top","Sus"],["center","Centru"],["spread","Distribuit"]].map(function(a){return '<option value="'+a[0]+'"'+((_le.tpl.valign||"center")===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join("")
+    + '</select></div>'
+    + '<div class="muted" style="font-size:11.5px;flex:1;min-width:180px">Pune dimensiunea reală a etichetei tale. Așa iese pe hârtie exact ca în previzualizare.</div>'
+    + '</div>'
+    + '<div class="muted" style="font-size:12.5px;margin-bottom:10px">Alege un model din „Presetare" sau construiește-ți eticheta pe rânduri. Data și ora se pun automat la print.</div>'
     + '<div class="grid" style="grid-template-columns:1fr 320px;gap:16px;align-items:start">'
     + '<div><div id="le_rows"></div><button class="sm" style="margin-top:8px" onclick="leAdd()">+ Adaugă rând</button></div>'
     + '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">Previzualizare</div><div style="border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff"><canvas id="le_canvas" style="width:100%;display:block"></canvas></div>'
@@ -2448,6 +2456,11 @@ function leRenderRows(){
       +'</div>'+fixedInput+'</div>';
   }).join("");
 }
+window.leSetDim = function(key,val){
+  if(key==="valign"){ _le.tpl.valign=val; }
+  else { _le.tpl[key]=Math.max(20, Math.min(key==="height_mm"?400:300, Number(val)||(key==="height_mm"?150:100))); }
+  lePreview();
+};
 window.leSet = function(i,key,val){
   var e=_le.tpl.elements[i]; if(!e) return;
   e[key]=val;
@@ -2470,32 +2483,50 @@ function leSample(type){
 }
 function lePreview(){
   var c=el("le_canvas"); if(!c) return;
-  var W=c.clientWidth||360; c.width=W;
-  var sample=leSample(_le.type), pad=10, y=pad, ops=[];
-  var FS={sm:12,md:16,lg:22,xl:30}, BH={sm:28,md:46,lg:66};
+  var W=c.clientWidth||300; c.width=W;
+  // canvas la proporția reală a etichetei (mm)
+  var wmm=Number(_le.tpl.width_mm)||100, hmm=Number(_le.tpl.height_mm)||150;
+  var H=Math.max(80, Math.round(W*(hmm/wmm)));
+  c.height=H;
+  var scale=W/(wmm/25.4*300); // px per dot (aceeași scară ca la print)
+  var sample=leSample(_le.type), pad=Math.round(24*scale);
+  var FSd={sm:24,md:32,lg:46,xl:62}, BHd={sm:90,md:150,lg:210};
+  // măsoară blocurile (în px, folosind scara)
+  var blocks=[];
   _le.tpl.elements.forEach(function(e){
     var val=e.field==="fixed"?(e.text||""):sample[e.field];
     if(val==null||val==="") return;
-    if(e.render==="barcode"&&leCanBc(e.field)){ var h=BH[e.size]||BH.md; ops.push({t:"bc",val:String(val),y:y,h:h,align:e.align}); y+=h+18; }
-    else { var fs=FS[e.size]||FS.md; var lc=e.field==="items"?String(val).split("\\n").length:1; ops.push({t:"tx",val:String(val),y:y,fs:fs,align:e.align,field:e.field}); y+=fs*lc+8; }
+    if(e.render==="barcode"&&leCanBc(e.field)){ var bh=(BHd[e.size]||BHd.md)*scale; blocks.push({t:"bc",val:String(val),align:e.align,bh:bh,h:bh+30*scale,gap:20*scale}); }
+    else { var fs=(FSd[e.size]||FSd.md)*scale; var lc=e.field==="items"?String(val).split("\\n").length:1; blocks.push({t:"tx",val:String(val),align:e.align,fs:fs,field:e.field,h:fs*lc,gap:12*scale}); }
   });
-  c.height=Math.max(120,y+pad);
-  var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height); ctx.fillStyle="#000";
+  var contentH=blocks.reduce(function(a,b,i){return a+b.h+(i<blocks.length-1?b.gap:0);},0);
+  var valign=_le.tpl.valign||"center", y=pad, extra=0;
+  if(valign==="center") y=Math.max(pad,(H-contentH)/2);
+  else if(valign==="spread"&&blocks.length>1) extra=Math.max(0,(H-contentH-2*pad)/(blocks.length-1));
+  var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H); ctx.fillStyle="#000";
   function ax(al,wpx){ if(al==="L")return pad; if(al==="R")return W-pad-wpx; return (W-wpx)/2; }
-  ops.forEach(function(o){ if(o.t!=="tx") return;
-    ctx.font="bold "+o.fs+"px Arial"; ctx.textBaseline="top";
-    var lines=o.field==="items"?o.val.split("\\n"):[o.val]; var yy=o.y;
-    lines.forEach(function(ln){ var wpx=ctx.measureText(ln).width; ctx.fillText(ln, ax(o.align,wpx), yy); yy+=o.fs+2; });
+  // text întâi
+  var yy=y;
+  blocks.forEach(function(b){
+    if(b.t==="tx"){ ctx.font="bold "+Math.max(7,b.fs)+"px Arial"; ctx.textBaseline="top";
+      var lines=b.field==="items"?b.val.split("\\n"):[b.val]; var ly=yy;
+      lines.forEach(function(ln){ var wpx=ctx.measureText(ln).width; ctx.fillText(ln, ax(b.align,wpx), ly); ly+=b.fs+2; });
+    }
+    yy+=b.h+b.gap+extra;
   });
-  ops.forEach(function(o){ if(o.t!=="bc") return;
-    var img=new Image();
-    img.onload=function(){ var wpx=Math.min(W-2*pad,img.width), hpx=o.h; var x=ax(o.align,wpx); ctx.drawImage(img,x,o.y,wpx,hpx);
-      ctx.font="11px Arial"; ctx.textBaseline="top"; var tw=ctx.measureText(o.val).width; ctx.fillText(o.val, ax(o.align,tw), o.y+hpx+1); };
-    img.src=lblBarcodeURL(o.val);
+  // coduri de bare (async)
+  var yb=y;
+  blocks.forEach(function(b){
+    if(b.t==="bc"){ (function(bb,by){ var img=new Image();
+      img.onload=function(){ var wpx=Math.min(W-2*pad,img.width), hpx=bb.bh, x=ax(bb.align,wpx); ctx.drawImage(img,x,by,wpx,hpx);
+        ctx.font=Math.max(7,11*scale)+"px Arial"; ctx.textBaseline="top"; var tw=ctx.measureText(bb.val).width; ctx.fillText(bb.val, ax(bb.align,tw), by+hpx+1); };
+      img.src=lblBarcodeURL(bb.val); })(b,yb);
+    }
+    yb+=b.h+b.gap+extra;
   });
 }
 window.leSave = function(){
-  api("PUT","/api/print/label-template",{type:_le.type, template:{elements:_le.tpl.elements}}).then(function(){ toast("Șablon salvat pentru "+_le.type); }).catch(function(e){ toast(e.message,"bad"); });
+  api("PUT","/api/print/label-template",{type:_le.type, template:{width_mm:_le.tpl.width_mm, height_mm:_le.tpl.height_mm, valign:_le.tpl.valign, elements:_le.tpl.elements}}).then(function(){ toast("Șablon salvat pentru "+_le.type); }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.leResetTpl = function(){
   modal("Revino la implicit","<p>Sigur revii la eticheta implicită pentru acest tip? Modificările tale se pierd.</p>", function(){
