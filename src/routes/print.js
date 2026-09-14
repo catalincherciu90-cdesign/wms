@@ -86,19 +86,24 @@ function zplEsc(s) { return String(s == null ? '' : s).replace(/[\^~]/g, ' '); }
 async function jobToZpl(env, job, w) {
   w = w > 0 ? w : 1200;
   const DT = '{{DT}}';
+  // Centrat pe toată lățimea etichetei (^FB ... ,C) — ca eticheta din browser.
+  const C = (y, h, txt) => '^FO0,' + y + '^FB' + w + ',2,4,C,0^A0N,' + h + ',' + h + '^FD' + txt + '^FS';
+  const Cbc = (y, hgt, code) => '^FO0,' + y + '^FB' + w + ',1,0,C,0^BY3^BCN,' + hgt + ',Y,N,N^FD' + code + '^FS';
+  const Csmall = (y, txt) => '^FO0,' + y + '^FB' + w + ',1,0,C,0^A0N,26,26^FD' + txt + '^FS';
+
   if (job.type === 'test') {
-    return '^XA^CI28^PW' + w + '^LL0'
-      + '^FO30,30^A0N,50,50^FDTEST PRINT^FS'
-      + '^FO30,110^BY3^BCN,140,Y,N,N^FDTEST-OK^FS'
-      + '^FO30,300^A0N,28,28^FD' + DT + '^FS'
+    return '^XA^CI28^PW' + w
+      + C(50, 50, 'TEST PRINT')
+      + Cbc(150, 160, 'TEST-OK')
+      + Csmall(360, DT)
       + '^XZ';
   }
   if (job.type === 'product') {
     const meta = (job.lot ? ('Lot: ' + zplEsc(job.lot) + '   ') : '') + DT;
-    return '^XA^CI28^PW' + w + '^LL0'
-      + '^FO30,30^A0N,40,40^FB' + (w - 60) + ',2,0,L^FD' + zplEsc(job.title) + '^FS'
-      + '^FO30,150^BY3^BCN,150,Y,N,N^FD' + zplEsc(job.code) + '^FS'
-      + '^FO30,340^A0N,28,28^FD' + meta + '^FS'
+    return '^XA^CI28^PW' + w
+      + C(35, 46, zplEsc(job.title))       // nume produs (mare, centrat, până la 2 rânduri)
+      + Cbc(185, 170, zplEsc(job.code))     // cod de bare centrat + numărul dedesubt
+      + Csmall(410, meta)                   // lot + data/ora (mic, jos)
       + '^XZ';
   }
   // palet / colet / ambalaje
@@ -106,16 +111,17 @@ async function jobToZpl(env, job, w) {
     'SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id = pa.client_id LEFT JOIN locations l ON l.id = pa.location_id WHERE pa.id = ?'
   ).bind(job.ref_id).first();
   if (!pallet) {
-    return '^XA^CI28^PW' + w + '^FO30,30^A0N,40,40^FD' + zplEsc(job.code) + '^FS^FO30,110^BY3^BCN,150,Y,N,N^FD' + zplEsc(job.code) + '^FS^XZ';
+    return '^XA^CI28^PW' + w + C(35, 44, zplEsc(job.code)) + Cbc(120, 160, zplEsc(job.code)) + '^XZ';
   }
   const { results: items } = await env.DB.prepare(
     'SELECT pi.quantity, pr.name AS product_name, pr.sku FROM pallet_items pi JOIN products pr ON pr.id = pi.product_id WHERE pi.pallet_id = ? ORDER BY pr.name'
   ).bind(pallet.id).all();
   const kind = pallet.kind === 'colet' ? 'COLET' : (pallet.kind === 'ambalaje' ? 'PALET AMBALAJE' : 'PALET');
-  let y = 30, s = '^XA^CI28^PW' + w + '^LL0';
-  s += '^FO30,' + y + '^A0N,46,46^FD' + kind + '^FS'; y += 56;
-  s += '^FO30,' + y + '^A0N,40,40^FD' + zplEsc(pallet.code) + '^FS'; y += 50;
-  s += '^FO30,' + y + '^BY3^BCN,130,Y,N,N^FD' + zplEsc(pallet.code) + '^FS'; y += 190;
+  let s = '^XA^CI28^PW' + w;
+  s += C(25, 44, kind);
+  s += C(80, 40, zplEsc(pallet.code));
+  s += Cbc(135, 150, zplEsc(pallet.code));
+  let y = 330;
   const metaLines = [];
   if (pallet.client_name) metaLines.push('Client: ' + zplEsc(pallet.client_name));
   if (pallet.location_code) metaLines.push('Locatie: ' + zplEsc(pallet.location_code));
