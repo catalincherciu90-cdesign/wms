@@ -106,7 +106,7 @@ export function labelFields(type) {
 const BARCODE_FIELDS = { code: 1, box_code: 1, product_barcode: 1 };
 
 export function defaultTemplate(type) {
-  const dim = { width_mm: 100, height_mm: 150, valign: 'center' };
+  const dim = { width_mm: 100, height_mm: 150, valign: 'center', orient: 'portrait' };
   if (type === 'pallet') return { ...dim, elements: [
     { field: 'kind', render: 'text', size: 'lg', align: 'C' },
     { field: 'code', render: 'text', size: 'md', align: 'C' },
@@ -138,6 +138,7 @@ export async function getTemplate(env, type) {
         if (!t.width_mm) t.width_mm = 100;
         if (!t.height_mm) t.height_mm = 150;
         if (!['top', 'center', 'spread'].includes(t.valign)) t.valign = 'center';
+        if (!['portrait', 'landscape'].includes(t.orient)) t.orient = 'portrait';
         return t;
       }
     }
@@ -183,8 +184,12 @@ async function jobToZpl(env, job, wFallback) {
   }
   const tpl = await getTemplate(env, job.type === 'inbound' || job.type === 'outbound' ? 'pallet' : job.type);
   const vals = await labelValues(env, job);
-  const w = tpl.width_mm ? mmToDots(tpl.width_mm) : (wFallback > 0 ? wFallback : 1181);
-  const h = tpl.height_mm ? mmToDots(tpl.height_mm) : 0; // 0 = lasă imprimanta să folosească lungimea calibrată
+  const landscape = tpl.orient === 'landscape';
+  // Cadrul de design: wd = lățimea pe care se întinde conținutul, hd = pe verticală (stivuire).
+  const wd = tpl.width_mm ? mmToDots(tpl.width_mm) : (wFallback > 0 ? wFallback : 1181);
+  const hd = tpl.height_mm ? mmToDots(tpl.height_mm) : 0;
+  const h = hd; // înălțimea cadrului de design (0 = necunoscut)
+  const w = wd; // lățimea cadrului de design
   const valign = ['top', 'center', 'spread'].includes(tpl.valign) ? tpl.valign : 'top';
 
   // 1) rezolvă elementele vizibile + înălțimea fiecărui bloc
@@ -213,13 +218,19 @@ async function jobToZpl(env, job, wFallback) {
     else if (valign === 'spread' && blocks.length > 1) extra = Math.max(0, Math.round((h - contentH - 2 * pad) / (blocks.length - 1)));
   }
 
-  // 3) generează ZPL
-  let s = '^XA^CI28^PW' + w + (h > 0 ? ('^LL' + h) : '');
-  blocks.forEach((b, i) => {
-    if (b.isBc) {
-      s += '^FO0,' + y + '^FB' + w + ',1,0,' + b.align + ',0^BY3^BCN,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
+  // 3) generează ZPL — portret: fields normale; landscape: fields rotite 90° (R)
+  //    Fizic: portret PW=wd, LL=hd; landscape PW=hd, LL=wd.
+  const PW = landscape ? (hd > 0 ? hd : wd) : wd;
+  let s = '^XA^CI28^PW' + PW + (h > 0 ? ('^LL' + (landscape ? wd : hd)) : '');
+  blocks.forEach((b) => {
+    if (!landscape) {
+      if (b.isBc) s += '^FO0,' + y + '^FB' + w + ',1,0,' + b.align + ',0^BY3^BCN,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
+      else s += '^FO0,' + y + '^FB' + w + ',' + b.maxLines + ',4,' + b.align + ',0^A0N,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
     } else {
-      s += '^FO0,' + y + '^FB' + w + ',' + b.maxLines + ',4,' + b.align + ',0^A0N,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
+      // 90° în sens orar: originea pe axa scurtă (hd) = hd - y - grosime bloc
+      const px = Math.max(0, (hd > 0 ? hd : (contentH + 2 * pad)) - y - b.h);
+      if (b.isBc) s += '^FO' + px + ',0^FB' + wd + ',1,0,' + b.align + ',0^BY3^BCR,' + b.bh + ',Y,N,N^FD' + zplEsc(b.val) + '^FS';
+      else s += '^FO' + px + ',0^FB' + wd + ',' + b.maxLines + ',4,' + b.align + ',0^A0R,' + b.fh + ',' + b.fh + '^FD' + zplEsc(b.val) + '^FS';
     }
     y += b.h + b.gap + extra;
   });
@@ -247,8 +258,9 @@ export async function labelTemplateSave(request, env) {
   const width_mm = Math.max(20, Math.min(300, Number(b?.template?.width_mm) || 100));
   const height_mm = Math.max(20, Math.min(400, Number(b?.template?.height_mm) || 150));
   const valign = ['top', 'center', 'spread'].includes(b?.template?.valign) ? b.template.valign : 'center';
+  const orient = ['portrait', 'landscape'].includes(b?.template?.orient) ? b.template.orient : 'portrait';
   await env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-    .bind('label_tpl_' + type, JSON.stringify({ width_mm, height_mm, valign, elements: els })).run();
+    .bind('label_tpl_' + type, JSON.stringify({ width_mm, height_mm, valign, orient, elements: els })).run();
   return json({ ok: true });
 }
 export async function labelTemplateReset(request, env) {

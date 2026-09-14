@@ -2395,7 +2395,7 @@ var LE_PRESETS = {
 window.leApplyPreset = function(idx){
   if(idx===""||idx==null) return;
   var p=(LE_PRESETS[_le.type]||[])[Number(idx)]; if(!p) return;
-  _le.tpl={ width_mm:_le.tpl.width_mm||100, height_mm:_le.tpl.height_mm||150, valign:_le.tpl.valign||"center", elements:JSON.parse(JSON.stringify(p.elements)) };
+  _le.tpl={ width_mm:_le.tpl.width_mm||100, height_mm:_le.tpl.height_mm||150, valign:_le.tpl.valign||"center", orient:_le.tpl.orient||"portrait", elements:JSON.parse(JSON.stringify(p.elements)) };
   leRenderRows(); lePreview();
   toast("Model aplicat — apasă Salvează ca să-l păstrezi");
 };
@@ -2411,6 +2411,9 @@ VIEWS.labeleditor = function(){
     + '<div class="field" style="width:110px;margin:0"><label>Înălțime (mm)</label><input id="le_h" type="number" min="20" max="400" value="'+esc((_le.tpl.height_mm||150))+'" oninput="leSetDim(\\'height_mm\\',this.value)"></div>'
     + '<div class="field" style="width:150px;margin:0"><label>Aliniere verticală</label><select id="le_valign" onchange="leSetDim(\\'valign\\',this.value)">'
     + [["top","Sus"],["center","Centru"],["spread","Distribuit"]].map(function(a){return '<option value="'+a[0]+'"'+((_le.tpl.valign||"center")===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join("")
+    + '</select></div>'
+    + '<div class="field" style="width:140px;margin:0"><label>Orientare</label><select id="le_orient" onchange="leSetDim(\\'orient\\',this.value)">'
+    + [["portrait","Portret"],["landscape","Landscape"]].map(function(a){return '<option value="'+a[0]+'"'+((_le.tpl.orient||"portrait")===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join("")
     + '</select></div>'
     + '<div class="muted" style="font-size:11.5px;flex:1;min-width:180px">Pune dimensiunea reală a etichetei tale. Așa iese pe hârtie exact ca în previzualizare.</div>'
     + '</div>'
@@ -2457,7 +2460,7 @@ function leRenderRows(){
   }).join("");
 }
 window.leSetDim = function(key,val){
-  if(key==="valign"){ _le.tpl.valign=val; }
+  if(key==="valign"||key==="orient"){ _le.tpl[key]=val; }
   else { _le.tpl[key]=Math.max(20, Math.min(key==="height_mm"?400:300, Number(val)||(key==="height_mm"?150:100))); }
   lePreview();
 };
@@ -2483,15 +2486,16 @@ function leSample(type){
 }
 function lePreview(){
   var c=el("le_canvas"); if(!c) return;
-  var W=c.clientWidth||300; c.width=W;
-  // canvas la proporția reală a etichetei (mm)
+  var cw=c.clientWidth||300;
   var wmm=Number(_le.tpl.width_mm)||100, hmm=Number(_le.tpl.height_mm)||150;
-  var H=Math.max(80, Math.round(W*(hmm/wmm)));
-  c.height=H;
-  var scale=W/(wmm/25.4*300); // px per dot (aceeași scară ca la print)
+  var landscape=(_le.tpl.orient==="landscape");
+  // cadrul de design (upright) desenat offscreen, apoi rotit la blit pentru landscape
+  var offW = landscape ? Math.round(cw*(wmm/hmm)) : cw;
+  var offH = Math.round(offW*(hmm/wmm));
+  var visW = cw, visH = landscape ? Math.round(cw*(wmm/hmm)) : offH;
+  var scale=offW/(wmm/25.4*300);
   var sample=leSample(_le.type), pad=Math.round(24*scale);
   var FSd={sm:24,md:32,lg:46,xl:62}, BHd={sm:90,md:150,lg:210};
-  // măsoară blocurile (în px, folosind scara)
   var blocks=[];
   _le.tpl.elements.forEach(function(e){
     var val=e.field==="fixed"?(e.text||""):sample[e.field];
@@ -2500,33 +2504,39 @@ function lePreview(){
     else { var fs=(FSd[e.size]||FSd.md)*scale; var lc=e.field==="items"?String(val).split("\\n").length:1; blocks.push({t:"tx",val:String(val),align:e.align,fs:fs,field:e.field,h:fs*lc,gap:12*scale}); }
   });
   var contentH=blocks.reduce(function(a,b,i){return a+b.h+(i<blocks.length-1?b.gap:0);},0);
-  var valign=_le.tpl.valign||"center", y=pad, extra=0;
-  if(valign==="center") y=Math.max(pad,(H-contentH)/2);
-  else if(valign==="spread"&&blocks.length>1) extra=Math.max(0,(H-contentH-2*pad)/(blocks.length-1));
-  var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H); ctx.fillStyle="#000";
-  function ax(al,wpx){ if(al==="L")return pad; if(al==="R")return W-pad-wpx; return (W-wpx)/2; }
-  // text întâi
-  var yy=y;
-  blocks.forEach(function(b){
-    if(b.t==="tx"){ ctx.font="bold "+Math.max(7,b.fs)+"px Arial"; ctx.textBaseline="top";
-      var lines=b.field==="items"?b.val.split("\\n"):[b.val]; var ly=yy;
-      lines.forEach(function(ln){ var wpx=ctx.measureText(ln).width; ctx.fillText(ln, ax(b.align,wpx), ly); ly+=b.fs+2; });
-    }
-    yy+=b.h+b.gap+extra;
-  });
-  // coduri de bare (async)
-  var yb=y;
-  blocks.forEach(function(b){
-    if(b.t==="bc"){ (function(bb,by){ var img=new Image();
-      img.onload=function(){ var wpx=Math.min(W-2*pad,img.width), hpx=bb.bh, x=ax(bb.align,wpx); ctx.drawImage(img,x,by,wpx,hpx);
-        ctx.font=Math.max(7,11*scale)+"px Arial"; ctx.textBaseline="top"; var tw=ctx.measureText(bb.val).width; ctx.fillText(bb.val, ax(bb.align,tw), by+hpx+1); };
-      img.src=lblBarcodeURL(bb.val); })(b,yb);
-    }
-    yb+=b.h+b.gap+extra;
-  });
+  var valign=_le.tpl.valign||"center", y0=pad, extra=0;
+  if(valign==="center") y0=Math.max(pad,(offH-contentH)/2);
+  else if(valign==="spread"&&blocks.length>1) extra=Math.max(0,(offH-contentH-2*pad)/(blocks.length-1));
+  function ax(al,wpx){ if(al==="L")return pad; if(al==="R")return offW-pad-wpx; return (offW-wpx)/2; }
+  // offscreen (design upright)
+  var off=document.createElement("canvas"); off.width=offW; off.height=offH;
+  var octx=off.getContext("2d"); octx.fillStyle="#fff"; octx.fillRect(0,0,offW,offH); octx.fillStyle="#000";
+  // preload barcode images
+  var imgs=[]; blocks.forEach(function(b){ if(b.t==="bc"){ var im=new Image(); im.src=lblBarcodeURL(b.val); b._img=im; imgs.push(im); } });
+  function drawAll(){
+    var yy=y0;
+    blocks.forEach(function(b){
+      if(b.t==="tx"){ octx.font="bold "+Math.max(7,b.fs)+"px Arial"; octx.textBaseline="top";
+        var lines=b.field==="items"?b.val.split("\\n"):[b.val]; var ly=yy;
+        lines.forEach(function(ln){ var wpx=octx.measureText(ln).width; octx.fillText(ln, ax(b.align,wpx), ly); ly+=b.fs+2; });
+      } else if(b._img&&b._img.complete&&b._img.width){
+        var wpx=Math.min(offW-2*pad,b._img.width), hpx=b.bh, x=ax(b.align,wpx); octx.drawImage(b._img,x,yy,wpx,hpx);
+        octx.font=Math.max(7,11*scale)+"px Arial"; octx.textBaseline="top"; var tw=octx.measureText(b.val).width; octx.fillText(b.val, ax(b.align,tw), yy+hpx+1);
+      }
+      yy+=b.h+b.gap+extra;
+    });
+    // blit pe canvas vizibil
+    c.width=visW; c.height=visH;
+    var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,visW,visH);
+    if(!landscape){ ctx.drawImage(off,0,0,visW,visH); }
+    else { ctx.save(); ctx.translate(visW,0); ctx.rotate(Math.PI/2); ctx.drawImage(off,0,0,offW,offH,0,0,visH,visW); ctx.restore(); }
+  }
+  var pending=imgs.filter(function(im){return !im.complete;}).length;
+  if(!pending){ drawAll(); }
+  else { imgs.forEach(function(im){ if(im.complete) return; im.onload=function(){ pending--; if(pending<=0) drawAll(); }; im.onerror=function(){ pending--; if(pending<=0) drawAll(); }; }); drawAll(); }
 }
 window.leSave = function(){
-  api("PUT","/api/print/label-template",{type:_le.type, template:{width_mm:_le.tpl.width_mm, height_mm:_le.tpl.height_mm, valign:_le.tpl.valign, elements:_le.tpl.elements}}).then(function(){ toast("Șablon salvat pentru "+_le.type); }).catch(function(e){ toast(e.message,"bad"); });
+  api("PUT","/api/print/label-template",{type:_le.type, template:{width_mm:_le.tpl.width_mm, height_mm:_le.tpl.height_mm, valign:_le.tpl.valign, orient:_le.tpl.orient, elements:_le.tpl.elements}}).then(function(){ toast("Șablon salvat pentru "+_le.type); }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.leResetTpl = function(){
   modal("Revino la implicit","<p>Sigur revii la eticheta implicită pentru acest tip? Modificările tale se pierd.</p>", function(){
