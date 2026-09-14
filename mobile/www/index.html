@@ -497,9 +497,9 @@ function screenPrintLabel(){
   scanTarget=function(code){ prnFind(code); };
   shell("Imprimă etichetă",
     '<div id="prn_station" class="card" style="margin-bottom:10px">Verific stația de imprimare…</div>'
-    +'<div class="scanbox"><input id="prn_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează paletul/coletul"></div>'
+    +'<div class="scanbox"><input id="prn_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează palet / colet / produs"></div>'
     +'<button class="cam" onclick="openCam(function(c){prnFind(c)})">📷 Scanează cu camera</button>'
-    +'<div class="op-hint" style="margin-top:6px">Eticheta iese la imprimanta de pe calculatorul cu pagina „Stație imprimare" deschisă.</div>'
+    +'<div class="op-hint" style="margin-top:6px">Scanează un palet/colet sau un produs. Eticheta iese la imprimanta de pe calculatorul cu pagina „Stație imprimare" deschisă.</div>'
     +'<div id="prn_res"></div>', {back:"renderHome()"});
   wireScan("prn_scan", prnFind);
   prnStationStatus();
@@ -524,13 +524,35 @@ function prnFind(code){
   code=(code||"").trim(); if(!code) return;
   api("GET","/api/pallets?code="+encodeURIComponent(code)).then(function(d){
     var p=(d.pallets||[])[0];
-    if(!p){ feedback(false); if(el("prn_res")) el("prn_res").innerHTML='<div class="card center muted">Niciun palet/colet activ: '+esc(code)+'</div>'; return; }
-    feedback(true);
-    el("prn_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:18px;font-weight:800">'+esc(p.code)+'</div><div class="muted" style="font-size:12.5px;margin:4px 0 8px">'+(p.kind==="colet"?"colet":"palet")+' · '+esc(p.client_name||"intern")+' · loc '+esc(p.location_code||"—")+'</div><button class="big" onclick="prnSend('+p.id+',\''+esc(p.code)+'\')">🖨️ Trimite la imprimantă</button></div>';
+    if(p){
+      feedback(true);
+      el("prn_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:18px;font-weight:800">'+esc(p.code)+'</div><div class="muted" style="font-size:12.5px;margin:4px 0 8px">'+(p.kind==="colet"?"colet":"palet")+' · '+esc(p.client_name||"intern")+' · loc '+esc(p.location_code||"—")+'</div><button class="big" onclick="prnSend('+p.id+',\''+esc(p.code)+'\')">🖨️ Trimite la imprimantă</button></div>';
+      return;
+    }
+    // nu e palet/colet — încearcă un produs existent
+    return resolveProduct(code).then(function(pr){
+      if(!pr){ feedback(false); if(el("prn_res")) el("prn_res").innerHTML='<div class="card center muted">Niciun palet/colet sau produs pentru: '+esc(code)+'</div>'; return; }
+      feedback(true);
+      var bc=pr.barcode||pr.sku||"";
+      el("prn_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:16px;font-weight:800">'+esc(pr.name)+'</div>'
+        +'<div class="muted" style="font-size:12.5px;margin:4px 0 8px">produs · '+esc(pr.sku||"")+(bc?(' · '+esc(bc)):' · fără cod')+'</div>'
+        +'<div class="row" style="align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px">Nr. etichete</span><input id="prn_copies" type="number" inputmode="numeric" min="1" value="1" style="width:70px"></div>'
+        +(bc
+          ? '<button class="big" onclick="prnSendProduct('+pr.id+',\''+esc(bc)+'\',\''+esc(pr.name).replace(/'/g,"")+'\')">🖨️ Trimite la imprimantă</button>'
+          : '<div class="muted" style="font-size:12.5px">Produsul nu are cod de bare. Generează-i unul în WMS (Produse → cod intern) și reîncearcă.</div>')
+        +'</div>';
+    });
   }).catch(function(e){ toast(e.message,true); });
 }
 window.prnSend=function(id, code){
   api("POST","/api/print/jobs",{type:"pallet", ref_id:id, code:code}).then(function(){ feedback(true); toast("Etichetă trimisă la imprimantă: "+code); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
+window.prnSendProduct=function(id, code, name){
+  var c=el("prn_copies"), copies=c?Math.max(1,Math.min(50,Number(c.value)||1)):1;
+  var done=0;
+  for(var i=0;i<copies;i++){
+    api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:name}).then(function(){ done++; if(done===copies){ feedback(true); toast(copies+" etichetă/e trimise: "+code); } }).catch(function(e){ feedback(false); toast(e.message,true); });
+  }
 };
 
 /* ---- Spargere / mutare marfă de pe un palet pe altul ---- */
