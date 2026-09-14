@@ -232,6 +232,7 @@ function renderHome(){
   shell("WSD WMS",
     '<div class="grid">'
     +tile("orders","📋","Comenzi<br>de pregătit")
+    +tile("depart","🚚","Marfa<br>a plecat")
     +tile("lookup","🔎","Scanează<br>& caută")
     +tile("receive","📥","Recepție")
     +tile("pallet","📦","Recepție<br>palet/colet")
@@ -248,7 +249,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -872,6 +873,28 @@ window.completePick=function(){
   if(!loc){ toast("Alege locația de expediere",true); return; }
   api("POST","/api/orders/"+_pick.id+"/complete",{location_id:loc}).then(function(r){
     feedback(true); toast(r&&r.status==="prepared"?"Pregătită ✓ (stoc rezervat)":"Comandă expediată ✓"); pickStopHb(); _pick=null; screenOrders();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
+/* Listă rapidă cu comenzile pregătite → de aici confirmi plecarea. */
+window.screenDepartList=function(){
+  scanTarget=null;
+  shell("Marfa a plecat",'<div id="dep_list" class="muted center" style="padding:20px">Se încarcă…</div>',{back:"renderHome()"});
+  api("GET","/api/orders?type=outbound&status=prepared").then(function(d){
+    var list=d.orders||[];
+    if(!list.length){ el("dep_list").innerHTML='<div class="card center muted">Nicio comandă pregătită.</div>'; return; }
+    el("dep_list").innerHTML=list.map(function(o){
+      var who = o.source==="portal" ? (esc(o.client_name||"client")+(o.recipient_name?(' → '+esc(o.recipient_name)):'')) : esc(o.partner_name||"—");
+      return '<div class="card" style="margin-bottom:10px">'
+        +'<div class="row" style="justify-content:space-between;align-items:center"><b>'+esc(o.code)+'</b><span class="pill" style="background:#14532d;color:#bbf7d0">pregătită</span></div>'
+        +'<div class="muted" style="font-size:13px;margin-top:4px">'+who+'</div>'
+        +'<div class="muted" style="font-size:12.5px;margin-top:2px">'+esc(o.line_count)+' produse · '+esc(o.total_qty)+' buc.</div>'
+        +'<button class="big" style="margin-top:10px" onclick="departFromList('+o.id+')">🚚 Marfa a plecat (scade stocul)</button></div>';
+    }).join("");
+  }).catch(function(e){ el("dep_list").innerHTML='<div class="card center" style="color:#f88">'+esc(e.message)+'</div>'; });
+};
+window.departFromList=function(id){
+  api("POST","/api/orders/"+id+"/depart",{}).then(function(){
+    feedback(true); toast("Marfa a plecat — stoc actualizat ✓"); screenDepartList();
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 };
 /* Comandă pregătită → confirmă plecarea din depozit (aici scade stocul). */
