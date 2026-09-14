@@ -106,7 +106,7 @@ export function labelFields(type) {
 const BARCODE_FIELDS = { code: 1, box_code: 1, product_barcode: 1 };
 
 export function defaultTemplate(type) {
-  const dim = { width_mm: 100, height_mm: 150, valign: 'center', orient: 'portrait' };
+  const dim = { width_mm: 150, height_mm: 100, valign: 'center', orient: 'landscape' };
   if (type === 'pallet') return { ...dim, elements: [
     { field: 'kind', render: 'text', size: 'lg', align: 'C' },
     { field: 'code', render: 'text', size: 'md', align: 'C' },
