@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v76';
+const APP_VERSION = 'v77';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -144,6 +144,8 @@ const routes = [
   ['GET', '/api/boxes/:code', boxes.resolve, 'viewer'],
   ['POST', '/api/print/jobs', print.create, 'operator'],
   ['GET', '/api/print/jobs', print.pending, 'viewer'],
+  ['GET', '/api/print/status', print.status, 'viewer'],
+  ['POST', '/api/print/test', print.test, 'operator'],
   ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
   ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],

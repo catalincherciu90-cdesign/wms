@@ -2303,19 +2303,40 @@ window.printPalletLabel = function(pallet, items){
   w.document.write(buildPalletLabelHTML(pallet, items, true)); w.document.close();
 };
 /* ---- Stație imprimare: pagina ținută deschisă pe calculatorul cu imprimanta ---- */
+function stationName(){ try{ return localStorage.getItem("wms_station")||""; }catch(e){ return ""; } }
 VIEWS.printstation = function(){
+  var nm=stationName();
   setMain(topbar("Stație imprimare")
-    + '<div class="card" style="padding:16px"><p><b>Ține pagina asta deschisă</b> pe calculatorul cu imprimanta de etichete. Etichetele trimise de pe Zebra (sau din WMS) se printează automat aici.</p>'
-    + '<div class="muted" style="font-size:12.5px">Pentru printare fără fereastră de confirmare: pornește Chrome cu <code>--kiosk-printing</code> și pune imprimanta de etichete ca implicită.</div>'
-    + '<div id="st_status" style="margin-top:10px;font-weight:600"></div>'
-    + '<div id="st_log" style="margin-top:10px;font-size:13px"></div></div>'
+    + '<div class="card" style="padding:16px">'
+    + '<p><b>Ține pagina asta deschisă</b> pe calculatorul cu imprimanta. Etichetele trimise de pe Zebra (sau din WMS) se printează automat aici.</p>'
+    + '<div class="field" style="max-width:320px"><label>Numele acestei stații (opțional)</label>'
+    + '<div class="row"><input id="st_name" placeholder="ex: Depozit 1 – birou" value="'+esc(nm)+'" style="flex:1"><button class="sm" onclick="stationSaveName()">Salvează</button></div>'
+    + '<div class="fhint">Apare pe Zebra ca să știi care calculator printează.</div></div>'
+    + '<div id="st_status" style="margin-top:6px;font-weight:600"></div>'
+    + '<div class="row" style="margin-top:10px"><button onclick="stationTestPrint()">🖨️ Test print (aici)</button></div>'
+    + '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">⚙️ Configurare (o singură dată)</summary>'
+    + '<ol class="muted" style="font-size:13px;line-height:1.7;margin:8px 0 0 18px">'
+    + '<li>Deschide pagina asta în <b>Google Chrome</b> pe calculatorul cu imprimanta.</li>'
+    + '<li>Pune imprimanta de etichete ca <b>imprimantă implicită</b> în Windows.</li>'
+    + '<li>Pentru printare fără fereastră de confirmare: pornește Chrome cu opțiunea <code>--kiosk-printing</code> (creează o scurtătură Chrome și adaugă la final <code>--kiosk-printing</code>).</li>'
+    + '<li>Apasă <b>Test print</b> mai sus ca să verifici. Apoi trimite o etichetă de pe Zebra.</li>'
+    + '<li>Lasă fila deschisă (o poți minimiza). Cât timp e deschisă, apare „online" pe Zebra.</li>'
+    + '</ol></details>'
+    + '<div id="st_log" style="margin-top:12px;font-size:13px"></div></div>'
     + '<iframe id="ps_iframe" style="position:fixed;left:-9999px;top:0;width:420px;height:640px;border:0"></iframe>');
   window._stBusy=false;
-  if(el("st_status")) el("st_status").textContent="✅ Ascult... verific la fiecare 4 secunde.";
+  if(el("st_status")) el("st_status").textContent="✅ Ascult… verific la fiecare 4 secunde.";
   stationTick();
   if(window._stTimer) clearInterval(window._stTimer);
   window._stTimer=setInterval(stationTick, 4000);
 };
+window.stationSaveName = function(){ try{ localStorage.setItem("wms_station", el("st_name")?el("st_name").value.trim():""); toast("Salvat"); }catch(e){ toast("Nu am putut salva","bad"); } };
+function buildTestLabelHTML(title, autoprint){
+  var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
+  return '<html><head><meta charset="utf-8"><title>Test print</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:16px;text-align:center}h1{font-size:22px;margin:0 0 6px}img{max-width:100%}.d{font-size:13px;margin-top:6px}</style></head><body>'
+    +'<h1>✔ TEST PRINT</h1><img src="'+lblBarcodeURL("TEST-OK")+'"><div class="d">'+esc(title||"WSD WMS")+'</div><div class="d">'+esc(new Date().toLocaleString())+'</div>'+script+'</body></html>';
+}
+window.stationTestPrint = function(){ stationPrintHTML(buildTestLabelHTML("Test local stație", false)); toast("Am trimis un test la imprimantă"); };
 function stationLog(job){
   var h=el("st_log"); if(!h) return;
   var t=new Date().toLocaleTimeString();
@@ -2532,11 +2553,14 @@ function stationPrintHTML(html){
 function stationTick(){
   if(!el("ps_iframe")){ if(window._stTimer){ clearInterval(window._stTimer); window._stTimer=null; } return; } // am părăsit pagina
   if(window._stBusy) return;
-  api("GET","/api/print/jobs").then(function(d){
+  var qs = stationName() ? ("?station="+encodeURIComponent(stationName())) : "";
+  api("GET","/api/print/jobs"+qs).then(function(d){
     var jobs=d.jobs||[]; if(!jobs.length) return;
     var job=jobs[0]; window._stBusy=true;
     var step;
-    if(job.type==="product"){
+    if(job.type==="test"){
+      step = Promise.resolve().then(function(){ stationPrintHTML(buildTestLabelHTML(job.title, false)); });
+    } else if(job.type==="product"){
       step = Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false)); });
     } else {
       step = api("GET","/api/pallets/"+job.ref_id).then(function(pd){ stationPrintHTML(buildPalletLabelHTML(pd.pallet, pd.items, false)); });

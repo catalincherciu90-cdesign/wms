@@ -496,12 +496,30 @@ window.pspShip=function(){
 function screenPrintLabel(){
   scanTarget=function(code){ prnFind(code); };
   shell("Imprimă etichetă",
-    '<div class="scanbox"><input id="prn_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează paletul/coletul"></div>'
+    '<div id="prn_station" class="card" style="margin-bottom:10px">Verific stația de imprimare…</div>'
+    +'<div class="scanbox"><input id="prn_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează paletul/coletul"></div>'
     +'<button class="cam" onclick="openCam(function(c){prnFind(c)})">📷 Scanează cu camera</button>'
     +'<div class="op-hint" style="margin-top:6px">Eticheta iese la imprimanta de pe calculatorul cu pagina „Stație imprimare" deschisă.</div>'
     +'<div id="prn_res"></div>', {back:"renderHome()"});
   wireScan("prn_scan", prnFind);
+  prnStationStatus();
 }
+function prnStationStatus(){
+  var host=el("prn_station"); if(!host) return;
+  api("GET","/api/print/status").then(function(s){
+    var online=!!s.online;
+    var dot=online?'<span style="color:#22c55e">● Stație online</span>':'<span style="color:#f0c651">● Stație offline</span>';
+    var info=online
+      ? (s.station?('«'+esc(s.station)+'»'):'')+(s.pending?(' · '+esc(s.pending)+' în coadă'):'')
+      : 'Deschide pagina „Stație imprimare" pe calculatorul cu imprimanta.';
+    host.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><b>'+dot+'</b>'
+      +'<button class="sm" onclick="prnTest()">🖨️ Test print</button></div>'
+      +'<div class="muted" style="font-size:12.5px;margin-top:4px">'+info+'</div>';
+  }).catch(function(){ if(host) host.innerHTML='<div class="muted">Nu am putut verifica stația.</div>'; });
+}
+window.prnTest=function(){
+  api("POST","/api/print/test",{}).then(function(){ feedback(true); toast("Test trimis — verifică imprimanta"); prnStationStatus(); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 function prnFind(code){
   code=(code||"").trim(); if(!code) return;
   api("GET","/api/pallets?code="+encodeURIComponent(code)).then(function(d){
