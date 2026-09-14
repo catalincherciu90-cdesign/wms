@@ -1323,14 +1323,33 @@ window.deleteSelected = function(){
 // Trimite eticheta unui produs (cod de bare + nume) către stația de imprimare.
 window.prodPrintLabel = function(id){
   var p=(cache.products||[]).find(function(x){return x.id===id;}); if(!p) return;
-  var code=p.barcode||p.sku; if(!code){ toast("Produsul nu are cod","bad"); return; }
-  api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:p.name}).then(function(){ toast("Etichetă trimisă la imprimantă"); }).catch(function(e){ toast(e.message,"bad"); });
+  if(!(p.barcode||p.sku)){ toast("Produsul nu are cod","bad"); return; }
+  prodPrintDialog([id], false);
 };
 window.prodPrintSelected = function(){
   var ids=pselIds(); if(!ids.length){ toast("Selectează produse","bad"); return; }
-  var n=0; ids.forEach(function(id){ var p=(cache.products||[]).find(function(x){return x.id===id;}); if(p&&(p.barcode||p.sku)){ api("POST","/api/print/jobs",{type:"product", ref_id:id, code:(p.barcode||p.sku), title:p.name}).catch(function(){}); n++; } });
-  toast(n+" etichete trimise la imprimantă");
+  prodPrintDialog(ids, false);
 };
+// Dialog comun pentru etichete de produs: Lot (opțional) + copii; data și ora apar automat.
+function prodPrintDialog(ids, pdf){
+  var copiesField = pdf ? '' : '<div class="field"><label>Copii pe produs</label><input id="pp_copies" type="number" min="1" value="1"></div>';
+  modal((pdf?"Etichetă PDF":"Printează etichete ("+ids.length+")"),
+    '<div class="field"><label>Lot (opțional)</label><input id="pp_lot" placeholder="ex: LOT 2024-05">'+fhint("Apare pe etichetă alături de data și ora curentă.")+'</div>'+copiesField,
+    function(){
+      var lot=el("pp_lot")?el("pp_lot").value.trim():"";
+      if(pdf){
+        var pp=(cache.products||[]).find(function(x){return x.id===ids[0];}); if(!pp){ closeModal(); return; }
+        var code=pp.barcode||pp.sku; if(!code){ toast("Produsul nu are cod","bad"); return; }
+        var body=[]; if(lot) body.push("Lot: "+lot); body.push(new Date().toLocaleString());
+        downloadLabelPdf([pp.name], code, body, "eticheta_"+code+".pdf"); closeModal(); return;
+      }
+      var copies=el("pp_copies")?Math.max(1,Math.min(50,Number(el("pp_copies").value)||1)):1;
+      var n=0;
+      ids.forEach(function(id){ var p=(cache.products||[]).find(function(x){return x.id===id;}); if(p&&(p.barcode||p.sku)){ for(var i=0;i<copies;i++){ api("POST","/api/print/jobs",{type:"product", ref_id:id, code:(p.barcode||p.sku), title:p.name, lot:lot||null}).catch(function(){}); } n++; } });
+      closeModal(); toast(n+" produse trimise la imprimantă"+(copies>1?(" ("+copies+" copii)"):""));
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent=pdf?"Descarcă PDF":"Trimite la imprimantă"; sv.className=""; sv.style.display=""; }
+}
 // Generează un cod intern EAN-13 pentru un produs fără cod de bare.
 window.genProductBarcode = function(id){
   api("POST","/api/products/"+id+"/gen-barcode",{}).then(function(r){
@@ -2393,8 +2412,8 @@ function downloadLabelPdf(head, code, body, filename){
 }
 window.prodLabelPdf=function(id){
   var p=(cache.products||[]).find(function(x){return x.id===id;}); if(!p) return;
-  var code=p.barcode||p.sku; if(!code){ toast("Produsul nu are cod","bad"); return; }
-  downloadLabelPdf([p.name], code, [], "eticheta_"+code+".pdf");
+  if(!(p.barcode||p.sku)){ toast("Produsul nu are cod","bad"); return; }
+  prodPrintDialog([id], true);
 };
 window.palletLabelPdf=function(pallet, items){
   var kindLbl=(pallet.kind==="colet")?"COLET":(pallet.kind==="ambalaje"?"PALET AMBALAJE":"PALET");
@@ -2407,11 +2426,12 @@ window.palletLabelPdf=function(pallet, items){
   (items||[]).forEach(function(it){ body.push(it.product_name+": "+it.quantity+(it.boxes&&it.per_box?(" ("+it.boxes+"x"+it.per_box+")"):"")); });
   downloadLabelPdf([kindLbl, pallet.code], pallet.code, body, "eticheta_"+pallet.code+".pdf");
 };
-function buildProductLabelHTML(barcode, name, autoprint){
+function buildProductLabelHTML(barcode, name, autoprint, lot){
   var bc=lblBarcodeURL(barcode||"");
   var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
-  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(barcode||"")+'</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:8px;text-align:center;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}.nm{font-size:15px;font-weight:bold;margin-bottom:4px}img{max-width:100%;max-height:120px}.cd{font-size:13px;margin-top:2px;letter-spacing:1px}</style></head><body>'
-    +'<div class="nm">'+esc(name||"")+'</div><img src="'+bc+'"><div class="cd">'+esc(barcode||"")+'</div>'+script+'</body></html>';
+  var meta = (lot?('Lot: '+esc(lot)):'') + (lot?' · ':'') + esc(new Date().toLocaleString());
+  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(barcode||"")+'</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:8px;text-align:center;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}.nm{font-size:15px;font-weight:bold;margin-bottom:4px}img{max-width:100%;max-height:120px}.cd{font-size:13px;margin-top:2px;letter-spacing:1px}.mt{font-size:12px;margin-top:4px;color:#333}</style></head><body>'
+    +'<div class="nm">'+esc(name||"")+'</div><img src="'+bc+'"><div class="cd">'+esc(barcode||"")+'</div><div class="mt">'+meta+'</div>'+script+'</body></html>';
 }
 
 /* ---- Etichete de cutie: cod unic de cutie (CUT-...) + codul produsului, ambele scanabile ---- */
@@ -2465,6 +2485,7 @@ function buildBoxLabelBody(box){
     +'<div class="c2">'+esc(box.product_barcode||"")+'</div>'
     +'<div class="meta">'+(box.quantity?('Buc/cutie: <b>'+esc(box.quantity)+'</b>'):'')
       +(box.lot?(' · Lot: '+esc(box.lot)):'')+(box.pallet_code?(' · '+esc(box.pallet_code)):'')+'</div>'
+    +'<div class="meta">'+esc(new Date().toLocaleString())+'</div>'
     +'</div>';
 }
 window.boxLabelsPrint = function(){
@@ -2561,7 +2582,7 @@ function stationTick(){
     if(job.type==="test"){
       step = Promise.resolve().then(function(){ stationPrintHTML(buildTestLabelHTML(job.title, false)); });
     } else if(job.type==="product"){
-      step = Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false)); });
+      step = Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false, job.lot)); });
     } else {
       step = api("GET","/api/pallets/"+job.ref_id).then(function(pd){ stationPrintHTML(buildPalletLabelHTML(pd.pallet, pd.items, false)); });
     }

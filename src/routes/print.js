@@ -9,9 +9,10 @@ export async function create(request, env, ctx, user) {
   const refId = b?.ref_id ? Number(b.ref_id) : null;
   const code = (b?.code || '').toString().slice(0, 60) || null;
   const title = (b?.title || '').toString().slice(0, 120) || null;
+  const lot = (b?.lot || '').toString().slice(0, 60) || null;
   const res = await env.DB.prepare(
-    "INSERT INTO print_jobs (type, ref_id, code, title, status, created_by) VALUES (?, ?, ?, ?, 'pending', ?)"
-  ).bind(type, refId, code, title, user.sub).run();
+    "INSERT INTO print_jobs (type, ref_id, code, title, lot, status, created_by) VALUES (?, ?, ?, ?, ?, 'pending', ?)"
+  ).bind(type, refId, code, title, lot, user.sub).run();
   return json({ ok: true, id: res.meta.last_row_id });
 }
 
@@ -33,7 +34,7 @@ export async function pending(request, env) {
     }
   } catch (e) { /* settings poate lipsi pe scheme foarte vechi */ }
   const { results } = await env.DB.prepare(
-    "SELECT id, type, ref_id, code, title, created_at FROM print_jobs WHERE status='pending' ORDER BY id ASC LIMIT 20"
+    "SELECT id, type, ref_id, code, title, lot, created_at FROM print_jobs WHERE status='pending' ORDER BY id ASC LIMIT 20"
   ).all();
   return json({ jobs: results });
 }

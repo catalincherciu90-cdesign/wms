@@ -544,6 +544,7 @@ function prnFind(code){
       var bc=pr.barcode||pr.sku||"";
       el("prn_res").innerHTML='<div class="card" style="margin-top:12px"><div style="font-size:16px;font-weight:800">'+esc(pr.name)+'</div>'
         +'<div class="muted" style="font-size:12.5px;margin:4px 0 8px">produs · '+esc(pr.sku||"")+(bc?(' · '+esc(bc)):' · fără cod')+'</div>'
+        +'<label style="font-size:13px">Lot (opțional)</label><input id="prn_lot" placeholder="ex: LOT 2024-05" style="margin-bottom:8px">'
         +'<div class="row" style="align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px">Nr. etichete</span><input id="prn_copies" type="number" inputmode="numeric" min="1" value="1" style="width:70px"></div>'
         +(bc
           ? '<button class="big" onclick="prnSendProduct('+pr.id+',\''+esc(bc)+'\',\''+esc(pr.name).replace(/'/g,"")+'\')">🖨️ Trimite la imprimantă</button>'
@@ -557,9 +558,10 @@ window.prnSend=function(id, code){
 };
 window.prnSendProduct=function(id, code, name){
   var c=el("prn_copies"), copies=c?Math.max(1,Math.min(50,Number(c.value)||1)):1;
+  var lot=el("prn_lot")?el("prn_lot").value.trim():"";
   var done=0;
   for(var i=0;i<copies;i++){
-    api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:name}).then(function(){ done++; if(done===copies){ feedback(true); toast(copies+" etichetă/e trimise: "+code); } }).catch(function(e){ feedback(false); toast(e.message,true); });
+    api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:name, lot:lot||null}).then(function(){ done++; if(done===copies){ feedback(true); toast(copies+" etichetă/e trimise: "+code); } }).catch(function(e){ feedback(false); toast(e.message,true); });
   }
 };
 
