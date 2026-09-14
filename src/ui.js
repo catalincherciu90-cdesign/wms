@@ -2378,24 +2378,42 @@ function buildTestLabelHTML(title){
   return '<html><head><meta charset="utf-8"><title>Test</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial;color:#000;padding:10px;text-align:center}h1{font-size:20px;margin:0 0 4px}img{max-width:100%;max-height:120px}</style></head><body>'
     +'<h1>TEST PRINT</h1><img src="'+lblBarcodeURL("TEST-OK")+'"><div>'+esc(title||"")+'</div></body></html>';
 }
-function stationBoxHTML(box){
-  return '<html><head><meta charset="utf-8"><title>Cutie</title><style>'+boxLabelCss()+'</style></head><body>'+buildBoxLabelBody(box)+'</body></html>';
+function combinedLabelCss(){
+  return '@page{size:auto;margin:0}html,body{margin:0}'
+    +'.pg{page-break-after:always;text-align:center;padding:10px;box-sizing:border-box}.pg:last-child{page-break-after:auto}'
+    +'.pg .nm{font-size:15px;font-weight:bold;margin-bottom:4px}.pg img{max-width:100%;max-height:120px}.pg .cd{font-size:13px;letter-spacing:1px}.pg .mt{font-size:12px;color:#333;margin-top:4px}'
+    +'.pg h1{font-size:20px;margin:0}.pg table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}.pg td{border-bottom:1px solid #ddd;padding:2px 5px}.pg .meta{font-size:12px;margin:4px 0}'
+    +boxLabelCss();
 }
+function labelFragment(it){
+  var j=it.job;
+  if(j.type==="test") return '<div class="pg"><div class="nm">TEST PRINT</div><img src="'+lblBarcodeURL("TEST-OK")+'"><div class="cd">'+esc(j.title||"")+'</div></div>';
+  if(j.type==="product"){ var meta=(j.lot?("Lot: "+esc(j.lot)+"   "):"")+esc(new Date().toLocaleString()); return '<div class="pg"><div class="nm">'+esc(j.title||"")+'</div><img src="'+lblBarcodeURL(j.code)+'"><div class="cd">'+esc(j.code||"")+'</div><div class="mt">'+meta+'</div></div>'; }
+  if(j.type==="box" && it.box) return buildBoxLabelBody(it.box);
+  if(it.pallet){ var p=it.pallet.pallet, items=it.pallet.items;
+    var rows=(items||[]).map(function(i){return '<tr><td>'+esc(i.product_name)+'</td><td style="text-align:right">'+esc(i.quantity)+'</td></tr>';}).join("");
+    var kind=(p.kind==="colet")?"COLET":(p.kind==="ambalaje"?"PALET AMBALAJE":"PALET");
+    return '<div class="pg"><h1>'+kind+'</h1><div style="font-size:22px;font-weight:bold">'+esc(p.code)+'</div><img src="'+lblBarcodeURL(p.code)+'"><div class="meta">'+(p.client_name?("Client: "+esc(p.client_name)):"")+(p.lot?(" · Lot: "+esc(p.lot)):"")+'</div><table><tbody>'+rows+'</tbody></table></div>'; }
+  return '<div class="pg"><div class="cd">'+esc(j.code||"")+'</div></div>';
+}
+// Printează TOATE etichetele din coadă deodată (una pe pagină), într-un singur print.
 function stationTick(){
   if(!el("ps_iframe")){ if(window._bstTimer){ clearInterval(window._bstTimer); window._bstTimer=null; } return; }
   if(window._stBusy) return;
   api("GET","/api/print/jobs").then(function(d){
     var jobs=d.jobs||[]; if(!jobs.length) return;
-    var job=jobs[0]; window._stBusy=true;
-    var step;
-    if(job.type==="test"){ step=Promise.resolve().then(function(){ stationPrintHTML(buildTestLabelHTML(job.title)); }); }
-    else if(job.type==="product"){ step=Promise.resolve().then(function(){ stationPrintHTML(buildProductLabelHTML(job.code, job.title, false, job.lot)); }); }
-    else if(job.type==="box"){ step=api("GET","/api/boxes/"+encodeURIComponent(job.code)).then(function(r){ stationPrintHTML(stationBoxHTML(r.box)); }); }
-    else { step=api("GET","/api/pallets/"+job.ref_id).then(function(pd){ stationPrintHTML(buildPalletLabelHTML(pd.pallet, pd.items, false)); }); }
-    step.then(function(){ return api("POST","/api/print/jobs/"+job.id+"/done"); })
-      .then(function(){ stationLog(job); })
+    window._stBusy=true;
+    Promise.all(jobs.map(function(job){
+      if(job.type==="box") return api("GET","/api/boxes/"+encodeURIComponent(job.code)).then(function(r){return {job:job, box:r.box};}).catch(function(){return {job:job};});
+      if(job.type!=="test" && job.type!=="product") return api("GET","/api/pallets/"+job.ref_id).then(function(pd){return {job:job, pallet:pd};}).catch(function(){return {job:job};});
+      return Promise.resolve({job:job});
+    })).then(function(items){
+      var body=items.map(labelFragment).join("");
+      stationPrintHTML('<html><head><meta charset="utf-8"><title>Etichete</title><style>'+combinedLabelCss()+'</style></head><body>'+body+'</body></html>');
+      return Promise.all(jobs.map(function(job){ return api("POST","/api/print/jobs/"+job.id+"/done").catch(function(){}); }));
+    }).then(function(){ stationLog({code: jobs.length+" etichetă/e"}); })
       .catch(function(e){ toast(e.message,"bad"); })
-      .then(function(){ setTimeout(function(){ window._stBusy=false; }, 900); });
+      .then(function(){ setTimeout(function(){ window._stBusy=false; }, 1200); });
   }).catch(function(){});
 }
 function stationStatusTick(){
