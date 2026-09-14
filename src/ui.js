@@ -891,7 +891,7 @@ var NAV = [
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
-  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Stație imprimare","operator"] ] },
+  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Imprimare","operator"], ["labeleditor","Editor etichetă","admin"] ] },
   ["orders","Comenzi","viewer"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
@@ -2366,6 +2366,183 @@ window.agentDownload = function(){
   var u=API+"/print-agent.bat?token="+encodeURIComponent(_agentToken)+"&printer="+encodeURIComponent(printer)+"&w="+dots;
   window.location.href=u; // răspunsul e attachment -> se descarcă
   toast("Se descarcă agentul…");
+};
+
+/* ================= Editor de etichetă (admin) ================= */
+var _le = { type:"product", fields:[], tpl:{elements:[]} };
+var LE_TYPES = [["product","Produs"],["pallet","Palet / colet"],["box","Cutie"]];
+// Presetări gata făcute per tip (le aplici, apoi Salvezi).
+var LE_PRESETS = {
+  product:[
+    {name:"Complet (nume + cod + lot/dată)", elements:[{field:"title",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"lg",align:"C"},{field:"meta",render:"text",size:"sm",align:"C"}]},
+    {name:"Doar cod de bare mare", elements:[{field:"code",render:"barcode",size:"lg",align:"C"}]},
+    {name:"Nume + cod de bare", elements:[{field:"title",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"}]},
+    {name:"Compact (etichetă mică)", elements:[{field:"title",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"sm",align:"C"}]},
+    {name:"Cu lot pe rând separat", elements:[{field:"title",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"lot",render:"text",size:"md",align:"C"},{field:"date",render:"text",size:"sm",align:"C"}]}
+  ],
+  pallet:[
+    {name:"Complet", elements:[{field:"kind",render:"text",size:"lg",align:"C"},{field:"code",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"client",render:"text",size:"sm",align:"C"},{field:"lot",render:"text",size:"sm",align:"C"},{field:"date",render:"text",size:"sm",align:"C"}]},
+    {name:"Doar cod palet (mare)", elements:[{field:"kind",render:"text",size:"lg",align:"C"},{field:"code",render:"barcode",size:"lg",align:"C"}]},
+    {name:"Cod + client + lot", elements:[{field:"code",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"client",render:"text",size:"sm",align:"C"},{field:"lot",render:"text",size:"sm",align:"C"}]},
+    {name:"Cu listă produse", elements:[{field:"kind",render:"text",size:"md",align:"C"},{field:"code",render:"barcode",size:"md",align:"C"},{field:"items",render:"text",size:"sm",align:"L"}]}
+  ],
+  box:[
+    {name:"Ambele coduri (cutie + produs)", elements:[{field:"box_code",render:"barcode",size:"md",align:"C"},{field:"product_name",render:"text",size:"md",align:"C"},{field:"product_barcode",render:"barcode",size:"md",align:"C"},{field:"meta",render:"text",size:"sm",align:"C"}]},
+    {name:"Doar cod cutie (mare)", elements:[{field:"box_code",render:"barcode",size:"lg",align:"C"}]},
+    {name:"Cutie + produs + lot", elements:[{field:"box_code",render:"barcode",size:"md",align:"C"},{field:"product_name",render:"text",size:"md",align:"C"},{field:"lot",render:"text",size:"sm",align:"C"},{field:"qty",render:"text",size:"sm",align:"C"}]}
+  ]
+};
+window.leApplyPreset = function(idx){
+  if(idx===""||idx==null) return;
+  var p=(LE_PRESETS[_le.type]||[])[Number(idx)]; if(!p) return;
+  _le.tpl={ width_mm:_le.tpl.width_mm||100, height_mm:_le.tpl.height_mm||150, valign:_le.tpl.valign||"center", orient:_le.tpl.orient||"portrait", elements:JSON.parse(JSON.stringify(p.elements)) };
+  leRenderRows(); lePreview();
+  toast("Model aplicat — apasă Salvează ca să-l păstrezi");
+};
+VIEWS.labeleditor = function(){
+  var tabs = LE_TYPES.map(function(t){ return '<button class="sm'+(_le.type===t[0]?'':' ghost')+'" onclick="leSetType(\\''+t[0]+'\\')">'+esc(t[1])+'</button>'; }).join(" ");
+  var presets=(LE_PRESETS[_le.type]||[]);
+  var presetSel = presets.length ? ('<div class="row" style="gap:6px;align-items:center;margin-bottom:10px"><span style="font-size:12.5px">Presetare:</span><select id="le_preset" onchange="leApplyPreset(this.value)" style="max-width:260px"><option value="">— alege un model —</option>'+presets.map(function(p,i){return '<option value="'+i+'">'+esc(p.name)+'</option>';}).join("")+'</select></div>') : '';
+  setMain(topbar("Editor etichetă")
+    + '<div class="card" style="padding:14px"><div class="row" style="gap:6px;margin-bottom:10px">'+tabs+'</div>'
+    + presetSel
+    + '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+    + '<div class="field" style="width:110px;margin:0"><label>Lățime (mm)</label><input id="le_w" type="number" min="20" max="300" value="'+esc((_le.tpl.width_mm||100))+'" oninput="leSetDim(\\'width_mm\\',this.value)"></div>'
+    + '<div class="field" style="width:110px;margin:0"><label>Înălțime (mm)</label><input id="le_h" type="number" min="20" max="400" value="'+esc((_le.tpl.height_mm||150))+'" oninput="leSetDim(\\'height_mm\\',this.value)"></div>'
+    + '<div class="field" style="width:150px;margin:0"><label>Aliniere verticală</label><select id="le_valign" onchange="leSetDim(\\'valign\\',this.value)">'
+    + [["top","Sus"],["center","Centru"],["spread","Distribuit"]].map(function(a){return '<option value="'+a[0]+'"'+((_le.tpl.valign||"center")===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join("")
+    + '</select></div>'
+    + '<div class="field" style="width:140px;margin:0"><label>Orientare</label><select id="le_orient" onchange="leSetDim(\\'orient\\',this.value)">'
+    + [["portrait","Portret"],["landscape","Landscape"]].map(function(a){return '<option value="'+a[0]+'"'+((_le.tpl.orient||"portrait")===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join("")
+    + '</select></div>'
+    + '<div class="muted" style="font-size:11.5px;flex:1;min-width:180px">Pune dimensiunea reală a etichetei tale. Așa iese pe hârtie exact ca în previzualizare.</div>'
+    + '</div>'
+    + '<div class="muted" style="font-size:12.5px;margin-bottom:10px">Alege un model din „Presetare" sau construiește-ți eticheta pe rânduri. Data și ora se pun automat la print.</div>'
+    + '<div class="grid" style="grid-template-columns:1fr 320px;gap:16px;align-items:start">'
+    + '<div><div id="le_rows"></div><button class="sm" style="margin-top:8px" onclick="leAdd()">+ Adaugă rând</button></div>'
+    + '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">Previzualizare</div><div style="border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff"><canvas id="le_canvas" style="width:100%;display:block"></canvas></div>'
+    + '<div class="muted" style="font-size:11.5px;margin-top:6px">Aproximativ — pe imprimanta Zebra iese centrat exact.</div></div>'
+    + '</div>'
+    + '<div class="row" style="margin-top:14px"><button onclick="leSave()">Salvează</button> <button class="ghost sm" onclick="leResetTpl()">Revino la implicit</button></div>'
+    + '</div>');
+  leLoad();
+};
+window.leSetType = function(t){ _le.type=t; go("labeleditor"); };
+function leLoad(){
+  api("GET","/api/print/label-template?type="+_le.type).then(function(r){
+    _le.fields=r.fields||[]; _le.tpl=(r.template&&Array.isArray(r.template.elements))?r.template:{elements:[]};
+    leRenderRows(); lePreview();
+  }).catch(function(e){ toast(e.message,"bad"); });
+}
+function leCanBc(field){ var f=_le.fields.find(function(x){return x[0]===field;}); return !!(f&&f[2]); }
+function leFieldLabel(field){ var f=_le.fields.find(function(x){return x[0]===field;}); return f?f[1]:field; }
+function leRenderRows(){
+  var host=el("le_rows"); if(!host) return;
+  if(!_le.tpl.elements.length){ host.innerHTML='<div class="muted" style="font-size:12.5px;padding:8px 0">Niciun rând. Apasă „+ Adaugă rând".</div>'; return; }
+  host.innerHTML=_le.tpl.elements.map(function(e,i){
+    var canBc=leCanBc(e.field);
+    var fopts=_le.fields.map(function(f){return '<option value="'+f[0]+'"'+(f[0]===e.field?' selected':'')+'>'+esc(f[1])+'</option>';}).join("");
+    var isBc=(e.render==="barcode"&&canBc);
+    var renderSel = canBc ? ('<select onchange="leSet('+i+',\\'render\\',this.value)"><option value="text"'+(!isBc?' selected':'')+'>Text</option><option value="barcode"'+(isBc?' selected':'')+'>Cod de bare</option></select>') : '<span class="muted" style="font-size:12px">text</span>';
+    var sizes = isBc ? [["sm","Mic"],["md","Mediu"],["lg","Mare"]] : [["sm","Mic"],["md","Mediu"],["lg","Mare"],["xl","F. mare"]];
+    var sizeSel='<select onchange="leSet('+i+',\\'size\\',this.value)">'+sizes.map(function(s){return '<option value="'+s[0]+'"'+(e.size===s[0]?' selected':'')+'>'+s[1]+'</option>';}).join("")+'</select>';
+    var alignSel='<select onchange="leSet('+i+',\\'align\\',this.value)">'+[["L","Stânga"],["C","Centru"],["R","Dreapta"]].map(function(a){return '<option value="'+a[0]+'"'+(e.align===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join("")+'</select>';
+    var fixedInput = e.field==="fixed" ? ('<input placeholder="text fix" value="'+esc(e.text||"")+'" oninput="leSet('+i+',\\'text\\',this.value)" style="margin-top:6px;width:100%">') : '';
+    return '<div class="card" style="padding:8px;margin-bottom:6px;background:var(--panel-2)">'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">'
+      +'<select onchange="leSet('+i+',\\'field\\',this.value)" style="flex:2;min-width:130px">'+fopts+'</select>'
+      +renderSel+sizeSel+alignSel
+      +'<span style="flex:1"></span>'
+      +'<button class="ghost sm" onclick="leMove('+i+',-1)" title="Sus">▲</button>'
+      +'<button class="ghost sm" onclick="leMove('+i+',1)" title="Jos">▼</button>'
+      +'<button class="danger sm" onclick="leDel('+i+')">✕</button>'
+      +'</div>'+fixedInput+'</div>';
+  }).join("");
+}
+window.leSetDim = function(key,val){
+  if(key==="valign"||key==="orient"){ _le.tpl[key]=val; }
+  else { _le.tpl[key]=Math.max(20, Math.min(key==="height_mm"?400:300, Number(val)||(key==="height_mm"?150:100))); }
+  lePreview();
+};
+window.leSet = function(i,key,val){
+  var e=_le.tpl.elements[i]; if(!e) return;
+  e[key]=val;
+  if(key==="field"){ if(!leCanBc(val)) e.render="text"; leRenderRows(); }
+  else if(key==="render"){ leRenderRows(); }
+  lePreview();
+};
+window.leAdd = function(){
+  var first=_le.fields[0]?_le.fields[0][0]:"fixed";
+  _le.tpl.elements.push({field:first, render:"text", size:"md", align:"C", text:""});
+  leRenderRows(); lePreview();
+};
+window.leDel = function(i){ _le.tpl.elements.splice(i,1); leRenderRows(); lePreview(); };
+window.leMove = function(i,d){ var a=_le.tpl.elements; var j=i+d; if(j<0||j>=a.length) return; var t=a[i]; a[i]=a[j]; a[j]=t; leRenderRows(); lePreview(); };
+function leSample(type){
+  var d=new Date().toLocaleString();
+  if(type==="pallet") return {kind:"PALET",code:"PAL-00001",client:"ACME SRL",location:"A1",lot:"LOT 1",aviz:"AV123",date:d,items:"Produs A  10\\nProdus B  5"};
+  if(type==="box") return {box_code:"CUT-00001",product_barcode:"2000000002088",product_name:"CUTIA BEBELUSULUI",lot:"LOT 1",qty:"12",date:d,meta:"Lot: LOT 1   "+d};
+  return {title:"CUTIA BEBELUSULUI",code:"2000000002088",lot:"LOT 1",date:d,meta:"Lot: LOT 1   "+d};
+}
+function lePreview(){
+  var c=el("le_canvas"); if(!c) return;
+  var cw=c.clientWidth||300;
+  var wmm=Number(_le.tpl.width_mm)||100, hmm=Number(_le.tpl.height_mm)||150;
+  var landscape=(_le.tpl.orient==="landscape");
+  // cadrul de design (upright) desenat offscreen, apoi rotit la blit pentru landscape
+  var offW = landscape ? Math.round(cw*(wmm/hmm)) : cw;
+  var offH = Math.round(offW*(hmm/wmm));
+  var visW = cw, visH = landscape ? Math.round(cw*(wmm/hmm)) : offH;
+  var scale=offW/(wmm/25.4*300);
+  var sample=leSample(_le.type), pad=Math.round(24*scale);
+  var FSd={sm:24,md:32,lg:46,xl:62}, BHd={sm:90,md:150,lg:210};
+  var blocks=[];
+  _le.tpl.elements.forEach(function(e){
+    var val=e.field==="fixed"?(e.text||""):sample[e.field];
+    if(val==null||val==="") return;
+    if(e.render==="barcode"&&leCanBc(e.field)){ var bh=(BHd[e.size]||BHd.md)*scale; blocks.push({t:"bc",val:String(val),align:e.align,bh:bh,h:bh+30*scale,gap:20*scale}); }
+    else { var fs=(FSd[e.size]||FSd.md)*scale; var lc=e.field==="items"?String(val).split("\\n").length:1; blocks.push({t:"tx",val:String(val),align:e.align,fs:fs,field:e.field,h:fs*lc,gap:12*scale}); }
+  });
+  var contentH=blocks.reduce(function(a,b,i){return a+b.h+(i<blocks.length-1?b.gap:0);},0);
+  var valign=_le.tpl.valign||"center", y0=pad, extra=0;
+  if(valign==="center") y0=Math.max(pad,(offH-contentH)/2);
+  else if(valign==="spread"&&blocks.length>1) extra=Math.max(0,(offH-contentH-2*pad)/(blocks.length-1));
+  function ax(al,wpx){ if(al==="L")return pad; if(al==="R")return offW-pad-wpx; return (offW-wpx)/2; }
+  // offscreen (design upright)
+  var off=document.createElement("canvas"); off.width=offW; off.height=offH;
+  var octx=off.getContext("2d"); octx.fillStyle="#fff"; octx.fillRect(0,0,offW,offH); octx.fillStyle="#000";
+  // preload barcode images
+  var imgs=[]; blocks.forEach(function(b){ if(b.t==="bc"){ var im=new Image(); im.src=lblBarcodeURL(b.val); b._img=im; imgs.push(im); } });
+  function drawAll(){
+    var yy=y0;
+    blocks.forEach(function(b){
+      if(b.t==="tx"){ octx.font="bold "+Math.max(7,b.fs)+"px Arial"; octx.textBaseline="top";
+        var lines=b.field==="items"?b.val.split("\\n"):[b.val]; var ly=yy;
+        lines.forEach(function(ln){ var wpx=octx.measureText(ln).width; octx.fillText(ln, ax(b.align,wpx), ly); ly+=b.fs+2; });
+      } else if(b._img&&b._img.complete&&b._img.width){
+        var wpx=Math.min(offW-2*pad,b._img.width), hpx=b.bh, x=ax(b.align,wpx); octx.drawImage(b._img,x,yy,wpx,hpx);
+        octx.font=Math.max(7,11*scale)+"px Arial"; octx.textBaseline="top"; var tw=octx.measureText(b.val).width; octx.fillText(b.val, ax(b.align,tw), yy+hpx+1);
+      }
+      yy+=b.h+b.gap+extra;
+    });
+    // blit pe canvas vizibil
+    c.width=visW; c.height=visH;
+    var ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,visW,visH);
+    if(!landscape){ ctx.drawImage(off,0,0,visW,visH); }
+    else { ctx.save(); ctx.translate(visW,0); ctx.rotate(Math.PI/2); ctx.drawImage(off,0,0,offW,offH,0,0,visH,visW); ctx.restore(); }
+  }
+  var pending=imgs.filter(function(im){return !im.complete;}).length;
+  if(!pending){ drawAll(); }
+  else { imgs.forEach(function(im){ if(im.complete) return; im.onload=function(){ pending--; if(pending<=0) drawAll(); }; im.onerror=function(){ pending--; if(pending<=0) drawAll(); }; }); drawAll(); }
+}
+window.leSave = function(){
+  api("PUT","/api/print/label-template",{type:_le.type, template:{width_mm:_le.tpl.width_mm, height_mm:_le.tpl.height_mm, valign:_le.tpl.valign, orient:_le.tpl.orient, elements:_le.tpl.elements}}).then(function(){ toast("Șablon salvat pentru "+_le.type); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.leResetTpl = function(){
+  modal("Revino la implicit","<p>Sigur revii la eticheta implicită pentru acest tip? Modificările tale se pierd.</p>", function(){
+    api("POST","/api/print/label-template/reset",{type:_le.type}).then(function(r){ _le.tpl=r.template||{elements:[]}; closeModal(); leRenderRows(); lePreview(); toast("Revenit la implicit"); }).catch(function(e){ toast(e.message,"bad"); });
+  });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, revino"; sv.className="danger"; sv.style.display=""; }
 };
 /* ---- Etichetă -> PDF descărcabil (fără librării: canvas -> JPEG -> PDF minimal) ---- */
 function jpegToPdf(dataUrl, wpx, hpx){
