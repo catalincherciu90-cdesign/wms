@@ -2285,9 +2285,9 @@ function buildPalletLabelHTML(pallet, items, autoprint){
   var rows=(items||[]).map(function(i){ var bx=(i.boxes&&i.per_box)?(i.boxes+'×'+i.per_box+' = '):''; return '<tr><td>'+esc(i.product_name)+' <span style="color:#666">'+esc(i.sku||"")+'</span></td><td style="text-align:right">'+bx+esc(i.quantity)+' '+esc(i.unit||"")+'</td></tr>'; }).join("");
   var kindLbl = (pallet.kind==="colet") ? "COLET" : (pallet.kind==="ambalaje" ? "PALET AMBALAJE" : "PALET");
   var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
-  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(pallet.code)+'</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:10px}h1{font-size:20px;margin:0}table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}td{border-bottom:1px solid #ddd;padding:3px 6px}.meta{font-size:13px;margin:4px 0;line-height:1.45}.code{font-size:22px;font-weight:bold;letter-spacing:1px}</style></head><body>'
+  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(pallet.code)+'</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:10px}h1{font-size:20px;margin:0;text-align:center}table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}td{border-bottom:1px solid #ddd;padding:3px 6px}.meta{font-size:13px;margin:4px 0;line-height:1.45}.code{font-size:22px;font-weight:bold;letter-spacing:1px;text-align:center}</style></head><body>'
     +'<h1>'+kindLbl+'</h1><div class="code">'+esc(pallet.code)+'</div>'
-    +'<img src="'+bc+'" style="max-width:100%;max-height:120px;margin:6px 0">'
+    +'<img src="'+bc+'" style="display:block;max-width:100%;max-height:120px;margin:6px auto">'
     +'<div class="meta">'
       +(pallet.client_name?('Client: <b>'+esc(pallet.client_name)+'</b><br>'):'')
       +(pallet.location_code?('Locație: <b>'+esc(pallet.location_code)+'</b><br>'):'')
@@ -2333,7 +2333,7 @@ VIEWS.printstation = function(){
 window.stationSaveName = function(){ try{ localStorage.setItem("wms_station", el("st_name")?el("st_name").value.trim():""); toast("Salvat"); }catch(e){ toast("Nu am putut salva","bad"); } };
 function buildTestLabelHTML(title, autoprint){
   var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
-  return '<html><head><meta charset="utf-8"><title>Test print</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:10px;text-align:center}h1{font-size:20px;margin:0 0 4px}img{max-width:100%;max-height:120px}.d{font-size:13px;margin-top:4px}</style></head><body>'
+  return '<html><head><meta charset="utf-8"><title>Test print</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:10px;text-align:center;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}h1{font-size:20px;margin:0 0 4px}img{max-width:100%;max-height:120px}.d{font-size:13px;margin-top:4px}</style></head><body>'
     +'<h1>✔ TEST PRINT</h1><img src="'+lblBarcodeURL("TEST-OK")+'"><div class="d">'+esc(title||"WSD WMS")+'</div>'+script+'</body></html>';
 }
 window.stationTestPrint = function(){ stationPrintHTML(buildTestLabelHTML("Test local stație", false)); toast("Am trimis un test la imprimantă"); };
@@ -2410,7 +2410,7 @@ window.palletLabelPdf=function(pallet, items){
 function buildProductLabelHTML(barcode, name, autoprint){
   var bc=lblBarcodeURL(barcode||"");
   var script = autoprint ? ('<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr'+'ipt>') : '';
-  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(barcode||"")+'</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:8px;text-align:center}.nm{font-size:15px;font-weight:bold;margin-bottom:4px}img{max-width:100%;max-height:120px}.cd{font-size:13px;margin-top:2px;letter-spacing:1px}</style></head><body>'
+  return '<html><head><meta charset="utf-8"><title>Etichetă '+esc(barcode||"")+'</title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:8px;text-align:center;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}.nm{font-size:15px;font-weight:bold;margin-bottom:4px}img{max-width:100%;max-height:120px}.cd{font-size:13px;margin-top:2px;letter-spacing:1px}</style></head><body>'
     +'<div class="nm">'+esc(name||"")+'</div><img src="'+bc+'"><div class="cd">'+esc(barcode||"")+'</div>'+script+'</body></html>';
 }
 
@@ -2450,7 +2450,7 @@ window.palBoxGen = function(palletId, productId){
 };
 function boxLabelCss(){
   return '@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#000}'
-    +'.lbl{page-break-after:always;text-align:center;padding:10px 8px;box-sizing:border-box}'
+    +'.lbl{page-break-after:always;text-align:center;padding:10px 8px;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}'
     +'.lbl:last-child{page-break-after:auto}'
     +'.t{font-size:11px;letter-spacing:2px;color:#555}.c{font-size:20px;font-weight:bold;letter-spacing:1px;margin:2px 0 3px}'
     +'.nm{font-size:14px;font-weight:bold;margin:8px 0 2px}.c2{font-size:12px;letter-spacing:1px;margin-top:2px}'
