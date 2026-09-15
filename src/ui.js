@@ -3270,6 +3270,12 @@ window.orderDetail = function(id){
         + '<button class="ghost sm" onclick="orderCancel('+o.id+',\\''+o.code+'\\')">Anulează</button>'
         + '<button class="danger sm" onclick="deleteOrder('+o.id+',\\''+o.code+'\\','+(o.status==="completed"?1:0)+')">Șterge</button></div>';
     }
+    // Transformă intrare <-> ieșire (cât timp nu e finalizată)
+    if(can("operator") && o.status!=="completed" && o.status!=="cancelled"){
+      var toType = o.type==="inbound" ? "outbound" : "inbound";
+      var toLbl = o.type==="inbound" ? "🔄 Transformă în IEȘIRE" : "🔄 Transformă în INTRARE";
+      actions += '<div class="row" style="margin-top:8px"><button class="ghost sm" onclick="convertOrder('+o.id+',\\''+toType+'\\',\\''+o.code+'\\')">'+toLbl+'</button></div>';
+    }
     // Admin: poate șterge ORICE comandă, inclusiv finalizată sau anulată.
     if(can("admin") && (o.status==="completed" || o.status==="cancelled")){
       actions += '<div class="row" style="margin-top:12px"><button class="danger sm" onclick="deleteOrder('+o.id+',\\''+o.code+'\\','+(o.status==="completed"?1:0)+')">Șterge comanda</button></div>';
@@ -3342,6 +3348,16 @@ window.departOrder = function(id){
   api("POST","/api/orders/"+id+"/depart",{})
     .then(function(){ closeModal(); toast("Marfa a plecat — stoc actualizat"); loadOrders(); })
     .catch(function(e){ toast(e.message,"bad"); });
+};
+window.convertOrder = function(id, toType, code){
+  var lbl = toType==="inbound" ? "INTRARE (recepție)" : "IEȘIRE (livrare)";
+  modal("Transformă comanda "+esc(code||("#"+id)),
+    '<p>Transformi comanda <b>'+esc(code||("#"+id))+'</b> în <b>'+lbl+'</b>?</p>'
+    +'<p class="muted" style="font-size:13px">Se schimbă tipul și codul (IN-/OUT-). Merge doar cât timp nu e finalizată.</p>',
+    function(){
+      api("POST","/api/orders/"+id+"/convert",{type:toType}).then(function(r){ closeModal(); toast("Transformată în "+(r.code||"")); loadOrders(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, transformă"; sv.className=""; sv.style.display=""; }
 };
 window.orderCreateNewItem = function(orderId, itemId){
   var inp=el("ni_"+itemId); var bc=inp?inp.value.trim():"";

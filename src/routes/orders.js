@@ -257,6 +257,25 @@ export async function depart(request, env, ctx, user, params) {
   return json({ ok: true, status: 'completed' });
 }
 
+// Transformă o comandă între intrare și ieșire (ex. retur, tip greșit).
+// Permis doar dacă nu e finalizată (stocul nu s-a mișcat).
+export async function convertType(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const b = await readJson(request).catch(() => ({}));
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.status === 'completed') return error('Comanda finalizată nu mai poate fi transformată', 400);
+  const target = (b?.type === 'inbound' || b?.type === 'outbound') ? b.type : (order.type === 'inbound' ? 'outbound' : 'inbound');
+  if (target === order.type) return json({ ok: true, type: order.type, code: order.code });
+  const num = (String(order.code || '').replace(/[^0-9]/g, '') || String(id)).padStart(5, '0');
+  const code = (target === 'inbound' ? 'IN-' : 'OUT-') + num;
+  const newStatus = order.status === 'prepared' ? 'confirmed' : order.status; // 'prepared' e specific ieșirii
+  await env.DB.prepare(
+    "UPDATE orders SET type = ?, code = ?, status = ?, prepared_location_id = NULL, locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?"
+  ).bind(target, code, newStatus, id).run();
+  return json({ ok: true, type: target, code });
+}
+
 export async function remove(request, env, ctx, user, params) {
   const id = Number(params.id);
   const order = await env.DB.prepare('SELECT status FROM orders WHERE id = ?').bind(id).first();
