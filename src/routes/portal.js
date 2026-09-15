@@ -1,6 +1,5 @@
 // Portal client — fiecare endpoint returnează DOAR datele clientului autentificat.
 import { json, csv, error, readJson } from '../lib/http.js';
-import { internalEan } from './products.js';
 
 export async function me(request, env, ctx, user) {
   const client = await env.DB.prepare('SELECT id, name, email, phone, cui, reg_com, address FROM clients WHERE id = ?').bind(user.client_id).first();
@@ -180,7 +179,9 @@ export async function supplyList(request, env, ctx, user) {
   const { results } = await env.DB.prepare(`
     SELECT o.id, o.code, o.status, o.note, o.expected_date, o.created_at, o.completed_at,
            (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
-           (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id) AS total_qty
+           (SELECT COUNT(*) FROM order_new_items WHERE order_id = o.id) AS new_count,
+           (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id)
+             + (SELECT COALESCE(SUM(quantity),0) FROM order_new_items WHERE order_id = o.id) AS total_qty
     FROM orders o
     WHERE o.client_id = ? AND o.type = 'inbound'
     ORDER BY o.created_at DESC, o.id DESC`).bind(user.client_id).all();
@@ -204,28 +205,10 @@ export async function supplyCreate(request, env, ctx, user) {
     const set = new Set(owned.map((r) => r.id));
     for (const id of existingIds) if (!set.has(id)) return error('Un produs nu îți aparține', 403);
   }
-  // rezolvă fiecare linie la un product_id (creează produsele noi pentru client)
-  const resolved = [];
-  for (const l of lines) {
-    let pid = l.product_id ? Number(l.product_id) : null;
-    if (!pid) {
-      // Produs nou anunțat de client. Codul EAN NU se atribuie acum — se pune la
-      // recepție (depozitul generează codul intern sau scanează EAN-ul real).
-      const name = String(l.new_name).trim();
-      const bc = (l.new_barcode || '').toString().trim(); // dacă totuși clientul are un cod, îl păstrăm
-      const tmp = 'NEW-' + Math.random().toString(36).slice(2, 10).toUpperCase();
-      const r = await env.DB.prepare(
-        'INSERT INTO products (sku, barcode, name, unit, client_id, active) VALUES (?, ?, ?, ?, ?, 1)'
-      ).bind(tmp, bc || null, name, 'buc', user.client_id).run();
-      pid = r.meta.last_row_id;
-      if (bc) { // clientul a dat un cod real -> îl folosim și ca SKU
-        try { await env.DB.prepare('UPDATE products SET sku=? WHERE id=?').bind(bc, pid).run(); } catch (e) {}
-      } else { // fără cod -> SKU citibil, barcode rămâne gol (se pune la recepție)
-        try { await env.DB.prepare('UPDATE products SET sku=? WHERE id=?').bind('NEW-' + pid, pid).run(); } catch (e) {}
-      }
-    }
-    resolved.push({ product_id: pid, quantity: Number(l.quantity) });
-  }
+  // produse existente -> linii; produse noi -> „anunțate" (NU se creează produs acum)
+  const existing = lines.filter((l) => l.product_id).map((l) => ({ product_id: Number(l.product_id), quantity: Number(l.quantity) }));
+  const newItems = lines.filter((l) => !l.product_id).map((l) => ({ name: String(l.new_name).trim(), barcode: (l.new_barcode || '').toString().trim() || null, quantity: Number(l.quantity) }));
+
   const res = await env.DB.prepare(
     `INSERT INTO orders (code, type, status, note, source, client_id, expected_date)
      VALUES (?, 'inbound', 'confirmed', ?, 'portal', ?, ?)`
@@ -233,8 +216,12 @@ export async function supplyCreate(request, env, ctx, user) {
   const id = res.meta.last_row_id;
   const code = 'IN-' + String(id).padStart(5, '0');
   await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
-  await env.DB.batch(resolved.map((l) =>
-    env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity) VALUES (?, ?, ?)').bind(id, l.product_id, l.quantity)));
+
+  const stmts = [];
+  for (const l of existing) stmts.push(env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity) VALUES (?, ?, ?)').bind(id, l.product_id, l.quantity));
+  for (const it of newItems) stmts.push(env.DB.prepare('INSERT INTO order_new_items (order_id, name, barcode, quantity) VALUES (?, ?, ?, ?)').bind(id, it.name, it.barcode, it.quantity));
+  if (stmts.length) await env.DB.batch(stmts);
+
   const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
   return json({ order }, 201);
 }

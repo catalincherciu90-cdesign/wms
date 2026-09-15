@@ -16,6 +16,9 @@ export async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS print_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL DEFAULT 'pallet', ref_id INTEGER, code TEXT, title TEXT, status TEXT NOT NULL DEFAULT 'pending', created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')), printed_at TEXT)",
     // cutii cu cod de bare propriu (generat de noi) pentru cutiile fără cod
     "CREATE TABLE IF NOT EXISTS boxes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, pallet_id INTEGER, product_id INTEGER, quantity INTEGER NOT NULL DEFAULT 0, lot TEXT, created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    // produse NOI anunțate de client la aprovizionare — nu sunt încă produse reale;
+    // se transformă în produse (cu EAN) la recepție, în depozit.
+    "CREATE TABLE IF NOT EXISTS order_new_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, name TEXT NOT NULL, barcode TEXT, quantity INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
     "CREATE TABLE IF NOT EXISTS backup_log (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT (datetime('now')), kind TEXT, status TEXT, bytes INTEGER DEFAULT 0, statements INTEGER DEFAULT 0, note TEXT)",
     "CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, unit TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",

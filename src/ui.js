@@ -3241,6 +3241,17 @@ window.orderDetail = function(id){
     var lines='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th><th class="right">Făcut</th></tr></thead><tbody>'
       + d.lines.map(function(l){ return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td></tr>'; }).join("")
       + '</tbody></table>';
+    // produse noi anunțate (de definit la recepție)
+    var newItems='';
+    if((d.new_items||[]).length && can("operator")){
+      newItems='<div class="card" style="margin-top:12px;padding:12px;background:var(--panel-2)"><div style="font-weight:700;margin-bottom:6px">🆕 Produse noi anunțate (de definit la recepție)</div>'
+        +'<div class="muted" style="font-size:12px;margin-bottom:8px">Creează produsul (cu cod EAN) și se adaugă automat ca linie pe comandă. Lasă codul gol ca să generezi un EAN intern.</div>'
+        +'<table><thead><tr><th>Produs</th><th class="right">Cant.</th><th>Cod EAN (opțional)</th><th></th></tr></thead><tbody>'
+        + d.new_items.map(function(it){ return '<tr><td>'+esc(it.name)+'</td><td class="right">'+esc(it.quantity)+'</td>'
+            +'<td><input id="ni_'+it.id+'" placeholder="gol = EAN intern" value="'+esc(it.barcode||"")+'" style="width:150px"></td>'
+            +'<td class="right"><button class="sm" onclick="orderCreateNewItem('+o.id+','+it.id+')">Creează produs</button></td></tr>'; }).join("")
+        +'</tbody></table></div>';
+    }
     var actions='';
     if(can("operator") && o.status==="prepared"){
       // Comandă de ieșire pregătită (stoc rezervat) — stocul scade doar la plecare.
@@ -3280,7 +3291,7 @@ window.orderDetail = function(id){
     }
     modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
       '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
-      + recip + lines
+      + recip + lines + newItems
       + '<div id="od_services" style="margin-top:14px"></div>'
       + actions, null);
     // ascunde butonul default de salvare al modalului
@@ -3330,6 +3341,12 @@ window.completeOrder = function(id){
 window.departOrder = function(id){
   api("POST","/api/orders/"+id+"/depart",{})
     .then(function(){ closeModal(); toast("Marfa a plecat — stoc actualizat"); loadOrders(); })
+    .catch(function(e){ toast(e.message,"bad"); });
+};
+window.orderCreateNewItem = function(orderId, itemId){
+  var inp=el("ni_"+itemId); var bc=inp?inp.value.trim():"";
+  api("POST","/api/orders/"+orderId+"/new-items/"+itemId,{ barcode:bc||null })
+    .then(function(r){ toast("Produs creat: "+((r.product&&r.product.barcode)||"")); orderDetail(orderId); })
     .catch(function(e){ toast(e.message,"bad"); });
 };
 window.orderStatus = function(id,status){
