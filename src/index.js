@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v96';
+const APP_VERSION = 'v97';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -153,6 +153,7 @@ const routes = [
   ['GET', '/api/print/label-template', print.labelTemplateGet, 'admin'],
   ['PUT', '/api/print/label-template', print.labelTemplateSave, 'admin'],
   ['POST', '/api/print/label-template/reset', print.labelTemplateReset, 'admin'],
+  ['GET', '/api/print/jobs/:id/zpl', print.jobZpl, 'operator'],
   ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
   ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
@@ -170,6 +171,9 @@ const routes = [
   ['POST', '/api/portal/orders', portal.orderCreate, 'client'],
   ['GET', '/api/portal/orders/:id', portal.orderGet, 'client'],
   ['POST', '/api/portal/orders/:id/cancel', portal.orderCancel, 'client'],
+  ['GET', '/api/portal/supply', portal.supplyList, 'client'],
+  ['POST', '/api/portal/supply', portal.supplyCreate, 'client'],
+  ['POST', '/api/portal/supply/:id/cancel', portal.supplyCancel, 'client'],
 ];
 
 function match(routePath, actualPath) {

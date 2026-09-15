@@ -585,7 +585,7 @@ function portalFirmHtml(){
     +'</div>';
 }
 window.renderPortal = function(){
-  var nav = [["stock","Stocul meu"],["pallets","Recepții (paleți/colete)"],["orders","Comenzile mele"],["movements","Mișcări"]].map(function(n){
+  var nav = [["stock","Stocul meu"],["pallets","Recepții (paleți/colete)"],["supply","Aprovizionare"],["orders","Comenzile mele"],["movements","Mișcări"]].map(function(n){
     return '<a class="nav'+(pview===n[0]?' active':'')+'" href="#" onclick="pgo(\\''+n[0]+'\\');return false">'+n[1]+'</a>';
   }).join("");
   document.getElementById("root").innerHTML =
@@ -610,6 +610,7 @@ window.pgo = function(v){ pview=v; renderPortal(); };
 function portalRender(v){
   if(v==="movements") portalMovements();
   else if(v==="pallets") portalPallets();
+  else if(v==="supply") portalSupply();
   else if(v==="orders") portalOrders();
   else portalStock();
 }
@@ -883,6 +884,95 @@ window.porderCancel = function(id, code){
       api("POST","/api/portal/orders/"+id+"/cancel",{}).then(function(){ closeModal(); toast("Comandă anulată"); pgo("orders"); }).catch(function(e){ toast(e.message,"bad"); });
     });
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, anulează comanda"; sv.className="danger"; sv.style.display=""; }
+};
+
+/* ---- Aprovizionare (comenzi de INTRARE create de client) ---- */
+function pSupStatusPill(s){
+  if(s==="completed") return '<span class="pill good">Recepționată</span>';
+  if(s==="cancelled") return '<span class="pill bad">Anulată</span>';
+  return '<span class="pill warn">Anunțată</span>';
+}
+function portalSupply(){
+  setMain(topbar("Aprovizionare — marfă spre depozit", '<button onclick="supplyNew()">+ Aprovizionare nouă</button>')
+    + '<div class="card" style="padding:14px;margin-bottom:12px"><div class="muted" style="font-size:13px">Anunță aici marfa pe care o trimiți spre depozitul nostru. Comanda apare la depozit ca «de recepționat»; stocul crește după ce facem recepția fizică.</div></div>'
+    + '<div class="card" id="psup">…</div>');
+  api("GET","/api/portal/supply").then(function(d){
+    var list=d.orders||[];
+    var rows=list.map(function(o){
+      return '<tr><td><b>'+esc(o.code)+'</b></td><td>'+pSupStatusPill(o.status)+'</td>'
+        +'<td class="right">'+esc(o.total_qty)+' buc.</td>'
+        +'<td class="muted">'+(o.expected_date?('sosire '+esc(o.expected_date)):'')+'</td>'
+        +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
+        +'<td class="right">'+((o.status!=="completed"&&o.status!=="cancelled")?'<button class="danger sm" onclick="supplyCancel('+o.id+',\\''+esc(o.code)+'\\')">Anulează</button>':'')+'</td></tr>';
+    }).join("");
+    el("psup").innerHTML='<table><thead><tr><th>Cod</th><th>Status</th><th class="right">Cant.</th><th>Sosire</th><th>Creată</th><th></th></tr></thead><tbody>'
+      +(rows||'<tr><td colspan=6 class="muted center">Nicio comandă de aprovizionare încă.</td></tr>')+'</tbody></table>';
+  }).catch(function(e){ el("psup").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+}
+var supLines=[];
+function supplyNew(){
+  supLines=[];
+  setMain(topbar("Aprovizionare nouă", '<button class="ghost" onclick="pgo(\\'supply\\')">← Înapoi</button>')
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start">'
+    + '<div class="card" style="padding:20px"><h2>Detalii</h2>'
+      + field("Data estimată de sosire (opțional)","sup_date","","","date","Când estimezi că ajunge marfa la depozit.")
+      + '<div class="field"><label>Observații (opțional)</label><textarea id="sup_note" rows="2" placeholder="Ex: sosește cu curier, nr. aviz..."></textarea></div>'
+    + '</div>'
+    + '<div class="card" style="padding:20px"><h2>Produse trimise</h2>'
+      + '<div class="row" style="align-items:flex-end;gap:8px"><div style="flex:1"><label>Produs existent</label><select id="sup_prod"><option>Se încarcă…</option></select></div>'
+      + '<div style="width:90px"><label>Cant.</label><input id="sup_qty" type="number" min="1" value="1"></div>'
+      + '<button class="sm" onclick="supAddExisting()">Adaugă</button></div>'
+      + '<div class="fhint" style="margin:10px 0 4px">sau produs nou (dacă nu e încă în sistem):</div>'
+      + '<div class="row" style="align-items:flex-end;gap:8px"><div style="flex:1"><label>Nume produs nou</label><input id="sup_nname" placeholder="ex: Șampon 500ml"></div>'
+      + '<div style="width:120px"><label>Cod (opțional)</label><input id="sup_nbc" placeholder="EAN"></div>'
+      + '<div style="width:90px"><label>Cant.</label><input id="sup_nqty" type="number" min="1" value="1"></div>'
+      + '<button class="sm" onclick="supAddNew()">Adaugă</button></div>'
+      + '<div id="sup_lines" style="margin-top:14px"></div>'
+      + '<button style="width:100%;margin-top:14px" onclick="supplySubmit()">Trimite aprovizionarea</button>'
+    + '</div></div>');
+  supRenderLines();
+  api("GET","/api/portal/products").then(function(d){
+    pProducts=d.products||[];
+    el("sup_prod").innerHTML = pProducts.length
+      ? pProducts.map(function(p){ return '<option value="'+p.id+'">'+esc(p.name)+'</option>'; }).join("")
+      : '<option value="">Nu ai produse — adaugă unul nou mai jos</option>';
+  });
+}
+window.supAddExisting = function(){
+  var pid=Number(el("sup_prod").value), qty=Number(el("sup_qty").value);
+  if(!pid){ toast("Alege un produs","bad"); return; }
+  if(!(qty>0)){ toast("Cantitate invalidă","bad"); return; }
+  var p=pProducts.find(function(x){return x.id===pid;}); if(!p) return;
+  var ex=supLines.find(function(l){return l.product_id===pid;});
+  if(ex){ ex.quantity+=qty; } else { supLines.push({product_id:pid, name:p.name, quantity:qty}); }
+  el("sup_qty").value=1; supRenderLines();
+};
+window.supAddNew = function(){
+  var name=el("sup_nname").value.trim(), bc=el("sup_nbc").value.trim(), qty=Number(el("sup_nqty").value);
+  if(!name){ toast("Scrie numele produsului nou","bad"); return; }
+  if(!(qty>0)){ toast("Cantitate invalidă","bad"); return; }
+  supLines.push({new_name:name, new_barcode:bc||null, name:name+" (nou)", quantity:qty});
+  el("sup_nname").value=""; el("sup_nbc").value=""; el("sup_nqty").value=1; supRenderLines();
+};
+window.supRemoveLine = function(i){ supLines.splice(i,1); supRenderLines(); };
+function supRenderLines(){
+  var c=el("sup_lines"); if(!c) return;
+  if(!supLines.length){ c.innerHTML='<div class="muted" style="padding:8px 0">Niciun produs adăugat.</div>'; return; }
+  c.innerHTML='<table><thead><tr><th>Produs</th><th class="right">Cant.</th><th></th></tr></thead><tbody>'
+    + supLines.map(function(l,i){ return '<tr><td>'+esc(l.name)+(l.new_name?' <span class="pill warn" style="font-size:10px">nou</span>':'')+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right"><button class="danger sm" onclick="supRemoveLine('+i+')">✕</button></td></tr>'; }).join("")
+    + '</tbody></table>';
+}
+window.supplySubmit = function(){
+  if(!supLines.length){ toast("Adaugă cel puțin un produs","bad"); return; }
+  var body={ expected_date:el("sup_date")?el("sup_date").value:"", note:el("sup_note")?el("sup_note").value.trim():"",
+    lines:supLines.map(function(l){ return l.new_name?{new_name:l.new_name, new_barcode:l.new_barcode, quantity:l.quantity}:{product_id:l.product_id, quantity:l.quantity}; }) };
+  api("POST","/api/portal/supply",body).then(function(){ toast("Aprovizionare trimisă la depozit"); pgo("supply"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.supplyCancel = function(id, code){
+  modal("Anulează aprovizionarea "+esc(code||("#"+id)),
+    '<p>Sigur anulezi comanda de aprovizionare <b>'+esc(code||("#"+id))+'</b>?</p>',
+    function(){ api("POST","/api/portal/supply/"+id+"/cancel",{}).then(function(){ closeModal(); toast("Anulată"); pgo("supply"); }).catch(function(e){ toast(e.message,"bad"); }); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, anulează"; sv.className="danger"; sv.style.display=""; }
 };
 
 /* ---------------- App shell ---------------- */
@@ -3174,7 +3264,13 @@ window.orderDetail = function(id){
       actions += '<div class="row" style="margin-top:12px"><button class="danger sm" onclick="deleteOrder('+o.id+',\\''+o.code+'\\','+(o.status==="completed"?1:0)+')">Șterge comanda</button></div>';
     }
     var recip='';
-    if(o.source==="portal"){
+    if(o.source==="portal" && o.type==="inbound"){
+      // aprovizionare anunțată de client
+      recip='<div class="card" style="padding:12px;margin-bottom:10px;background:var(--panel-2)"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Aprovizionare din portal · '+esc(o.client_name||"client")+'</div>'
+        +'<b>De recepționat de la: '+esc(o.client_name||"client")+'</b>'
+        +(o.expected_date?'<div class="muted" style="font-size:13px">📅 Sosire estimată: '+esc(o.expected_date)+'</div>':'')
+        +(o.note?'<div style="font-size:13px;margin-top:6px">📝 '+esc(o.note)+'</div>':'')+'</div>';
+    } else if(o.source==="portal"){
       var addr=[o.recipient_address,o.recipient_city,o.recipient_county,o.recipient_postal].filter(Boolean).map(esc).join(", ");
       recip='<div class="card" style="padding:12px;margin-bottom:10px;background:var(--panel-2)"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Comandă din portal · '+esc(o.client_name||"client")+'</div>'
         +'<b>Livrare către: '+esc(o.recipient_name||"—")+'</b>'

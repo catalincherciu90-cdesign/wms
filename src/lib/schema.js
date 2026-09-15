@@ -56,6 +56,8 @@ export async function ensureSchema(env) {
     'locked_at TEXT',
     // stoc tampon: locația unde marfa e pregătită (rezervată) până pleacă din depozit
     'prepared_location_id INTEGER',
+    // aprovizionare (comenzi de intrare din portal): data estimată de sosire
+    'expected_date TEXT',
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
