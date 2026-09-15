@@ -903,7 +903,8 @@ function portalSupply(){
         +'<td class="right">'+esc(o.total_qty)+' buc.</td>'
         +'<td class="muted">'+(o.expected_date?('sosire '+esc(o.expected_date)):'')+'</td>'
         +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
-        +'<td class="right">'+((o.status!=="completed"&&o.status!=="cancelled")?'<button class="danger sm" onclick="supplyCancel('+o.id+',\\''+esc(o.code)+'\\')">Anulează</button>':'')+'</td></tr>';
+        +'<td class="right"><button class="ghost sm" onclick="supplyView('+o.id+')">Vezi</button>'
+        +((o.status!=="completed"&&o.status!=="cancelled")?' <button class="danger sm" onclick="supplyCancel('+o.id+',\\''+esc(o.code)+'\\')">Anulează</button>':'')+'</td></tr>';
     }).join("");
     el("psup").innerHTML='<table><thead><tr><th>Cod</th><th>Status</th><th class="right">Cant.</th><th>Sosire</th><th>Creată</th><th></th></tr></thead><tbody>'
       +(rows||'<tr><td colspan=6 class="muted center">Nicio comandă de aprovizionare încă.</td></tr>')+'</tbody></table>';
@@ -967,6 +968,26 @@ window.supplySubmit = function(){
   var body={ expected_date:el("sup_date")?el("sup_date").value:"", note:el("sup_note")?el("sup_note").value.trim():"",
     lines:supLines.map(function(l){ return l.new_name?{new_name:l.new_name, new_barcode:l.new_barcode, quantity:l.quantity}:{product_id:l.product_id, quantity:l.quantity}; }) };
   api("POST","/api/portal/supply",body).then(function(){ toast("Aprovizionare trimisă la depozit"); pgo("supply"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.supplyView = function(id){
+  api("GET","/api/portal/supply/"+id).then(function(d){
+    var o=d.order;
+    var lines=(d.lines||[]).map(function(l){ return '<tr><td><b>'+esc(l.sku||"")+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+' '+esc(l.unit||"")+'</td></tr>'; }).join("");
+    var newRows=(d.new_items||[]).map(function(it){ return '<tr><td colspan=2>'+esc(it.name)+' <span class="pill warn" style="font-size:10px">nou</span></td><td class="right">'+esc(it.quantity)+'</td></tr>'; }).join("");
+    var tbl=(lines||newRows)
+      ? '<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+lines+newRows+'</tbody></table>'
+      : '<div class="muted center">Fără produse</div>';
+    modal("Aprovizionare "+esc(o.code),
+      '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span>'+pSupStatusPill(o.status)+'</span><span class="muted">'+esc(String(o.created_at).slice(0,16))+'</span></div>'
+      +'<div class="card" style="padding:12px;margin-bottom:12px;background:var(--panel-2)">'
+        +(o.expected_date?'<div>📅 Sosire estimată: <b>'+esc(o.expected_date)+'</b></div>':'')
+        +(o.note?'<div style="margin-top:4px">📝 '+esc(o.note)+'</div>':'')
+        +((!o.expected_date&&!o.note)?'<div class="muted">Fără detalii suplimentare.</div>':'')+'</div>'
+      +tbl
+      +((o.status!=="completed"&&o.status!=="cancelled")?'<div class="row" style="margin-top:14px"><button class="danger" onclick="supplyCancel('+o.id+',\\''+esc(o.code)+'\\')">Anulează comanda</button></div>':''),
+      function(){ closeModal(); });
+    var sv=el("modalSave"); if(sv){ sv.textContent="Închide"; sv.className=""; sv.style.display=""; }
+  }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.supplyCancel = function(id, code){
   modal("Anulează aprovizionarea "+esc(code||("#"+id)),

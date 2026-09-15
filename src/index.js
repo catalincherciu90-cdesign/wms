@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v100';
+const APP_VERSION = 'v101';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -175,6 +175,7 @@ const routes = [
   ['POST', '/api/portal/orders/:id/cancel', portal.orderCancel, 'client'],
   ['GET', '/api/portal/supply', portal.supplyList, 'client'],
   ['POST', '/api/portal/supply', portal.supplyCreate, 'client'],
+  ['GET', '/api/portal/supply/:id', portal.supplyGet, 'client'],
   ['POST', '/api/portal/supply/:id/cancel', portal.supplyCancel, 'client'],
 ];
 
