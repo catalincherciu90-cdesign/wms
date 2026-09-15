@@ -972,17 +972,21 @@ window.supplySubmit = function(){
 window.supplyView = function(id){
   api("GET","/api/portal/supply/"+id).then(function(d){
     var o=d.order;
-    var lines=(d.lines||[]).map(function(l){ return '<tr><td><b>'+esc(l.sku||"")+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+' '+esc(l.unit||"")+'</td></tr>'; }).join("");
-    var newRows=(d.new_items||[]).map(function(it){ return '<tr><td colspan=2>'+esc(it.name)+' <span class="pill warn" style="font-size:10px">nou</span></td><td class="right">'+esc(it.quantity)+'</td></tr>'; }).join("");
+    var done=(o.status==="completed");
+    var lines=(d.lines||[]).map(function(l){
+      var recv=done?('<span class="pill good">'+esc(l.qty_done||0)+'</span>'):('<span class="muted">'+esc(l.qty_done||0)+'</span>');
+      return '<tr><td>'+esc(l.product_name)+'<div class="muted" style="font-size:11px">'+esc(l.barcode||l.sku||"")+'</div></td><td class="right">'+esc(l.quantity)+' '+esc(l.unit||"")+'</td><td class="right">'+recv+'</td></tr>'; }).join("");
+    var newRows=(d.new_items||[]).map(function(it){ return '<tr><td>'+esc(it.name)+' <span class="pill warn" style="font-size:10px">nou · de definit</span></td><td class="right">'+esc(it.quantity)+'</td><td class="right"><span class="muted">—</span></td></tr>'; }).join("");
     var tbl=(lines||newRows)
-      ? '<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th></tr></thead><tbody>'+lines+newRows+'</tbody></table>'
+      ? '<table><thead><tr><th>Produs</th><th class="right">Anunțat</th><th class="right">Recepționat</th></tr></thead><tbody>'+lines+newRows+'</tbody></table>'
       : '<div class="muted center">Fără produse</div>';
     modal("Aprovizionare "+esc(o.code),
-      '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span>'+pSupStatusPill(o.status)+'</span><span class="muted">'+esc(String(o.created_at).slice(0,16))+'</span></div>'
+      '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span>'+pSupStatusPill(o.status)+'</span><span class="muted">creată '+esc(String(o.created_at).slice(0,16))+'</span></div>'
       +'<div class="card" style="padding:12px;margin-bottom:12px;background:var(--panel-2)">'
         +(o.expected_date?'<div>📅 Sosire estimată: <b>'+esc(o.expected_date)+'</b></div>':'')
+        +(o.completed_at?'<div>✅ Recepționată: <b>'+esc(String(o.completed_at).slice(0,16))+'</b></div>':'')
         +(o.note?'<div style="margin-top:4px">📝 '+esc(o.note)+'</div>':'')
-        +((!o.expected_date&&!o.note)?'<div class="muted">Fără detalii suplimentare.</div>':'')+'</div>'
+        +((!o.expected_date&&!o.note&&!o.completed_at)?'<div class="muted">Fără detalii suplimentare.</div>':'')+'</div>'
       +tbl
       +((o.status!=="completed"&&o.status!=="cancelled")?'<div class="row" style="margin-top:14px"><button class="danger" onclick="supplyCancel('+o.id+',\\''+esc(o.code)+'\\')">Anulează comanda</button></div>':''),
       function(){ closeModal(); });

@@ -195,7 +195,7 @@ export async function supplyGet(request, env, ctx, user, params) {
     "SELECT * FROM orders WHERE id = ? AND client_id = ? AND type = 'inbound'").bind(id, user.client_id).first();
   if (!order) return error('Comandă inexistentă', 404);
   const { results: lines } = await env.DB.prepare(`
-    SELECT ol.quantity, pr.sku, pr.name AS product_name, pr.unit
+    SELECT ol.quantity, ol.qty_done, pr.sku, pr.barcode, pr.name AS product_name, pr.unit
     FROM order_lines ol JOIN products pr ON pr.id = ol.product_id
     WHERE ol.order_id = ? ORDER BY ol.id`).bind(id).all();
   let new_items = [];
