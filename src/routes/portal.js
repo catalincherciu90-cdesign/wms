@@ -209,16 +209,20 @@ export async function supplyCreate(request, env, ctx, user) {
   for (const l of lines) {
     let pid = l.product_id ? Number(l.product_id) : null;
     if (!pid) {
+      // Produs nou anunțat de client. Codul EAN NU se atribuie acum — se pune la
+      // recepție (depozitul generează codul intern sau scanează EAN-ul real).
       const name = String(l.new_name).trim();
-      const bc = (l.new_barcode || '').toString().trim();
-      const tmp = 'TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase();
+      const bc = (l.new_barcode || '').toString().trim(); // dacă totuși clientul are un cod, îl păstrăm
+      const tmp = 'NEW-' + Math.random().toString(36).slice(2, 10).toUpperCase();
       const r = await env.DB.prepare(
         'INSERT INTO products (sku, barcode, name, unit, client_id, active) VALUES (?, ?, ?, ?, ?, 1)'
       ).bind(tmp, bc || null, name, 'buc', user.client_id).run();
       pid = r.meta.last_row_id;
-      const barcode = bc || internalEan(pid);
-      try { await env.DB.prepare('UPDATE products SET barcode=?, sku=? WHERE id=?').bind(barcode, barcode, pid).run(); }
-      catch (e) { try { await env.DB.prepare('UPDATE products SET barcode=? WHERE id=?').bind(internalEan(pid), pid).run(); } catch (e2) {} }
+      if (bc) { // clientul a dat un cod real -> îl folosim și ca SKU
+        try { await env.DB.prepare('UPDATE products SET sku=? WHERE id=?').bind(bc, pid).run(); } catch (e) {}
+      } else { // fără cod -> SKU citibil, barcode rămâne gol (se pune la recepție)
+        try { await env.DB.prepare('UPDATE products SET sku=? WHERE id=?').bind('NEW-' + pid, pid).run(); } catch (e) {}
+      }
     }
     resolved.push({ product_id: pid, quantity: Number(l.quantity) });
   }
