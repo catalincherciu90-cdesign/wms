@@ -916,6 +916,7 @@ function supplyNew(){
   setMain(topbar("Aprovizionare nouă", '<button class="ghost" onclick="pgo(\\'supply\\')">← Înapoi</button>')
     + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start">'
     + '<div class="card" style="padding:20px"><h2>Detalii</h2>'
+      + field("De unde vine (furnizor / adresă)","sup_origin","","","text","Ex: furnizor SC ABC SRL, București / depozit propriu.")
       + field("Data estimată de sosire (opțional)","sup_date","","","date","Când estimezi că ajunge marfa la depozit.")
       + '<div class="field"><label>Observații (opțional)</label><textarea id="sup_note" rows="2" placeholder="Ex: sosește cu curier, nr. aviz..."></textarea></div>'
     + '</div>'
@@ -965,7 +966,7 @@ function supRenderLines(){
 }
 window.supplySubmit = function(){
   if(!supLines.length){ toast("Adaugă cel puțin un produs","bad"); return; }
-  var body={ expected_date:el("sup_date")?el("sup_date").value:"", note:el("sup_note")?el("sup_note").value.trim():"",
+  var body={ origin:el("sup_origin")?el("sup_origin").value.trim():"", expected_date:el("sup_date")?el("sup_date").value:"", note:el("sup_note")?el("sup_note").value.trim():"",
     lines:supLines.map(function(l){ return l.new_name?{new_name:l.new_name, new_barcode:l.new_barcode, quantity:l.quantity}:{product_id:l.product_id, quantity:l.quantity}; }) };
   api("POST","/api/portal/supply",body).then(function(){ toast("Aprovizionare trimisă la depozit"); pgo("supply"); }).catch(function(e){ toast(e.message,"bad"); });
 };
@@ -983,10 +984,11 @@ window.supplyView = function(id){
     modal("Aprovizionare "+esc(o.code),
       '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span>'+pSupStatusPill(o.status)+'</span><span class="muted">creată '+esc(String(o.created_at).slice(0,16))+'</span></div>'
       +'<div class="card" style="padding:12px;margin-bottom:12px;background:var(--panel-2)">'
+        +(o.origin?'<div>🚚 De unde vine: <b>'+esc(o.origin)+'</b></div>':'')
         +(o.expected_date?'<div>📅 Sosire estimată: <b>'+esc(o.expected_date)+'</b></div>':'')
         +(o.completed_at?'<div>✅ Recepționată: <b>'+esc(String(o.completed_at).slice(0,16))+'</b></div>':'')
         +(o.note?'<div style="margin-top:4px">📝 '+esc(o.note)+'</div>':'')
-        +((!o.expected_date&&!o.note&&!o.completed_at)?'<div class="muted">Fără detalii suplimentare.</div>':'')+'</div>'
+        +((!o.origin&&!o.expected_date&&!o.note&&!o.completed_at)?'<div class="muted">Fără detalii suplimentare.</div>':'')+'</div>'
       +tbl
       +((o.status!=="completed"&&o.status!=="cancelled")?'<div class="row" style="margin-top:14px"><button class="danger" onclick="supplyCancel('+o.id+',\\''+esc(o.code)+'\\')">Anulează comanda</button></div>':''),
       function(){ closeModal(); });
@@ -3310,6 +3312,7 @@ window.orderDetail = function(id){
       // aprovizionare anunțată de client
       recip='<div class="card" style="padding:12px;margin-bottom:10px;background:var(--panel-2)"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Aprovizionare din portal · '+esc(o.client_name||"client")+'</div>'
         +'<b>De recepționat de la: '+esc(o.client_name||"client")+'</b>'
+        +(o.origin?'<div class="muted" style="font-size:13px">🚚 De unde vine: '+esc(o.origin)+'</div>':'')
         +(o.expected_date?'<div class="muted" style="font-size:13px">📅 Sosire estimată: '+esc(o.expected_date)+'</div>':'')
         +(o.note?'<div style="font-size:13px;margin-top:6px">📝 '+esc(o.note)+'</div>':'')+'</div>';
     } else if(o.source==="portal"){

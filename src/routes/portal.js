@@ -177,7 +177,7 @@ export async function orderCreate(request, env, ctx, user) {
 // aici — crește când depozitul face recepția (orders.complete inbound).
 export async function supplyList(request, env, ctx, user) {
   const { results } = await env.DB.prepare(`
-    SELECT o.id, o.code, o.status, o.note, o.expected_date, o.created_at, o.completed_at,
+    SELECT o.id, o.code, o.status, o.note, o.expected_date, o.origin, o.created_at, o.completed_at,
            (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
            (SELECT COUNT(*) FROM order_new_items WHERE order_id = o.id) AS new_count,
            (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id)
@@ -225,9 +225,9 @@ export async function supplyCreate(request, env, ctx, user) {
   const newItems = lines.filter((l) => !l.product_id).map((l) => ({ name: String(l.new_name).trim(), barcode: (l.new_barcode || '').toString().trim() || null, quantity: Number(l.quantity) }));
 
   const res = await env.DB.prepare(
-    `INSERT INTO orders (code, type, status, note, source, client_id, expected_date)
-     VALUES (?, 'inbound', 'confirmed', ?, 'portal', ?, ?)`
-  ).bind('TMP', b.note || null, user.client_id, b.expected_date || null).run();
+    `INSERT INTO orders (code, type, status, note, source, client_id, expected_date, origin)
+     VALUES (?, 'inbound', 'confirmed', ?, 'portal', ?, ?, ?)`
+  ).bind('TMP', b.note || null, user.client_id, b.expected_date || null, (b.origin || '').toString().slice(0, 200) || null).run();
   const id = res.meta.last_row_id;
   const code = 'IN-' + String(id).padStart(5, '0');
   await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
