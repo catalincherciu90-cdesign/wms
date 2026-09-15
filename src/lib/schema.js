@@ -62,6 +62,8 @@ export async function ensureSchema(env) {
     // aprovizionare (comenzi de intrare din portal): data estimată de sosire + originea
     'expected_date TEXT',
     'origin TEXT',
+    'sender_contact TEXT', // contact expeditor (nume/telefon)
+    'awb TEXT',            // nr. aviz / AWB
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}

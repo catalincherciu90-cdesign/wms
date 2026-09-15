@@ -225,9 +225,12 @@ export async function supplyCreate(request, env, ctx, user) {
   const newItems = lines.filter((l) => !l.product_id).map((l) => ({ name: String(l.new_name).trim(), barcode: (l.new_barcode || '').toString().trim() || null, quantity: Number(l.quantity) }));
 
   const res = await env.DB.prepare(
-    `INSERT INTO orders (code, type, status, note, source, client_id, expected_date, origin)
-     VALUES (?, 'inbound', 'confirmed', ?, 'portal', ?, ?, ?)`
-  ).bind('TMP', b.note || null, user.client_id, b.expected_date || null, (b.origin || '').toString().slice(0, 200) || null).run();
+    `INSERT INTO orders (code, type, status, note, source, client_id, expected_date, origin, sender_contact, awb)
+     VALUES (?, 'inbound', 'confirmed', ?, 'portal', ?, ?, ?, ?, ?)`
+  ).bind('TMP', b.note || null, user.client_id, b.expected_date || null,
+    (b.origin || '').toString().slice(0, 200) || null,
+    (b.sender_contact || '').toString().slice(0, 120) || null,
+    (b.awb || '').toString().slice(0, 60) || null).run();
   const id = res.meta.last_row_id;
   const code = 'IN-' + String(id).padStart(5, '0');
   await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
