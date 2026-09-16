@@ -1110,6 +1110,7 @@ VIEWS.dashboard = function(){
       + dashTile("products","📦","Produse","viewer")
       + dashTile("stock","🧮","Stoc","viewer")
       + dashTile("locations","🗺️","Locații","viewer")
+      + dashTile("warehouses","🏭","Gestiuni","viewer")
       + dashTile("labels","🏷️","Etichete","operator")
       + dashTile("clients","👥","Clienți","operator")
       + dashTile("movements","🔁","Mișcări","viewer")
