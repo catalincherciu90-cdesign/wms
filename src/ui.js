@@ -1088,9 +1088,10 @@ function topbar(title, right){ return '<div class="topbar"><h1>'+esc(title)+'</h
 /* ---------------- Views ---------------- */
 var VIEWS = {};
 
+var dashClient = "";
 VIEWS.dashboard = function(){
   setMain(topbar("Dashboard") + '<div id="dash">Se încarcă…</div>');
-  api("GET","/api/dashboard").then(function(d){
+  api("GET","/api/dashboard"+(dashClient?("?client_id="+encodeURIComponent(dashClient)):"")).then(function(d){
     var k=d.kpis;
     var kpis = '<div class="kpis" style="grid-template-columns:repeat(6,1fr)">'
       + kpi(k.products,"Produse active")
@@ -1144,18 +1145,22 @@ VIEWS.dashboard = function(){
     var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
 
     var clientPicker = can("operator")
-      ? '<div class="card" style="padding:12px;margin-bottom:16px"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:600">👥 Vezi un client:</span><select id="dash_client" onchange="if(this.value)clientDetail(Number(this.value))" style="max-width:340px;flex:1;min-width:180px"><option value="">— alege un client —</option></select></div><div class="fhint">Deschide dosarul clientului: produse & stoc, comenzi și alte operațiuni.</div></div>'
+      ? '<div class="card" style="padding:12px;margin-bottom:16px'+(dashClient?';border-left:4px solid var(--brand)':'')+'"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:600">👥 Client:</span>'
+        + '<select id="dash_client" onchange="dashSetClient(this.value)" style="max-width:320px;flex:1;min-width:180px"><option value="">— toți clienții —</option></select>'
+        + (dashClient?'<button class="ghost sm" onclick="dashSetClient(\\'\\')">✕ Toți</button> <button class="sm" onclick="clientDetail(Number(\\''+esc(dashClient)+'\\'))">Deschide dosarul</button>':'')
+        + '</div><div class="fhint">'+(dashClient?'Dashboard filtrat pe clientul selectat.':'Alege un client ca să filtrezi KPI-urile și graficele pe el.')+'</div></div>'
       : '';
     el("dash").innerHTML = kpis + quick + clientPicker + prepared + top + bottom;
     drawChart(d.activity||[]);
     if(can("operator")){ dashLoadPrepared(); dashLoadClients(); }
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
 };
+window.dashSetClient = function(v){ dashClient = v||""; VIEWS.dashboard(); };
 function dashLoadClients(){
   var sel=el("dash_client"); if(!sel) return;
   api("GET","/api/clients").then(function(d){
     var list=(d.clients||[]).filter(function(c){return c.active;});
-    sel.innerHTML='<option value="">— alege un client —</option>'+list.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");
+    sel.innerHTML='<option value="">— toți clienții —</option>'+list.map(function(c){return '<option value="'+c.id+'"'+(String(c.id)===String(dashClient)?' selected':'')+'>'+esc(c.name)+'</option>';}).join("");
   }).catch(function(){});
 }
 // Încarcă în Dashboard comenzile pregătite (stoc rezervat) — de aici marchezi „Marfa a plecat".
