@@ -190,9 +190,7 @@ export function renderUI() {
   .bar-h .bl{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .bar-h .bv{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;flex:none;white-space:nowrap}
   .bar-t{position:relative;height:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(10,15,25,.07)}
-  .bar-f{height:100%;min-width:6px;border-radius:999px;background-color:var(--brand);background-image:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%);transform-origin:left center;animation:barGrow .55s cubic-bezier(.22,1,.36,1) both}
-  @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-  @media (prefers-reduced-motion:reduce){.bar-f{animation:none}}
+  .bar-f{height:100%;min-width:6px;border-radius:999px;background-color:var(--brand);background-image:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%)}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
   .toolbar .spacer{flex:1}
   .muted{color:var(--muted)} .right{text-align:right} .center{text-align:center}
