@@ -14,9 +14,11 @@ export async function stock(request, env) {
     JOIN locations l ON l.id = i.location_id
     WHERE i.quantity <> 0`;
   const clientId = url.searchParams.get('client_id');
+  const warehouseId = url.searchParams.get('warehouse_id');
   const binds = [];
   if (productId) { sql += ' AND p.id = ?'; binds.push(Number(productId)); }
   if (clientId) { sql += ' AND p.client_id = ?'; binds.push(Number(clientId)); }
+  if (warehouseId) { sql += ' AND l.warehouse_id = ?'; binds.push(Number(warehouseId)); }
   sql += ' ORDER BY p.name, l.code';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return json({ stock: results });
@@ -24,7 +26,9 @@ export async function stock(request, env) {
 
 // Stoc total per produs (pentru dashboard / listă). Opțional filtrat pe client.
 export async function summary(request, env) {
-  const clientId = new URL(request.url).searchParams.get('client_id');
+  const url = new URL(request.url);
+  const clientId = url.searchParams.get('client_id');
+  const warehouseId = url.searchParams.get('warehouse_id');
   let sql = `
     SELECT p.id AS product_id, p.sku, p.name, p.unit, p.reorder_point,
            COALESCE(SUM(i.quantity), 0) AS total,
@@ -32,10 +36,12 @@ export async function summary(request, env) {
               WHERE ol.product_id = p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved,
            CASE WHEN COALESCE(SUM(i.quantity),0) <= p.reorder_point THEN 1 ELSE 0 END AS low
     FROM products p
-    LEFT JOIN inventory i ON i.product_id = p.id
-    WHERE p.active = 1`;
+    LEFT JOIN inventory i ON i.product_id = p.id`;
+  if (warehouseId) sql += ' LEFT JOIN locations l ON l.id = i.location_id';
+  sql += ' WHERE p.active = 1';
   const binds = [];
   if (clientId) { sql += ' AND p.client_id = ?'; binds.push(Number(clientId)); }
+  if (warehouseId) { sql += ' AND l.warehouse_id = ?'; binds.push(Number(warehouseId)); }
   sql += ' GROUP BY p.id ORDER BY p.name';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   for (const r of results) r.available = (r.total || 0) - (r.reserved || 0);

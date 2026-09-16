@@ -1011,7 +1011,7 @@ var NAV = [
   ["dashboard","Dashboard","viewer"],
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
-  { label:"Depozit", items:[ ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
+  { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
   { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Imprimare","operator"], ["labeleditor","Editor etichetă","admin"] ] },
   ["orders","Comenzi","viewer"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
@@ -1526,6 +1526,48 @@ window.productForm = function(id){
   }).catch(function(){});
 };
 
+VIEWS.warehouses = function(){
+  var addBtn = can("admin") ? '<button onclick="warehouseForm()">+ Gestiune</button>' : '';
+  setMain(topbar("Gestiuni (depozite)", addBtn)
+    + '<div class="card" style="padding:12px;margin-bottom:12px"><div class="muted" style="font-size:12.5px">O gestiune grupează locații; stocul ei este suma din locațiile care îi aparțin. Asociezi locațiile la gestiune din pagina Locații (Edit → Gestiune).</div></div>'
+    + '<div class="card" id="whtbl">…</div>');
+  api("GET","/api/warehouses").then(function(d){
+    cache.warehouses = d.warehouses;
+    var rows=(d.warehouses||[]).map(function(w){
+      return '<tr'+(w.active?'':' style="opacity:.6"')+'><td><b>'+esc(w.name)+'</b>'+(w.code?(' <span class="muted">'+esc(w.code)+'</span>'):'')+(w.notes?('<div class="muted" style="font-size:12px">'+esc(w.notes)+'</div>'):'')+'</td>'
+        +'<td class="right">'+esc(w.locations||0)+' locații</td>'
+        +'<td class="right"><b>'+esc(w.units||0)+'</b> buc</td>'
+        +'<td>'+(w.active?'<span class="pill good">activă</span>':'<span class="pill mut">inactivă</span>')+'</td>'
+        +'<td class="right"><button class="ghost sm" onclick="go(\\'stock\\');setTimeout(function(){stockSetWarehouse('+w.id+')},60)">Vezi stoc</button>'
+        +(can("admin")?' <button class="ghost sm" onclick="warehouseForm('+w.id+')">Edit</button> <button class="danger sm" onclick="deleteWarehouse('+w.id+',\\''+esc(w.name)+'\\')">Șterge</button>':'')
+        +'</td></tr>';
+    }).join("");
+    el("whtbl").innerHTML='<table><thead><tr><th>Gestiune</th><th class="right">Locații</th><th class="right">Stoc</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio gestiune. Adaugă una.</td></tr>')+'</tbody></table>';
+  }).catch(function(e){ el("whtbl").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+};
+window.warehouseForm = function(id){
+  var w = id ? (cache.warehouses||[]).find(function(x){return x.id===id;}) : {};
+  if(!w) w={};
+  modal((id?"Editează":"Adaugă")+" gestiune",
+    field("Nume","wh_name",w.name||"","","text","Ex: Depozit central, Marfă retur, Consignație.")
+    + field("Cod (opțional)","wh_code",w.code||"","","text","Ex: G1, DEP-CJ.")
+    + '<div class="field"><label>Observații (opțional)</label><textarea id="wh_notes" rows="2">'+esc(w.notes||"")+'</textarea></div>'
+    + (id?'<div class="field"><label>Activă</label><select id="wh_active"><option value="1"'+(w.active?' selected':'')+'>Da</option><option value="0"'+(w.active?'':' selected')+'>Nu</option></select></div>':''),
+    function(){
+      var body={ name:el("wh_name").value.trim(), code:el("wh_code").value.trim(), notes:el("wh_notes").value.trim() };
+      if(id && el("wh_active")) body.active=el("wh_active").value==="1";
+      if(!body.name){ toast("Numele e obligatoriu","bad"); return; }
+      var pr = id ? api("PUT","/api/warehouses/"+id,body) : api("POST","/api/warehouses",body);
+      pr.then(function(){ closeModal(); toast("Salvat"); go("warehouses"); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+};
+window.deleteWarehouse = function(id, name){
+  modal("Șterge gestiunea "+esc(name||("#"+id)),
+    '<p>Sigur ștergi gestiunea <b>'+esc(name||("#"+id))+'</b>?</p><p class="muted" style="font-size:13px">Dacă are locații asociate, se <b>dezactivează</b> (nu se pierd asocierile). Dacă e goală, se șterge definitiv.</p>',
+    function(){ api("DELETE","/api/warehouses/"+id).then(function(r){ closeModal(); toast(r.deleted?"Gestiune ștearsă":"Gestiune dezactivată (avea locații)"); go("warehouses"); }).catch(function(e){ toast(e.message,"bad"); }); });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; sv.style.display=""; }
+};
+
 VIEWS.locations = function(){
   var addBtn = can("operator") ? '<button onclick="locationForm()">+ Locație</button>' : '';
   setMain(topbar("Locații", addBtn) + '<div class="card" id="ltbl">…</div>');
@@ -1535,6 +1577,7 @@ VIEWS.locations = function(){
     var inactive = d.locations.filter(function(l){ return !l.active; });
     var rows = active.map(function(l){
       return '<tr><td><b>'+esc(l.code)+'</b></td><td>'+esc(l.name||"—")+'</td><td>'+esc(l.zone||"—")+'</td>'
+        + '<td>'+(l.warehouse_name?esc(l.warehouse_name):'<span class="muted">—</span>')+'</td>'
         + '<td>'+fillBar(l.used, l.capacity)+'</td>'
         + '<td class="right"><button class="ghost sm" onclick="showQR(appOrigin()+\\'/#loc=\\'+encodeURIComponent(\\''+esc(l.code)+'\\'),\\''+esc(l.code)+'\\')">▦ QR</button>'
         + ' <button class="ghost sm" onclick="locationView(\\''+esc(l.code)+'\\')">Vezi</button>'
@@ -1543,7 +1586,7 @@ VIEWS.locations = function(){
         + (can("admin")?' <button class="danger sm" onclick="deleteLocation('+l.id+',\\''+esc(l.code)+'\\')">Șterge</button>':'')
         + '</td></tr>';
     }).join("");
-    var html='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Ocupare</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class="muted center">Nicio locație activă</td></tr>')+'</tbody></table>';
+    var html='<table><thead><tr><th>Cod</th><th>Nume</th><th>Zonă</th><th>Gestiune</th><th>Ocupare</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 class="muted center">Nicio locație activă</td></tr>')+'</tbody></table>';
     if(inactive.length){
       html += '<div style="margin-top:16px;font-weight:600;font-size:13px" class="muted">Locații dezactivate ('+inactive.length+')</div>';
       html += '<table style="margin-top:6px"><tbody>'+inactive.map(function(l){
@@ -1590,12 +1633,18 @@ window.locationForm = function(id){
   var l = id ? cache.locations.find(function(x){return x.id===id;}) : {};
   modal((id?"Editează":"Adaugă")+" locație",
     field("Cod (ex: A-01-03)","l_code",l.code||"",id?"disabled":"","text","Codul locației: zonă-raft-nivel (ex: A-01-03).") + field("Nume","l_name",l.name||"","","text","Nume descriptiv opțional al locației.") + field("Zonă","l_zone",l.zone||"","","text","Zona din depozit (ex: A, Frig, Retur).")
+    + '<div class="field"><label>Gestiune / depozit</label><select id="l_wh"><option value="">— fără —</option></select>'+fhint("Gestiunea (depozitul) de care aparține locația.")+'</div>'
     + field("Capacitate (nr. spații / paleți)","l_cap",l.capacity||0,"","number","Câte spații sau paleți încap aici (ex: 4)."),
     function(){
-      var body={ code:el("l_code").value, name:el("l_name").value, zone:el("l_zone").value, capacity:Number(el("l_cap").value)||0 };
+      var body={ code:el("l_code").value, name:el("l_name").value, zone:el("l_zone").value, capacity:Number(el("l_cap").value)||0, warehouse_id:el("l_wh")&&el("l_wh").value?Number(el("l_wh").value):null };
       var pr = id ? api("PUT","/api/locations/"+id,body) : api("POST","/api/locations",body);
       pr.then(function(){ closeModal(); toast("Salvat"); go("locations"); }).catch(function(e){ toast(e.message,"bad"); });
     });
+  api("GET","/api/warehouses").then(function(d){
+    var sel=el("l_wh"); if(!sel) return;
+    var list=(d.warehouses||[]).filter(function(w){return w.active;});
+    sel.innerHTML='<option value="">— fără —</option>'+list.map(function(w){return '<option value="'+w.id+'"'+(l.warehouse_id===w.id?' selected':'')+'>'+esc(w.name)+'</option>';}).join("");
+  }).catch(function(){});
 };
 function fillBar(used, cap){
   used=Number(used)||0; cap=Number(cap)||0;
@@ -1620,12 +1669,19 @@ window.resetStockConfirm = function(){
 VIEWS.stock = function(){
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/inventory/export\\',\\'stoc.csv\\')">Export CSV</button>'
     + (can("admin")?' <button class="danger" onclick="resetStockConfirm()">⚠ Resetează stoc la 0</button>':'');
-  var filter = '<div class="toolbar"><label style="margin:0">Client:</label><select id="stk_client" onchange="loadStockData()" style="max-width:280px"><option value="">Toți (tot depozitul)</option></select> <span id="stk_hint" class="muted" style="font-size:12.5px"></span></div>';
+  var filter = '<div class="toolbar"><label style="margin:0">Client:</label><select id="stk_client" onchange="loadStockData()" style="max-width:240px"><option value="">Toți (tot depozitul)</option></select>'
+    + ' <label style="margin:0">Gestiune:</label><select id="stk_wh" onchange="loadStockData()" style="max-width:220px"><option value="">Toate</option></select>'
+    + ' <span id="stk_hint" class="muted" style="font-size:12.5px"></span></div>';
   setMain(topbar("Stoc", exp) + filter
     + '<div id="occwrap"><h2 style="margin-top:6px">Ocupare rafturi</h2><div class="card" id="occ" style="margin-bottom:18px;padding:8px 4px">…</div></div>'
     + '<h2 id="sumttl">Total per produs</h2><div class="card" id="sumtbl" style="margin-bottom:18px">…</div><h2>Detaliu pe locație</h2><div class="card" id="stbl">…</div>');
   api("GET","/api/clients").then(function(d){
     var sel=el("stk_client"); if(sel) sel.innerHTML='<option value="">Toți (tot depozitul)</option>'+(d.clients||[]).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");
+  }).catch(function(){});
+  api("GET","/api/warehouses").then(function(d){
+    var sel=el("stk_wh"); if(!sel) return;
+    sel.innerHTML='<option value="">Toate</option>'+(d.warehouses||[]).map(function(w){return '<option value="'+w.id+'">'+esc(w.name)+'</option>';}).join("");
+    if(window._pendStockWh){ sel.value=String(window._pendStockWh); window._pendStockWh=null; loadStockData(); }
   }).catch(function(){});
   api("GET","/api/locations").then(function(d){
     var locs=d.locations.filter(function(l){return l.active;});
@@ -1636,10 +1692,13 @@ VIEWS.stock = function(){
   });
   loadStockData();
 };
+window.stockSetWarehouse = function(id){ window._pendStockWh=String(id); var s=el("stk_wh"); if(s){ s.value=String(id); loadStockData(); } };
 window.loadStockData = function(){
   var cid = el("stk_client") ? el("stk_client").value : "";
-  var q = cid ? ("?client_id="+encodeURIComponent(cid)) : "";
-  var ow=el("occwrap"); if(ow) ow.style.display = cid ? "none" : "";
+  var wid = el("stk_wh") ? el("stk_wh").value : "";
+  var qp=[]; if(cid) qp.push("client_id="+encodeURIComponent(cid)); if(wid) qp.push("warehouse_id="+encodeURIComponent(wid));
+  var q = qp.length ? ("?"+qp.join("&")) : "";
+  var ow=el("occwrap"); if(ow) ow.style.display = (cid||wid) ? "none" : "";
   var ttl=el("sumttl"); if(ttl) ttl.textContent = cid ? "Total per produs (client selectat)" : "Total per produs";
   var hint=el("stk_hint"); if(hint) hint.textContent = cid ? "Se afișează doar stocul clientului ales." : "";
   api("GET","/api/inventory/summary"+q).then(function(d){

@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v108';
+const APP_VERSION = 'v109';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -7,6 +7,7 @@ import { renderUI } from './ui.js';
 import * as auth from './routes/auth.js';
 import * as products from './routes/products.js';
 import * as locations from './routes/locations.js';
+import * as warehouses from './routes/warehouses.js';
 import * as inventory from './routes/inventory.js';
 import * as dashboard from './routes/dashboard.js';
 import * as users from './routes/users.js';
@@ -51,6 +52,10 @@ const routes = [
   ['PUT', '/api/locations/:id', locations.update, 'operator'],
   ['POST', '/api/locations/:id/reactivate', locations.reactivate, 'operator'],
   ['DELETE', '/api/locations/:id', locations.remove, 'admin'],
+  ['GET', '/api/warehouses', warehouses.list, 'viewer'],
+  ['POST', '/api/warehouses', warehouses.create, 'admin'],
+  ['PUT', '/api/warehouses/:id', warehouses.update, 'admin'],
+  ['DELETE', '/api/warehouses/:id', warehouses.remove, 'admin'],
 
   ['GET', '/api/inventory/stock', inventory.stock, 'viewer'],
   ['GET', '/api/inventory/summary', inventory.summary, 'viewer'],
