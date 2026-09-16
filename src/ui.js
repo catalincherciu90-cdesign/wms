@@ -1143,11 +1143,21 @@ VIEWS.dashboard = function(){
         : '<div class="muted">Totul peste prag ✔</div>')+'</div>';
     var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
 
-    el("dash").innerHTML = kpis + quick + prepared + top + bottom;
+    var clientPicker = can("operator")
+      ? '<div class="card" style="padding:12px;margin-bottom:16px"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:600">👥 Vezi un client:</span><select id="dash_client" onchange="if(this.value)clientDetail(Number(this.value))" style="max-width:340px;flex:1;min-width:180px"><option value="">— alege un client —</option></select></div><div class="fhint">Deschide dosarul clientului: produse & stoc, comenzi și alte operațiuni.</div></div>'
+      : '';
+    el("dash").innerHTML = kpis + quick + clientPicker + prepared + top + bottom;
     drawChart(d.activity||[]);
-    if(can("operator")) dashLoadPrepared();
+    if(can("operator")){ dashLoadPrepared(); dashLoadClients(); }
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
 };
+function dashLoadClients(){
+  var sel=el("dash_client"); if(!sel) return;
+  api("GET","/api/clients").then(function(d){
+    var list=(d.clients||[]).filter(function(c){return c.active;});
+    sel.innerHTML='<option value="">— alege un client —</option>'+list.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");
+  }).catch(function(){});
+}
 // Încarcă în Dashboard comenzile pregătite (stoc rezervat) — de aici marchezi „Marfa a plecat".
 function dashLoadPrepared(){
   var host=el("dash_prepared"); if(!host) return;
