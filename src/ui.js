@@ -1150,7 +1150,7 @@ VIEWS.dashboard = function(){
         + (dashClient?'<button class="ghost sm" onclick="dashSetClient(\\'\\')">✕ Toți</button> <button class="sm" onclick="clientDetail(Number(\\''+esc(dashClient)+'\\'))">Deschide dosarul</button>':'')
         + '</div><div class="fhint">'+(dashClient?'Dashboard filtrat pe clientul selectat.':'Alege un client ca să filtrezi KPI-urile și graficele pe el.')+'</div></div>'
       : '';
-    el("dash").innerHTML = kpis + quick + clientPicker + prepared + top + bottom;
+    el("dash").innerHTML = clientPicker + kpis + quick + prepared + top + bottom;
     drawChart(d.activity||[]);
     if(can("operator")){ dashLoadPrepared(); dashLoadClients(); }
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });

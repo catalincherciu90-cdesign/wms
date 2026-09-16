@@ -33,6 +33,10 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # NU instala pachetul vechi „tools" (a fost scos din SDK → build-ul pica).
+          # Instalam doar platform-tools; restul (platforms/build-tools) le aduce Gradle automat.
+          packages: 'platform-tools'
 
       - name: Instalează dependențele
         working-directory: mobile
