@@ -184,6 +184,15 @@ export function renderUI() {
   .dtile{background:var(--panel-2,var(--panel));border:1px solid var(--border);border-radius:12px;padding:16px 10px;text-align:center;font-weight:600;font-size:13.5px;color:var(--text);cursor:pointer;transition:transform .06s,border-color .12s}
   .dtile:hover{border-color:var(--brand);transform:translateY(-1px)}
   .dtile .di{font-size:26px;display:block;margin-bottom:6px}
+  /* Bare de progres profesionale */
+  .bar{margin:11px 0}
+  .bar-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px;margin-bottom:5px}
+  .bar-h .bl{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .bar-h .bv{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;flex:none;white-space:nowrap}
+  .bar-t{position:relative;height:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(10,15,25,.07)}
+  .bar-f{height:100%;min-width:6px;border-radius:999px;background-color:var(--brand);background-image:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%);transform-origin:left center;animation:barGrow .55s cubic-bezier(.22,1,.36,1) both}
+  @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  @media (prefers-reduced-motion:reduce){.bar-f{animation:none}}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
   .toolbar .spacer{flex:1}
   .muted{color:var(--muted)} .right{text-align:right} .center{text-align:center}
@@ -1247,8 +1256,8 @@ function catBars(rows){
   var max=1; rows.forEach(function(r){ max=Math.max(max,r.units); });
   return rows.map(function(r){
     var pct=Math.round((r.units/max)*100);
-    return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>'+esc(r.category)+'</span><span class="muted">'+esc(r.units)+'</span></div>'
-      +'<div style="height:8px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pct+'%;background:var(--brand);border-radius:6px"></div></div></div>';
+    return '<div class="bar"><div class="bar-h"><span class="bl">'+esc(r.category)+'</span><span class="bv">'+esc(r.units)+'</span></div>'
+      +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%"></div></div></div>';
   }).join("");
 }
 // Bare orizontale generice: items = [{label, value, color?}]
@@ -1258,8 +1267,8 @@ function miniBars(items){
   return items.map(function(r){
     var pct=Math.round(((Number(r.value)||0)/max)*100);
     var col=r.color||"var(--brand)";
-    return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.label)+'</span><span class="muted">'+esc(r.value)+'</span></div>'
-      +'<div style="height:8px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:6px"></div></div></div>';
+    return '<div class="bar"><div class="bar-h"><span class="bl">'+esc(r.label)+'</span><span class="bv">'+esc(r.value)+'</span></div>'
+      +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%;background-color:'+col+'"></div></div></div>';
   }).join("");
 }
 function orderStatusPill(s){
@@ -1675,8 +1684,8 @@ function fillBar(used, cap){
   if(cap<=0) return '<span class="muted" style="font-size:12px">'+used+' paleți · fără capacitate</span>';
   var pct=Math.min(100, Math.round(used/cap*100));
   var col = pct>=90?'var(--bad)':(pct>=70?'var(--warn)':'var(--good)');
-  return '<div style="min-width:150px"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:2px"><span>'+used+' / '+cap+' spații</span><span class="muted">'+pct+'%'+(used>cap?' ⚠':'')+'</span></div>'
-    +'<div style="height:9px;background:var(--panel-2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:6px"></div></div></div>';
+  return '<div class="bar" style="min-width:150px;margin:0"><div class="bar-h"><span class="bl">'+used+' / '+cap+' spații</span><span class="bv">'+pct+'%'+(used>cap?' ⚠':'')+'</span></div>'
+    +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%;background-color:'+col+'"></div></div></div>';
 }
 
 window.resetStockConfirm = function(){
