@@ -255,32 +255,68 @@ window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="rec
 function screenLookup(){
   scanTarget=function(code){ el("s_scan").value=code; opLookup(code); };
   shell("Scanează & caută",
-    '<div class="scanbox"><input id="s_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează codul (fără Enter)"></div>'
+    '<div class="scanbox"><input id="s_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează: produs / palet / colet / cutie"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'s_scan\').value=c;opLookup(c)})">📷 Scanează cu camera</button>'
     +'<div id="s_res"></div>', {back:"renderHome()"});
   wireScan("s_scan", opLookup);
 }
+// Căutare universală: produs / palet / colet / cutie — după prefix, cu fallback.
 function opLookup(code){
   code=(code||"").trim(); if(!code) return;
+  var u=code.toUpperCase();
+  if(/^CUT-/.test(u)){ lkBox(code, function(){ lkNotFound(code); }); return; }
+  if(/^(PAL|COL|AMB)-/.test(u)){ lkPallet(code, function(){ lkNotFound(code); }); return; }
   resolveProduct(code).then(function(p){
-    if(!p){ feedback(false); el("s_res") && (el("s_res").innerHTML='<div class="card center muted">Produs negăsit pentru: '+esc(code)+'</div>'); return; }
-    feedback(true);
-    return api("GET","/api/inventory/stock?product_id="+p.id).then(function(d){
-      var rows=(d.stock||[]).map(function(s){return '<tr><td>'+esc(s.location_code)+'</td><td class="center"><b>'+esc(s.quantity)+'</b> '+esc(s.unit||"")+'</td></tr>';}).join("");
-      var total=(d.stock||[]).reduce(function(a,s){return a+Number(s.quantity||0);},0);
-      var host=el("s_res"); if(!host){ screenLookup(); host=el("s_res"); }
-      var bc=p.barcode||p.sku||"";
-      var printBtn = bc
-        ? '<button class="sm" onclick="lkPrint('+p.id+',\''+esc(bc)+'\',\''+esc(String(p.name||"")).replace(/'/g,"")+'\')">🖨️ Printează eticheta</button>'
-        : '<span class="muted" style="font-size:12px">Fără cod de bare (generează-i unul în WMS)</span>';
-      host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(bc)+'</div>'
-        +'<div style="font-size:18px;font-weight:800;margin:2px 0 8px">'+esc(p.name)+'</div>'
-        +'<div class="big-num">'+total+' <span style="font-size:15px" class="muted">'+esc(p.unit||"buc")+' total</span></div>'
-        +'<table style="margin-top:10px"><thead><tr><th>Locație</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Fără stoc</td></tr>')+'</tbody></table>'
-        +'<div class="row" style="margin-top:10px">'+printBtn+'</div></div>';
-    });
+    if(p){ feedback(true); lkShowProduct(p); return; }
+    lkPallet(code, function(){ lkBox(code, function(){ lkNotFound(code); }); });
   }).catch(function(e){ toast(e.message,true); });
 }
+function lkNotFound(code){ feedback(false); var h=el("s_res"); if(h) h.innerHTML='<div class="card center muted">Niciun rezultat pentru: '+esc(code)+'</div>'; }
+function lkPallet(code, onMiss){
+  api("GET","/api/pallets?code="+encodeURIComponent(code)).then(function(d){
+    var p=(d.pallets||[])[0]; if(!p){ if(onMiss) onMiss(); return; }
+    feedback(true);
+    api("GET","/api/pallets/"+p.id).then(function(det){ lkRenderPallet(det.pallet, det.items||[]); }).catch(function(){ lkRenderPallet(p, []); });
+  }).catch(function(){ if(onMiss) onMiss(); });
+}
+function lkBox(code, onMiss){
+  api("GET","/api/boxes/"+encodeURIComponent(code)).then(function(r){ if(r&&r.box){ feedback(true); lkRenderBox(r.box); } else if(onMiss){ onMiss(); } }).catch(function(){ if(onMiss) onMiss(); });
+}
+function lkShowProduct(p){
+  api("GET","/api/inventory/stock?product_id="+p.id).then(function(d){
+    var rows=(d.stock||[]).map(function(s){return '<tr><td>'+esc(s.location_code)+'</td><td class="center"><b>'+esc(s.quantity)+'</b> '+esc(s.unit||"")+'</td></tr>';}).join("");
+    var total=(d.stock||[]).reduce(function(a,s){return a+Number(s.quantity||0);},0);
+    var host=el("s_res"); if(!host){ screenLookup(); host=el("s_res"); }
+    var bc=p.barcode||p.sku||"";
+    var printBtn = bc
+      ? '<button class="sm" onclick="lkPrint('+p.id+',\''+esc(bc)+'\',\''+esc(String(p.name||"")).replace(/'/g,"")+'\')">🖨️ Printează eticheta</button>'
+      : '<span class="muted" style="font-size:12px">Fără cod de bare (generează-i unul în WMS)</span>';
+    host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">🧾 Produs · '+esc(bc)+'</div>'
+      +'<div style="font-size:18px;font-weight:800;margin:2px 0 8px">'+esc(p.name)+'</div>'
+      +'<div class="big-num">'+total+' <span style="font-size:15px" class="muted">'+esc(p.unit||"buc")+' total</span></div>'
+      +'<table style="margin-top:10px"><thead><tr><th>Locație</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Fără stoc</td></tr>')+'</tbody></table>'
+      +'<div class="row" style="margin-top:10px">'+printBtn+'</div></div>';
+  }).catch(function(e){ toast(e.message,true); });
+}
+function lkRenderPallet(p, items){
+  var host=el("s_res"); if(!host){ screenLookup(); host=el("s_res"); if(!host) return; }
+  var rows=(items||[]).map(function(it){ return '<tr><td>'+esc(it.product_name||it.sku||"")+'</td><td class="center"><b>'+esc(it.quantity)+'</b></td></tr>'; }).join("");
+  var kind=(p.kind==="colet")?"📦 Colet":(p.kind==="ambalaje")?"🧴 Palet ambalaje":"🟫 Palet";
+  host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+kind+'</div>'
+    +'<div style="font-size:18px;font-weight:800;margin:2px 0 6px">'+esc(p.code)+'</div>'
+    +'<div class="muted" style="font-size:13px">'+esc(p.client_name||"intern")+' · loc '+esc(p.location_code||"—")+(p.lot?(' · lot '+esc(p.lot)):'')+' · '+esc(p.status||"")+'</div>'
+    +'<table style="margin-top:10px"><thead><tr><th>Produs</th><th class="center">Cant.</th></tr></thead><tbody>'+(rows||'<tr><td colspan=2 class="center muted">Gol</td></tr>')+'</tbody></table>'
+    +'<button class="sm" style="margin-top:10px" onclick="prnSend('+p.id+',\''+esc(p.code)+'\')">🖨️ Printează eticheta</button></div>';
+}
+function lkRenderBox(box){
+  var host=el("s_res"); if(!host){ screenLookup(); host=el("s_res"); if(!host) return; }
+  host.innerHTML='<div class="card"><div class="muted" style="font-size:12px">📦 Cutie</div>'
+    +'<div style="font-size:18px;font-weight:800;margin:2px 0 6px">'+esc(box.code)+'</div>'
+    +'<div style="font-size:15px;font-weight:700">'+esc(box.product_name||"")+'</div>'
+    +'<div class="muted" style="font-size:13px;margin-top:2px">cod produs: '+esc(box.product_barcode||"")+(box.quantity?(' · '+esc(box.quantity)+' buc/cutie'):'')+(box.lot?(' · lot '+esc(box.lot)):'')+(box.pallet_code?(' · palet '+esc(box.pallet_code)):'')+'</div>'
+    +'<button class="sm" style="margin-top:10px" onclick="lkPrintBox('+box.id+',\''+esc(box.code)+'\',\''+esc(String(box.product_name||"")).replace(/'/g,"")+'\')">🖨️ Printează eticheta</button></div>';
+}
+window.lkPrintBox=function(id,code,name){ api("POST","/api/print/jobs",{type:"box", ref_id:id, code:code, title:name}).then(function(){ feedback(true); toast("Etichetă cutie trimisă: "+code); }).catch(function(e){ feedback(false); toast(e.message,true); }); };
 window.lkPrint=function(id, code, name){
   api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:name}).then(function(){ feedback(true); toast("Etichetă trimisă la imprimantă: "+code); }).catch(function(e){ feedback(false); toast(e.message,true); });
 };

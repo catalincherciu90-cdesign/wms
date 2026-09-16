@@ -68,6 +68,17 @@ export async function test(request, env, ctx, user) {
   return json({ ok: true, id: res.meta.last_row_id });
 }
 
+// Returnează ZPL-ul unui job (pentru Zebra Browser Print din pagina web).
+export async function jobZpl(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const job = await env.DB.prepare("SELECT id, type, ref_id, code, title, lot FROM print_jobs WHERE id = ?").bind(id).first();
+  if (!job) return error('Job inexistent', 404);
+  const url = new URL(request.url);
+  const w = Number(url.searchParams.get('w')) || 0;
+  const zpl = await jobToZpl(env, job, w);
+  return json({ id: job.id, zpl });
+}
+
 // Marchează un job ca printat.
 export async function done(request, env, ctx, user, params) {
   const id = Number(params.id);

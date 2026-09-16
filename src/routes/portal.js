@@ -171,6 +171,91 @@ export async function orderCreate(request, env, ctx, user) {
   return json({ order }, 201);
 }
 
+// ---- Aprovizionare: comenzi de INTRARE create de client (ASN) ----
+// Clientul anunță marfa pe care o trimite spre depozit. Poate include produse
+// existente sau produse noi (create automat pentru client). Stocul NU crește
+// aici — crește când depozitul face recepția (orders.complete inbound).
+export async function supplyList(request, env, ctx, user) {
+  const { results } = await env.DB.prepare(`
+    SELECT o.id, o.code, o.status, o.note, o.expected_date, o.origin, o.created_at, o.completed_at,
+           (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
+           (SELECT COUNT(*) FROM order_new_items WHERE order_id = o.id) AS new_count,
+           (SELECT COALESCE(SUM(quantity),0) FROM order_lines WHERE order_id = o.id)
+             + (SELECT COALESCE(SUM(quantity),0) FROM order_new_items WHERE order_id = o.id) AS total_qty
+    FROM orders o
+    WHERE o.client_id = ? AND o.type = 'inbound'
+    ORDER BY o.created_at DESC, o.id DESC`).bind(user.client_id).all();
+  return json({ orders: results });
+}
+
+// Detaliile unei comenzi de aprovizionare (doar ale clientului).
+export async function supplyGet(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare(
+    "SELECT * FROM orders WHERE id = ? AND client_id = ? AND type = 'inbound'").bind(id, user.client_id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  const { results: lines } = await env.DB.prepare(`
+    SELECT ol.quantity, ol.qty_done, pr.sku, pr.barcode, pr.name AS product_name, pr.unit
+    FROM order_lines ol JOIN products pr ON pr.id = ol.product_id
+    WHERE ol.order_id = ? ORDER BY ol.id`).bind(id).all();
+  let new_items = [];
+  try { const r = await env.DB.prepare('SELECT name, barcode, quantity FROM order_new_items WHERE order_id = ? ORDER BY id').bind(id).all(); new_items = r.results || []; } catch (e) {}
+  return json({ order, lines, new_items });
+}
+
+export async function supplyCreate(request, env, ctx, user) {
+  const b = await readJson(request);
+  const lines = Array.isArray(b?.lines) ? b.lines : [];
+  if (!lines.length) return error('Adaugă cel puțin un produs', 400);
+  for (const l of lines) {
+    if (!(Number(l.quantity) > 0)) return error('Fiecare linie are cantitate > 0', 400);
+    if (!l.product_id && !(l.new_name && String(l.new_name).trim())) return error('Fiecare linie are un produs sau un nume de produs nou', 400);
+  }
+  // produsele existente trebuie să aparțină clientului
+  const existingIds = lines.filter((l) => l.product_id).map((l) => Number(l.product_id));
+  if (existingIds.length) {
+    const ph = existingIds.map(() => '?').join(',');
+    const { results: owned } = await env.DB.prepare(
+      `SELECT id FROM products WHERE id IN (${ph}) AND client_id = ?`).bind(...existingIds, user.client_id).all();
+    const set = new Set(owned.map((r) => r.id));
+    for (const id of existingIds) if (!set.has(id)) return error('Un produs nu îți aparține', 403);
+  }
+  // produse existente -> linii; produse noi -> „anunțate" (NU se creează produs acum)
+  const existing = lines.filter((l) => l.product_id).map((l) => ({ product_id: Number(l.product_id), quantity: Number(l.quantity) }));
+  const newItems = lines.filter((l) => !l.product_id).map((l) => ({ name: String(l.new_name).trim(), barcode: (l.new_barcode || '').toString().trim() || null, quantity: Number(l.quantity) }));
+
+  const res = await env.DB.prepare(
+    `INSERT INTO orders (code, type, status, note, source, client_id, expected_date, origin, sender_contact, awb)
+     VALUES (?, 'inbound', 'confirmed', ?, 'portal', ?, ?, ?, ?, ?)`
+  ).bind('TMP', b.note || null, user.client_id, b.expected_date || null,
+    (b.origin || '').toString().slice(0, 200) || null,
+    (b.sender_contact || '').toString().slice(0, 120) || null,
+    (b.awb || '').toString().slice(0, 60) || null).run();
+  const id = res.meta.last_row_id;
+  const code = 'IN-' + String(id).padStart(5, '0');
+  await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
+
+  const stmts = [];
+  for (const l of existing) stmts.push(env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity) VALUES (?, ?, ?)').bind(id, l.product_id, l.quantity));
+  for (const it of newItems) stmts.push(env.DB.prepare('INSERT INTO order_new_items (order_id, name, barcode, quantity) VALUES (?, ?, ?, ?)').bind(id, it.name, it.barcode, it.quantity));
+  if (stmts.length) await env.DB.batch(stmts);
+
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  return json({ order }, 201);
+}
+
+// Clientul își anulează o comandă de aprovizionare (doar dacă nu a fost recepționată).
+export async function supplyCancel(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const order = await env.DB.prepare(
+    "SELECT id, status FROM orders WHERE id = ? AND client_id = ? AND type = 'inbound'").bind(id, user.client_id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.status === 'completed') return error('Comanda a fost deja recepționată', 400);
+  if (order.status === 'cancelled') return error('Comanda e deja anulată', 400);
+  await env.DB.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").bind(id).run();
+  return json({ ok: true, status: 'cancelled' });
+}
+
 export async function exportCsv(request, env, ctx, user) {
   const { results } = await env.DB.prepare(`
     SELECT p.sku, p.name, l.code AS location, i.quantity

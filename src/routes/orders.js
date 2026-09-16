@@ -1,6 +1,7 @@
 // Rute comenzi: inbound (de la furnizori) & outbound (către clienți)
 // La finalizare, comanda generează automat mișcări de stoc (receiving / picking).
 import { json, error, readJson } from '../lib/http.js';
+import { internalEan } from './products.js';
 
 // Un „lock" pe comandă expiră după atâtea secunde fără heartbeat (dispozitiv închis/căzut).
 const LOCK_TTL = 300;
@@ -33,7 +34,45 @@ export async function get(request, env, ctx, user, params) {
     SELECT ol.*, pr.sku, pr.name AS product_name, pr.unit
     FROM order_lines ol JOIN products pr ON pr.id = ol.product_id
     WHERE ol.order_id = ? ORDER BY ol.id`).bind(id).all();
-  return json({ order, lines });
+  // produse noi anunțate (nu sunt încă produse reale) — se definesc la recepție
+  let new_items = [];
+  try {
+    const r = await env.DB.prepare('SELECT id, name, barcode, quantity FROM order_new_items WHERE order_id = ? ORDER BY id').bind(id).all();
+    new_items = r.results || [];
+  } catch (e) {}
+  return json({ order, lines, new_items });
+}
+
+// Recepție: transformă un produs „anunțat" într-un produs real (cu EAN) și îl
+// adaugă ca linie pe comandă. Codul: cel dat, altfel EAN intern generat acum.
+export async function materializeNewItem(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const itemId = Number(params.itemId);
+  const b = await readJson(request).catch(() => ({}));
+  const order = await env.DB.prepare('SELECT id, client_id FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  const it = await env.DB.prepare('SELECT * FROM order_new_items WHERE id = ? AND order_id = ?').bind(itemId, id).first();
+  if (!it) return error('Produs anunțat inexistent', 404);
+  const bcIn = (b?.barcode || it.barcode || '').toString().trim();
+
+  // creează produsul (SKU temporar, apoi cod final din id)
+  const tmp = 'TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase();
+  const res = await env.DB.prepare(
+    'INSERT INTO products (sku, barcode, name, unit, client_id, active) VALUES (?, ?, ?, ?, ?, 1)'
+  ).bind(tmp, bcIn || null, it.name, 'buc', order.client_id || null).run();
+  const pid = res.meta.last_row_id;
+  const barcode = bcIn || internalEan(pid);
+  try { await env.DB.prepare('UPDATE products SET barcode=?, sku=? WHERE id=?').bind(barcode, barcode, pid).run(); }
+  catch (e) {
+    await env.DB.prepare('DELETE FROM products WHERE id=?').bind(pid).run();
+    if (String(e).includes('UNIQUE')) return error('EAN sau SKU deja existent', 409);
+    throw e;
+  }
+  // adaugă linia și șterge „anunțul"
+  await env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity) VALUES (?, ?, ?)').bind(id, pid, it.quantity).run();
+  await env.DB.prepare('DELETE FROM order_new_items WHERE id = ?').bind(itemId).run();
+  const product = await env.DB.prepare('SELECT id, sku, barcode, name FROM products WHERE id = ?').bind(pid).first();
+  return json({ ok: true, product });
 }
 
 export async function create(request, env, ctx, user) {
@@ -218,6 +257,25 @@ export async function depart(request, env, ctx, user, params) {
   return json({ ok: true, status: 'completed' });
 }
 
+// Transformă o comandă între intrare și ieșire (ex. retur, tip greșit).
+// Permis doar dacă nu e finalizată (stocul nu s-a mișcat).
+export async function convertType(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const b = await readJson(request).catch(() => ({}));
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.status === 'completed') return error('Comanda finalizată nu mai poate fi transformată', 400);
+  const target = (b?.type === 'inbound' || b?.type === 'outbound') ? b.type : (order.type === 'inbound' ? 'outbound' : 'inbound');
+  if (target === order.type) return json({ ok: true, type: order.type, code: order.code });
+  const num = (String(order.code || '').replace(/[^0-9]/g, '') || String(id)).padStart(5, '0');
+  const code = (target === 'inbound' ? 'IN-' : 'OUT-') + num;
+  const newStatus = order.status === 'prepared' ? 'confirmed' : order.status; // 'prepared' e specific ieșirii
+  await env.DB.prepare(
+    "UPDATE orders SET type = ?, code = ?, status = ?, prepared_location_id = NULL, locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?"
+  ).bind(target, code, newStatus, id).run();
+  return json({ ok: true, type: target, code });
+}
+
 export async function remove(request, env, ctx, user, params) {
   const id = Number(params.id);
   const order = await env.DB.prepare('SELECT status FROM orders WHERE id = ?').bind(id).first();
@@ -226,6 +284,7 @@ export async function remove(request, env, ctx, user, params) {
   if (order.status === 'completed' && user.role !== 'admin') {
     return error('Doar un administrator poate șterge o comandă finalizată', 403);
   }
+  try { await env.DB.prepare('DELETE FROM order_new_items WHERE order_id = ?').bind(id).run(); } catch (e) {}
   await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(id).run(); // liniile cad prin ON DELETE CASCADE
   return json({ ok: true });
 }

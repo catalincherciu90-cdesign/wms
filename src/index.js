@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v93';
+const APP_VERSION = 'v109';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -7,6 +7,7 @@ import { renderUI } from './ui.js';
 import * as auth from './routes/auth.js';
 import * as products from './routes/products.js';
 import * as locations from './routes/locations.js';
+import * as warehouses from './routes/warehouses.js';
 import * as inventory from './routes/inventory.js';
 import * as dashboard from './routes/dashboard.js';
 import * as users from './routes/users.js';
@@ -51,6 +52,10 @@ const routes = [
   ['PUT', '/api/locations/:id', locations.update, 'operator'],
   ['POST', '/api/locations/:id/reactivate', locations.reactivate, 'operator'],
   ['DELETE', '/api/locations/:id', locations.remove, 'admin'],
+  ['GET', '/api/warehouses', warehouses.list, 'viewer'],
+  ['POST', '/api/warehouses', warehouses.create, 'admin'],
+  ['PUT', '/api/warehouses/:id', warehouses.update, 'admin'],
+  ['DELETE', '/api/warehouses/:id', warehouses.remove, 'admin'],
 
   ['GET', '/api/inventory/stock', inventory.stock, 'viewer'],
   ['GET', '/api/inventory/summary', inventory.summary, 'viewer'],
@@ -91,6 +96,8 @@ const routes = [
   ['PUT', '/api/orders/:id/status', orders.setStatus, 'operator'],
   ['POST', '/api/orders/:id/complete', orders.complete, 'operator'],
   ['POST', '/api/orders/:id/depart', orders.depart, 'operator'],
+  ['POST', '/api/orders/:id/new-items/:itemId', orders.materializeNewItem, 'operator'],
+  ['POST', '/api/orders/:id/convert', orders.convertType, 'operator'],
   ['POST', '/api/orders/:id/lock', orders.lock, 'operator'],
   ['POST', '/api/orders/:id/unlock', orders.unlock, 'operator'],
   ['DELETE', '/api/orders/:id', orders.remove, 'operator'],
@@ -153,6 +160,7 @@ const routes = [
   ['GET', '/api/print/label-template', print.labelTemplateGet, 'admin'],
   ['PUT', '/api/print/label-template', print.labelTemplateSave, 'admin'],
   ['POST', '/api/print/label-template/reset', print.labelTemplateReset, 'admin'],
+  ['GET', '/api/print/jobs/:id/zpl', print.jobZpl, 'operator'],
   ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
   ['POST', '/api/pallets/:id/items', pallets.addItem, 'operator'],
@@ -170,6 +178,10 @@ const routes = [
   ['POST', '/api/portal/orders', portal.orderCreate, 'client'],
   ['GET', '/api/portal/orders/:id', portal.orderGet, 'client'],
   ['POST', '/api/portal/orders/:id/cancel', portal.orderCancel, 'client'],
+  ['GET', '/api/portal/supply', portal.supplyList, 'client'],
+  ['POST', '/api/portal/supply', portal.supplyCreate, 'client'],
+  ['GET', '/api/portal/supply/:id', portal.supplyGet, 'client'],
+  ['POST', '/api/portal/supply/:id/cancel', portal.supplyCancel, 'client'],
 ];
 
 function match(routePath, actualPath) {

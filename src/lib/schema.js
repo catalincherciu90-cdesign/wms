@@ -16,6 +16,11 @@ export async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS print_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL DEFAULT 'pallet', ref_id INTEGER, code TEXT, title TEXT, status TEXT NOT NULL DEFAULT 'pending', created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')), printed_at TEXT)",
     // cutii cu cod de bare propriu (generat de noi) pentru cutiile fără cod
     "CREATE TABLE IF NOT EXISTS boxes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, pallet_id INTEGER, product_id INTEGER, quantity INTEGER NOT NULL DEFAULT 0, lot TEXT, created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    // produse NOI anunțate de client la aprovizionare — nu sunt încă produse reale;
+    // se transformă în produse (cu EAN) la recepție, în depozit.
+    "CREATE TABLE IF NOT EXISTS order_new_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, name TEXT NOT NULL, barcode TEXT, quantity INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    // gestiuni / depozite: fiecare grupează locații; stocul gestiunii = suma inventarului din locațiile ei
+    "CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, name TEXT NOT NULL, notes TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
     "CREATE TABLE IF NOT EXISTS backup_log (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT (datetime('now')), kind TEXT, status TEXT, bytes INTEGER DEFAULT 0, statements INTEGER DEFAULT 0, note TEXT)",
     "CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, unit TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
@@ -39,6 +44,16 @@ export async function ensureSchema(env) {
   try { await env.DB.prepare('ALTER TABLE pallet_items ADD COLUMN per_box INTEGER').run(); } catch (e) {} // buc/cutie
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN client_id INTEGER').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE locations ADD COLUMN capacity INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
+  try { await env.DB.prepare('ALTER TABLE locations ADD COLUMN warehouse_id INTEGER').run(); } catch (e) {} // gestiunea/depozitul de care aparține locația
+  // gestiune implicită „Depozit principal" — o singură dată; asignăm locațiile fără gestiune
+  try {
+    const w = await env.DB.prepare('SELECT COUNT(*) AS n FROM warehouses').first();
+    if (w && Number(w.n) === 0) {
+      await env.DB.prepare("INSERT INTO warehouses (code, name, active) VALUES ('G1', 'Depozit principal', 1)").run();
+      const def = await env.DB.prepare('SELECT id FROM warehouses ORDER BY id LIMIT 1').first();
+      if (def) await env.DB.prepare('UPDATE locations SET warehouse_id = ? WHERE warehouse_id IS NULL').bind(def.id).run();
+    }
+  } catch (e) {}
 
   // comenzi din portal client: proprietar + destinatar final + sursă
   const orderCols = [
@@ -56,6 +71,11 @@ export async function ensureSchema(env) {
     'locked_at TEXT',
     // stoc tampon: locația unde marfa e pregătită (rezervată) până pleacă din depozit
     'prepared_location_id INTEGER',
+    // aprovizionare (comenzi de intrare din portal): data estimată de sosire + originea
+    'expected_date TEXT',
+    'origin TEXT',
+    'sender_contact TEXT', // contact expeditor (nume/telefon)
+    'awb TEXT',            // nr. aviz / AWB
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}

@@ -5,7 +5,7 @@ export async function list(request, env) {
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   const clientId = url.searchParams.get('client_id');
-  let sql = 'SELECT p.*, c.name AS client_name FROM products p LEFT JOIN clients c ON c.id = p.client_id';
+  let sql = 'SELECT p.*, c.name AS client_name, (SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE product_id = p.id) AS stock FROM products p LEFT JOIN clients c ON c.id = p.client_id';
   const conds = [];
   const binds = [];
   if (q) {
