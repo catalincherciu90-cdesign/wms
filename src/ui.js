@@ -1144,13 +1144,25 @@ VIEWS.dashboard = function(){
         : '<div class="muted">Totul peste prag ✔</div>')+'</div>';
     var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
 
+    // Statistici suplimentare
+    var statusMap={draft:["ciornă","#8a94a6"],confirmed:["confirmată","#d99a2b"],prepared:["pregătită","#d99a2b"],completed:["finalizată","#12a150"],cancelled:["anulată","#d64545"]};
+    var statusItems=(d.orders_by_status||[]).map(function(r){ var m=statusMap[r.status]||[r.status,"var(--brand)"]; return {label:m[0],value:r.n,color:m[1]}; });
+    var statusPanel='<div class="card" style="padding:18px"><h2>Comenzi pe status</h2>'+miniBars(statusItems)+'</div>';
+    var m30=d.moves_30||{inbound:0,outbound:0};
+    var topHead='<div class="row" style="gap:16px;font-size:12.5px;margin-bottom:8px"><span><span class="pill good">▲</span> Intrări 30z: <b>'+esc(m30.inbound||0)+'</b></span><span><span class="pill bad">▼</span> Ieșiri 30z: <b>'+esc(m30.outbound||0)+'</b></span></div>';
+    var topItems=(d.top_products||[]).map(function(r){ return {label:(r.sku?r.sku+" · ":"")+r.name,value:r.moved}; });
+    var topPanel='<div class="card" style="padding:18px"><h2>Top produse — rulaj 30 zile</h2>'+topHead+miniBars(topItems)+'</div>';
+    var mid='<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+statusPanel+topPanel+'</div>';
+    var clientItems=(d.stock_by_client||[]).map(function(r){ return {label:r.name,value:r.units}; });
+    var clientStock = (!dashClient && clientItems.length) ? '<div class="card" style="padding:18px;margin-top:16px"><h2>Stoc pe client</h2>'+miniBars(clientItems)+'</div>' : '';
+
     var clientPicker = can("operator")
       ? '<div class="card" style="padding:12px;margin-bottom:16px'+(dashClient?';border-left:4px solid var(--brand)':'')+'"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:600">👥 Client:</span>'
         + '<select id="dash_client" onchange="dashSetClient(this.value)" style="max-width:320px;flex:1;min-width:180px"><option value="">— toți clienții —</option></select>'
         + (dashClient?'<button class="ghost sm" onclick="dashSetClient(\\'\\')">✕ Toți</button> <button class="sm" onclick="clientDetail(Number(\\''+esc(dashClient)+'\\'))">Deschide dosarul</button>':'')
         + '</div><div class="fhint">'+(dashClient?'Dashboard filtrat pe clientul selectat.':'Alege un client ca să filtrezi KPI-urile și graficele pe el.')+'</div></div>'
       : '';
-    el("dash").innerHTML = clientPicker + kpis + quick + prepared + top + bottom;
+    el("dash").innerHTML = clientPicker + kpis + quick + prepared + top + mid + clientStock + bottom;
     drawChart(d.activity||[]);
     if(can("operator")){ dashLoadPrepared(); dashLoadClients(); }
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
@@ -1236,6 +1248,17 @@ function catBars(rows){
     var pct=Math.round((r.units/max)*100);
     return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>'+esc(r.category)+'</span><span class="muted">'+esc(r.units)+'</span></div>'
       +'<div style="height:8px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pct+'%;background:var(--brand);border-radius:6px"></div></div></div>';
+  }).join("");
+}
+// Bare orizontale generice: items = [{label, value, color?}]
+function miniBars(items){
+  if(!items || !items.length) return '<div class="muted">—</div>';
+  var max=1; items.forEach(function(r){ max=Math.max(max, Number(r.value)||0); });
+  return items.map(function(r){
+    var pct=Math.round(((Number(r.value)||0)/max)*100);
+    var col=r.color||"var(--brand)";
+    return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.label)+'</span><span class="muted">'+esc(r.value)+'</span></div>'
+      +'<div style="height:8px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:6px"></div></div></div>';
   }).join("");
 }
 function orderStatusPill(s){
