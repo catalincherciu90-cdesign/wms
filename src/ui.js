@@ -1390,7 +1390,10 @@ window.loadProducts = function(){
         ? '<button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
           + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦ QR</button>'
         : (can("operator") ? '<button class="ghost sm" onclick="genProductBarcode('+p.id+')">⌗ Generează cod</button>' : '<span class="muted">fără cod</span>');
+      var stk=Number(p.stock||0), prag=Number(p.reorder_point||0);
+      var stkCell=(prag>0&&stk<=prag)?('<span class="pill bad">'+esc(stk)+'</span>'):('<b>'+esc(stk)+'</b>');
       return '<tr>'+chk+'<td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+owner+'</td><td>'+esc(p.category||"—")+'</td>'
+        + '<td class="right">'+stkCell+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right">'+codeBtns
@@ -1400,8 +1403,8 @@ window.loadProducts = function(){
         + '</td></tr>';
     }).join("");
     var selTh = can("operator") ? '<th style="width:34px"><input type="checkbox" onclick="pselAll(this)" style="width:auto"></th>' : '';
-    var colspan = can("operator") ? 9 : 8;
-    el("ptbl").innerHTML = '<table><thead><tr>'+selTh+'<th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan='+colspan+' class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
+    var colspan = can("operator") ? 10 : 9;
+    el("ptbl").innerHTML = '<table><thead><tr>'+selTh+'<th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Stoc</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan='+colspan+' class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
     pselUpd();
   });
 };
