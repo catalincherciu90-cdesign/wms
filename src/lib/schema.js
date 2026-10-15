@@ -27,6 +27,8 @@ export async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS order_services (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, service_id INTEGER, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, quantity REAL NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS offers (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, client_id INTEGER, recipient_name TEXT, recipient_contact TEXT, status TEXT NOT NULL DEFAULT 'draft', vat_rate REAL NOT NULL DEFAULT 0, note TEXT, valid_until TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS offer_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, offer_id INTEGER NOT NULL, name TEXT NOT NULL, price REAL NOT NULL DEFAULT 0, quantity REAL NOT NULL DEFAULT 1)",
+    // CMR (scrisoare de transport): câmpurile formularului în JSON (`data`) + câteva coloane indexate
+    "CREATE TABLE IF NOT EXISTS cmrs (id INTEGER PRIMARY KEY AUTOINCREMENT, series TEXT NOT NULL DEFAULT 'WSD', number INTEGER NOT NULL, order_id INTEGER, consignee_name TEXT, data TEXT, created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   ];
   for (const sql of tables) {
     try { await env.DB.prepare(sql).run(); } catch (e) { /* există deja */ }

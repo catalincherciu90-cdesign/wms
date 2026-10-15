@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v119';
+const APP_VERSION = 'v120';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -8,6 +8,7 @@ import * as auth from './routes/auth.js';
 import * as products from './routes/products.js';
 import * as locations from './routes/locations.js';
 import * as warehouses from './routes/warehouses.js';
+import * as cmr from './routes/cmr.js';
 import * as inventory from './routes/inventory.js';
 import * as dashboard from './routes/dashboard.js';
 import * as users from './routes/users.js';
@@ -101,6 +102,13 @@ const routes = [
   ['POST', '/api/orders/:id/lock', orders.lock, 'operator'],
   ['POST', '/api/orders/:id/unlock', orders.unlock, 'operator'],
   ['DELETE', '/api/orders/:id', orders.remove, 'operator'],
+
+  ['GET', '/api/cmr/defaults', cmr.defaults, 'operator'],
+  ['GET', '/api/cmr', cmr.list, 'operator'],
+  ['POST', '/api/cmr', cmr.create, 'operator'],
+  ['GET', '/api/cmr/:id', cmr.get, 'operator'],
+  ['PUT', '/api/cmr/:id', cmr.update, 'operator'],
+  ['DELETE', '/api/cmr/:id', cmr.remove, 'admin'],
 
   ['GET', '/api/reports/stock-by-category', reports.stockByCategory, 'viewer'],
   ['GET', '/api/reports/low-stock', reports.lowStock, 'viewer'],
