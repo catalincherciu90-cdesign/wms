@@ -185,7 +185,7 @@ export async function complete(request, env, ctx, user, params) {
       }
     }
     const stmts = lines.map((l) => env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
-    stmts.push(env.DB.prepare("UPDATE orders SET status = 'prepared', prepared_location_id = ?, locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(locationId, id));
+    stmts.push(env.DB.prepare("UPDATE orders SET status = 'prepared', prepared_location_id = ?, processed_by = ?, processed_by_name = ?, processed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(locationId, user.sub, user.name || ('#' + user.sub), id));
     await env.DB.batch(stmts);
     return json({ ok: true, status: 'prepared' });
   }
@@ -205,7 +205,7 @@ export async function complete(request, env, ctx, user, params) {
       .bind(l.product_id, locationId, order.type, delta, order.code, 'comandă ' + order.code, user.sub));
     stmts.push(env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
   }
-  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(id));
+  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), processed_by = ?, processed_by_name = ?, processed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(user.sub, user.name || ('#' + user.sub), id));
   await env.DB.batch(stmts);
 
   return json({ ok: true, status: 'completed' });

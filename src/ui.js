@@ -3372,14 +3372,17 @@ window.loadOrders = function(){
         : esc(o.partner_name||"—");
       var canProc = can("operator") && o.status!=="completed" && o.status!=="cancelled";
       var procBtn = canProc ? ('<button class="sm" onclick="orderProcess('+o.id+')">'+(o.status==="prepared"?"🚚 Procesează":"▶ Procesează")+'</button> ') : '';
-      var lockBadge = o.lock_active ? (' <span class="pill warn" style="font-size:10px">🔒 '+esc(o.locked_name||"în procesare")+'</span>') : '';
       var unlockBtn = (o.lock_active && can("operator")) ? ('<button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează</button> ') : '';
+      var proc = o.lock_active
+        ? ('<span class="pill warn" style="font-size:10.5px">🔒 '+esc(o.locked_name||"în lucru")+'</span>')
+        : (o.processed_by_name ? ('<span class="muted">✓ '+esc(o.processed_by_name)+'</span>') : '<span class="muted">—</span>');
       return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
-        +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+lockBadge+'</td>'
+        +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
+        +'<td>'+proc+'</td>'
         +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
         +'<td class="right">'+unlockBtn+procBtn+'<button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
     }).join("");
-    el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
+    el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Procesează</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=8 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
   });
 };
 window.orderDetail = function(id){
@@ -3451,6 +3454,7 @@ window.orderDetail = function(id){
     modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
       '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
       + (o.lock_active?('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>.'+(can("operator")?' <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button>':'')+'</div>'):'')
+      + (!o.lock_active && o.processed_by_name?('<div class="muted" style="font-size:12.5px;margin-bottom:10px">✓ Procesată de <b>'+esc(o.processed_by_name)+'</b>'+(o.processed_at?(' · '+esc(String(o.processed_at).slice(0,16))):'')+'</div>'):'')
       + recip + lines + newItems
       + '<div id="od_services" style="margin-top:14px"></div>'
       + actions, null);

@@ -76,6 +76,9 @@ export async function ensureSchema(env) {
     'origin TEXT',
     'sender_contact TEXT', // contact expeditor (nume/telefon)
     'awb TEXT',            // nr. aviz / AWB
+    'processed_by INTEGER',     // cine a procesat (pregătit/recepționat) comanda
+    'processed_by_name TEXT',   // numele procesatorului (pentru afișare)
+    'processed_at TEXT',        // când a fost procesată
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
