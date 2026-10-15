@@ -236,6 +236,7 @@ function renderHome(){
     +tile("lookup","🔎","Scanează<br>& caută")
     +tile("receive","📥","Recepție")
     +tile("pallet","📦","Recepție<br>palet/colet")
+    +tile("boxrecv","🧃","Recepție<br>pe cutii")
     +tile("ship","📤","Expediere")
     +tile("palletship","🚚","Expediere<br>palet/colet")
     +tile("spargere","✂️","Spargere<br>palet")
@@ -249,7 +250,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="boxrecv") screenBoxReceive(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -392,6 +393,60 @@ function mvSubmit(){
     screenMove(mv.kind); // reset pentru următorul scan
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Recepție pe cutii (cutie mare → cutii mici → produse) ---- */
+function screenBoxReceive(){
+  window._bxr={product:null};
+  scanTarget=function(code){ bxrScan(code); };
+  shell("Recepție pe cutii",
+    '<div class="scanbox"><input id="bxr_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'bxr_scan\').value=c;bxrScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="bxr_prod"></div>'
+    +'<div id="bxr_form" style="display:none">'
+    +'<label>Locație</label><select id="bxr_loc">'+locOptions()+'</select>'
+    +'<label>Cutii mari</label><input id="bxr_m" type="number" inputmode="numeric" min="0" value="0">'
+    +'<label>Cutii mici libere</label><input id="bxr_i" type="number" inputmode="numeric" min="0" value="0">'
+    +'<label>Bucăți libere</label><input id="bxr_p" type="number" inputmode="numeric" min="0" value="0">'
+    +'<label>Lot (opțional)</label><input id="bxr_lot" autocomplete="off">'
+    +'<div id="bxr_tot" class="card" style="text-align:center;font-size:15px">Total: 0 buc</div>'
+    +'<button class="big" onclick="bxrSubmit()">Confirmă recepția</button>'
+    +'</div>', {back:"renderHome()"});
+  wireScan("bxr_scan", bxrScan);
+}
+function bxrScan(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ feedback(false); el("bxr_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("bxr_form").style.display="none"; return; }
+    feedback(true); window._bxr.product=p;
+    var pi=Number(p.pcs_per_inner)||0, im=Number(p.inner_per_master)||0;
+    var packTxt = pi>0 ? (pi+" buc/cutie mică"+(im>0?(" · "+im+" mici/mare = "+(pi*im)+" buc/mare"):" (fără cutie mare)")) : "⚠ Fără ambalare definită — setează la produs în admin.";
+    el("bxr_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div><div class="muted" style="font-size:12px;margin-top:4px">📦 '+packTxt+'</div></div>';
+    el("bxr_form").style.display="block";
+    ["bxr_m","bxr_i","bxr_p"].forEach(function(idf){ var e=el(idf); if(e) e.oninput=bxrCalc; });
+    bxrCalc();
+  }).catch(function(e){ toast(e.message,true); });
+}
+window.bxrCalc=function(){
+  var p=window._bxr&&window._bxr.product; if(!p) return;
+  var pi=Number(p.pcs_per_inner)||0, im=Number(p.inner_per_master)||0;
+  var m=Number((el("bxr_m")||{}).value)||0, i=Number((el("bxr_i")||{}).value)||0, pc=Number((el("bxr_p")||{}).value)||0;
+  var tot=m*pi*im+i*pi+pc;
+  if(el("bxr_tot")) el("bxr_tot").innerHTML='Total: <b>'+tot+'</b> buc'+(m>0?(' · '+m+' cutii mari'):'')+(i>0?(' · '+i+' mici'):'');
+};
+window.bxrSubmit=function(){
+  var p=window._bxr&&window._bxr.product; if(!p){ toast("Scanează un produs",true); return; }
+  var loc=Number(el("bxr_loc").value);
+  if(!loc){ toast("Alege locația",true); return; }
+  var body={ product_id:p.id, location_id:loc, masters:Number(el("bxr_m").value)||0, inners:Number(el("bxr_i").value)||0, pieces:Number(el("bxr_p").value)||0, lot:(el("bxr_lot")&&el("bxr_lot").value)||null };
+  if(!(body.masters||body.inners||body.pieces)){ toast("Pune cel puțin o cutie sau bucăți",true); return; }
+  api("POST","/api/boxes/receive",body).then(function(r){
+    feedback(true);
+    var nb=(r.boxes&&r.boxes.length)||0;
+    toast("Recepționat: "+(r.total_pieces||0)+" buc · "+nb+" cutii");
+    if(r.boxes&&r.boxes.length){ r.boxes.forEach(function(b){ api("POST","/api/print/jobs",{type:"box",ref_id:b.id,code:b.code,title:b.code}).catch(function(){}); }); }
+    screenBoxReceive();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Recepție palet / colet (scanezi produsele + poză aviz) ---- */
 function screenPallet(){
