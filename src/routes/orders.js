@@ -135,16 +135,16 @@ export async function lock(request, env, ctx, user, params) {
   return json({ ok: true, locked_by: user.sub, locked_name: user.name || ('#' + user.sub) });
 }
 
-// Eliberează procesarea (deținătorul sau un admin).
+// Eliberează procesarea comenzii (scoate utilizatorul blocat).
+// Orice operator+ o poate elibera — util când cineva a rămas blocat pe comandă
+// (dispozitiv închis/căzut) iar altcineva trebuie să preia procesarea.
 export async function unlock(request, env, ctx, user, params) {
   const id = Number(params.id);
-  const order = await env.DB.prepare('SELECT locked_by FROM orders WHERE id = ?').bind(id).first();
+  const order = await env.DB.prepare('SELECT locked_by, locked_name FROM orders WHERE id = ?').bind(id).first();
   if (!order) return error('Comandă inexistentă', 404);
-  if (order.locked_by && order.locked_by !== user.sub && user.role !== 'admin') {
-    return error('Comanda e blocată de alt utilizator', 403);
-  }
+  const freed = order.locked_name || null;
   await releaseLock(env, id);
-  return json({ ok: true });
+  return json({ ok: true, freed });
 }
 
 // Finalizează comanda: aplică mișcările de stoc într-o locație aleasă.
@@ -185,7 +185,7 @@ export async function complete(request, env, ctx, user, params) {
       }
     }
     const stmts = lines.map((l) => env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
-    stmts.push(env.DB.prepare("UPDATE orders SET status = 'prepared', prepared_location_id = ?, locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(locationId, id));
+    stmts.push(env.DB.prepare("UPDATE orders SET status = 'prepared', prepared_location_id = ?, processed_by = ?, processed_by_name = ?, processed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(locationId, user.sub, user.name || ('#' + user.sub), id));
     await env.DB.batch(stmts);
     return json({ ok: true, status: 'prepared' });
   }
@@ -205,7 +205,7 @@ export async function complete(request, env, ctx, user, params) {
       .bind(l.product_id, locationId, order.type, delta, order.code, 'comandă ' + order.code, user.sub));
     stmts.push(env.DB.prepare('UPDATE order_lines SET qty_done = quantity WHERE id = ?').bind(l.id));
   }
-  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(id));
+  stmts.push(env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), processed_by = ?, processed_by_name = ?, processed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?").bind(user.sub, user.name || ('#' + user.sub), id));
   await env.DB.batch(stmts);
 
   return json({ ok: true, status: 'completed' });

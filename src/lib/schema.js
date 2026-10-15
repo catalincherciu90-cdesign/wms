@@ -76,6 +76,9 @@ export async function ensureSchema(env) {
     'origin TEXT',
     'sender_contact TEXT', // contact expeditor (nume/telefon)
     'awb TEXT',            // nr. aviz / AWB
+    'processed_by INTEGER',     // cine a procesat (pregătit/recepționat) comanda
+    'processed_by_name TEXT',   // numele procesatorului (pentru afișare)
+    'processed_at TEXT',        // când a fost procesată
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
@@ -86,6 +89,62 @@ export async function ensureSchema(env) {
   for (const col of clientCols) {
     try { await env.DB.prepare('ALTER TABLE clients ADD COLUMN ' + col).run(); } catch (e) {}
   }
+
+  // ── Migrare critică: tabela `orders` a fost creată cu CHECK(status IN
+  // ('draft','confirmed','completed','cancelled')) — FĂRĂ 'prepared'. Fluxul
+  // „stoc tampon" (Pregătită) are nevoie de status='prepared', iar SQLite nu
+  // permite modificarea unui CHECK prin ALTER → reconstruim tabela fără CHECK rigid.
+  // order_lines are ON DELETE CASCADE spre orders, deci îl salvăm și-l restaurăm
+  // ca să nu se piardă liniile dacă ștergerea tabelei vechi declanșează cascada.
+  try {
+    // Recuperare: dacă o migrare anterioară a căzut între DROP și RENAME,
+    // `orders` lipsește dar `orders_rebuild` există → redenumim înapoi.
+    try {
+      const o = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'").first();
+      const reb = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='orders_rebuild'").first();
+      if (!o && reb) await env.DB.prepare('ALTER TABLE orders_rebuild RENAME TO orders').run();
+    } catch (e) {}
+
+    const row = await env.DB.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'").first();
+    const ddl = (row && row.sql) || '';
+    // extrage DOAR lista din CHECK-ul pe status (ca să nu dăm fals-pozitiv pe
+    // coloana `prepared_location_id`, care conține cuvântul „prepared").
+    const chk = ddl.match(/CHECK\s*\(\s*status\s+IN\s*\(([^)]*)\)/i);
+    if (chk && !/'prepared'/i.test(chk[1])) {
+      const info = await env.DB.prepare('PRAGMA table_info(orders)').all();
+      const cols = info.results || [];
+      const names = cols.map((c) => '"' + c.name + '"').join(', ');
+      const defs = cols.map((c) => {
+        if (c.pk && /INT/i.test(c.type || '')) return '"' + c.name + '" INTEGER PRIMARY KEY';
+        let d = '"' + c.name + '" ' + (c.type || 'TEXT');
+        if (c.notnull) d += ' NOT NULL';
+        if (c.dflt_value != null) d += ' DEFAULT (' + c.dflt_value + ')';
+        return d;
+      }).join(', ');
+
+      await env.DB.prepare('PRAGMA foreign_keys=OFF').run();
+      await env.DB.prepare('DROP TABLE IF EXISTS order_lines_bak').run();
+      await env.DB.prepare('DROP TABLE IF EXISTS orders_rebuild').run();
+      // backup linii (în caz că ștergerea tabelei vechi declanșează cascada)
+      await env.DB.prepare('CREATE TABLE order_lines_bak AS SELECT * FROM order_lines').run();
+      // tabelă nouă, aceleași coloane, fără CHECK pe status
+      await env.DB.prepare('CREATE TABLE orders_rebuild (' + defs + ')').run();
+      await env.DB.prepare('INSERT INTO orders_rebuild (' + names + ') SELECT ' + names + ' FROM orders').run();
+      await env.DB.prepare('DROP TABLE orders').run();
+      await env.DB.prepare('ALTER TABLE orders_rebuild RENAME TO orders').run();
+      // restaurează liniile eventual șterse de cascadă
+      await env.DB.prepare('INSERT INTO order_lines (' +
+        '"id","order_id","product_id","quantity","qty_done") ' +
+        'SELECT "id","order_id","product_id","quantity","qty_done" FROM order_lines_bak ' +
+        'WHERE "id" NOT IN (SELECT "id" FROM order_lines)').run();
+      await env.DB.prepare('DROP TABLE IF EXISTS order_lines_bak').run();
+      // indexuri
+      await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_code ON orders(code)').run();
+      await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_type ON orders(type)').run();
+      await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)').run();
+      await env.DB.prepare('PRAGMA foreign_keys=ON').run();
+    }
+  } catch (e) { /* dacă migrarea eșuează, nu blocăm pornirea */ }
 
   ready = true;
 }

@@ -184,6 +184,13 @@ export function renderUI() {
   .dtile{background:var(--panel-2,var(--panel));border:1px solid var(--border);border-radius:12px;padding:16px 10px;text-align:center;font-weight:600;font-size:13.5px;color:var(--text);cursor:pointer;transition:transform .06s,border-color .12s}
   .dtile:hover{border-color:var(--brand);transform:translateY(-1px)}
   .dtile .di{font-size:26px;display:block;margin-bottom:6px}
+  /* Bare de progres profesionale */
+  .bar{margin:11px 0}
+  .bar-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px;margin-bottom:5px}
+  .bar-h .bl{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .bar-h .bv{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;flex:none;white-space:nowrap}
+  .bar-t{position:relative;height:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(10,15,25,.07)}
+  .bar-f{height:100%;min-width:6px;border-radius:999px;background-color:var(--brand);background-image:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%)}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
   .toolbar .spacer{flex:1}
   .muted{color:var(--muted)} .right{text-align:right} .center{text-align:center}
@@ -250,10 +257,14 @@ function toast(msg, kind){
 
 function api(method, path, body){
   var opts = { method: method, headers: {} };
+  var hadToken = !!token;
   if (token) opts.headers["Authorization"] = "Bearer " + token;
   if (body){ opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  var isAuthEndpoint = path.indexOf("/api/auth/login")===0 || path.indexOf("/api/auth/qr")===0;
   return fetch(API + path, opts).then(function(r){
-    if (r.status === 401){ logout(); throw new Error("Sesiune expirată"); }
+    // „Sesiune expirată" doar dacă aveam un token (sesiune reală) și NU e endpoint de logare.
+    // Un 401 de la logare = credențiale greșite → lăsăm mesajul serverului („Credențiale invalide").
+    if (r.status === 401 && hadToken && !isAuthEndpoint){ logout(); throw new Error("Sesiune expirată"); }
     var ct = r.headers.get("Content-Type") || "";
     if (ct.indexOf("application/json") < 0) return r;
     return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||("HTTP "+r.status)); return d; });
@@ -1110,6 +1121,7 @@ VIEWS.dashboard = function(){
       + dashTile("products","📦","Produse","viewer")
       + dashTile("stock","🧮","Stoc","viewer")
       + dashTile("locations","🗺️","Locații","viewer")
+      + dashTile("warehouses","🏭","Gestiuni","viewer")
       + dashTile("labels","🏷️","Etichete","operator")
       + dashTile("clients","👥","Clienți","operator")
       + dashTile("movements","🔁","Mișcări","viewer")
@@ -1144,13 +1156,25 @@ VIEWS.dashboard = function(){
         : '<div class="muted">Totul peste prag ✔</div>')+'</div>';
     var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
 
+    // Statistici suplimentare
+    var statusMap={draft:["ciornă","#8a94a6"],confirmed:["confirmată","#d99a2b"],prepared:["pregătită","#d99a2b"],completed:["finalizată","#12a150"],cancelled:["anulată","#d64545"]};
+    var statusItems=(d.orders_by_status||[]).map(function(r){ var m=statusMap[r.status]||[r.status,"var(--brand)"]; return {label:m[0],value:r.n,color:m[1]}; });
+    var statusPanel='<div class="card" style="padding:18px"><h2>Comenzi pe status</h2>'+miniBars(statusItems)+'</div>';
+    var m30=d.moves_30||{inbound:0,outbound:0};
+    var topHead='<div class="row" style="gap:16px;font-size:12.5px;margin-bottom:8px"><span><span class="pill good">▲</span> Intrări 30z: <b>'+esc(m30.inbound||0)+'</b></span><span><span class="pill bad">▼</span> Ieșiri 30z: <b>'+esc(m30.outbound||0)+'</b></span></div>';
+    var topItems=(d.top_products||[]).map(function(r){ return {label:(r.sku?r.sku+" · ":"")+r.name,value:r.moved}; });
+    var topPanel='<div class="card" style="padding:18px"><h2>Top produse — rulaj 30 zile</h2>'+topHead+miniBars(topItems)+'</div>';
+    var mid='<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+statusPanel+topPanel+'</div>';
+    var clientItems=(d.stock_by_client||[]).map(function(r){ return {label:r.name,value:r.units}; });
+    var clientStock = (!dashClient && clientItems.length) ? '<div class="card" style="padding:18px;margin-top:16px"><h2>Stoc pe client</h2>'+miniBars(clientItems)+'</div>' : '';
+
     var clientPicker = can("operator")
       ? '<div class="card" style="padding:12px;margin-bottom:16px'+(dashClient?';border-left:4px solid var(--brand)':'')+'"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:600">👥 Client:</span>'
         + '<select id="dash_client" onchange="dashSetClient(this.value)" style="max-width:320px;flex:1;min-width:180px"><option value="">— toți clienții —</option></select>'
         + (dashClient?'<button class="ghost sm" onclick="dashSetClient(\\'\\')">✕ Toți</button> <button class="sm" onclick="clientDetail(Number(\\''+esc(dashClient)+'\\'))">Deschide dosarul</button>':'')
         + '</div><div class="fhint">'+(dashClient?'Dashboard filtrat pe clientul selectat.':'Alege un client ca să filtrezi KPI-urile și graficele pe el.')+'</div></div>'
       : '';
-    el("dash").innerHTML = clientPicker + kpis + quick + prepared + top + bottom;
+    el("dash").innerHTML = clientPicker + kpis + quick + prepared + top + mid + clientStock + bottom;
     drawChart(d.activity||[]);
     if(can("operator")){ dashLoadPrepared(); dashLoadClients(); }
   }).catch(function(e){ el("dash").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
@@ -1234,8 +1258,19 @@ function catBars(rows){
   var max=1; rows.forEach(function(r){ max=Math.max(max,r.units); });
   return rows.map(function(r){
     var pct=Math.round((r.units/max)*100);
-    return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>'+esc(r.category)+'</span><span class="muted">'+esc(r.units)+'</span></div>'
-      +'<div style="height:8px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pct+'%;background:var(--brand);border-radius:6px"></div></div></div>';
+    return '<div class="bar"><div class="bar-h"><span class="bl">'+esc(r.category)+'</span><span class="bv">'+esc(r.units)+'</span></div>'
+      +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%"></div></div></div>';
+  }).join("");
+}
+// Bare orizontale generice: items = [{label, value, color?}]
+function miniBars(items){
+  if(!items || !items.length) return '<div class="muted">—</div>';
+  var max=1; items.forEach(function(r){ max=Math.max(max, Number(r.value)||0); });
+  return items.map(function(r){
+    var pct=Math.round(((Number(r.value)||0)/max)*100);
+    var col=r.color||"var(--brand)";
+    return '<div class="bar"><div class="bar-h"><span class="bl">'+esc(r.label)+'</span><span class="bv">'+esc(r.value)+'</span></div>'
+      +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%;background-color:'+col+'"></div></div></div>';
   }).join("");
 }
 function orderStatusPill(s){
@@ -1651,8 +1686,8 @@ function fillBar(used, cap){
   if(cap<=0) return '<span class="muted" style="font-size:12px">'+used+' paleți · fără capacitate</span>';
   var pct=Math.min(100, Math.round(used/cap*100));
   var col = pct>=90?'var(--bad)':(pct>=70?'var(--warn)':'var(--good)');
-  return '<div style="min-width:150px"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:2px"><span>'+used+' / '+cap+' spații</span><span class="muted">'+pct+'%'+(used>cap?' ⚠':'')+'</span></div>'
-    +'<div style="height:9px;background:var(--panel-2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:6px"></div></div></div>';
+  return '<div class="bar" style="min-width:150px;margin:0"><div class="bar-h"><span class="bl">'+used+' / '+cap+' spații</span><span class="bv">'+pct+'%'+(used>cap?' ⚠':'')+'</span></div>'
+    +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%;background-color:'+col+'"></div></div></div>';
 }
 
 window.resetStockConfirm = function(){
@@ -3335,12 +3370,19 @@ window.loadOrders = function(){
       var who = o.source==="portal"
         ? esc(o.client_name||"client")+(o.recipient_name?(' <span class="muted">→ '+esc(o.recipient_name)+'</span>'):'')+' <span class="pill warn" style="font-size:10px">portal</span>'
         : esc(o.partner_name||"—");
+      var canProc = can("operator") && o.status!=="completed" && o.status!=="cancelled";
+      var procBtn = canProc ? ('<button class="sm" onclick="orderProcess('+o.id+')">'+(o.status==="prepared"?"🚚 Procesează":"▶ Procesează")+'</button> ') : '';
+      var unlockBtn = (o.lock_active && can("operator")) ? ('<button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează</button> ') : '';
+      var proc = o.lock_active
+        ? ('<span class="pill warn" style="font-size:10.5px">🔒 '+esc(o.locked_name||"în lucru")+'</span>')
+        : (o.processed_by_name ? ('<span class="muted">✓ '+esc(o.processed_by_name)+'</span>') : '<span class="muted">—</span>');
       return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
         +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
+        +'<td>'+proc+'</td>'
         +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
-        +'<td class="right"><button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
+        +'<td class="right">'+unlockBtn+procBtn+'<button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
     }).join("");
-    el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
+    el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Procesează</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=8 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
   });
 };
 window.orderDetail = function(id){
@@ -3361,6 +3403,9 @@ window.orderDetail = function(id){
         +'</tbody></table></div>';
     }
     var actions='';
+    if(can("operator") && o.status!=="completed" && o.status!=="cancelled"){
+      actions += '<div class="row" style="margin-top:12px"><button onclick="closeModal();orderProcess('+o.id+')" style="flex:1">'+(o.status==="prepared"?"🚚 Procesează (ecran)":"▶ Procesează comanda (picking)")+'</button></div>';
+    }
     if(can("operator") && o.status==="prepared"){
       // Comandă de ieșire pregătită (stoc rezervat) — stocul scade doar la plecare.
       actions='<div class="card" style="margin-top:14px;padding:12px;background:var(--panel-2)"><div class="muted" style="font-size:12.5px;margin-bottom:8px">📦 Marfa e <b>pregătită</b> și rezervată. Stocul <b>nu a scăzut</b> încă — scade doar când marfa pleacă din depozit.</div>'
@@ -3408,6 +3453,8 @@ window.orderDetail = function(id){
     }
     modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
       '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
+      + (o.lock_active?('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>.'+(can("operator")?' <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button>':'')+'</div>'):'')
+      + (!o.lock_active && o.processed_by_name?('<div class="muted" style="font-size:12.5px;margin-bottom:10px">✓ Procesată de <b>'+esc(o.processed_by_name)+'</b>'+(o.processed_at?(' · '+esc(String(o.processed_at).slice(0,16))):'')+'</div>'):'')
       + recip + lines + newItems
       + '<div id="od_services" style="margin-top:14px"></div>'
       + actions, null);
@@ -3420,6 +3467,93 @@ window.orderDetail = function(id){
     }
     odLoadServices(o.id, o.status);
   });
+};
+/* ---- Procesare comandă în admin: ecran de picking (ca pe Zebra) ---- */
+var _opk=null;
+/* Scoate utilizatorul blocat pe o comandă (eliberează procesarea). */
+window.orderUnlock = function(id){
+  modal("Eliberează comanda",
+    '<p>Scoți utilizatorul care procesează această comandă și o eliberezi pentru altcineva?</p>'
+    +'<p class="muted" style="font-size:13px">Folosește asta când cineva a rămas blocat pe comandă (a închis aplicația / s-a oprit terminalul). Nu se pierde nimic — comanda rămâne în același status.</p>',
+    function(){
+      api("POST","/api/orders/"+id+"/unlock",{}).then(function(r){
+        closeModal(); toast(r&&r.freed?("Eliberată (era la "+r.freed+")"):"Comandă eliberată");
+        if(_opk && _opk.id===id) orderProcess(id); else loadOrders();
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, eliberează"; sv.className="danger"; sv.style.display=""; }
+};
+window.orderProcess = function(id){
+  api("GET","/api/orders/"+id).then(function(d){
+    var o=d.order;
+    if(o.status==="completed"||o.status==="cancelled"){ orderDetail(id); return; }
+    _opk={ id:id, order:o, inbound:(o.type==="inbound"), newItems:(d.new_items||[]).length,
+      lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0, packed:false}; }) };
+    opkRender();
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+function opkRender(){
+  var o=_opk.order, inbound=_opk.inbound;
+  var back='<button class="ghost sm" onclick="go(\\'orders\\')">← Comenzi</button>';
+  var info='<div class="muted" style="margin-bottom:10px">'+(inbound?"Intrare / recepție":"Ieșire / picking")+(o.partner_name?(" · "+esc(o.partner_name)):"")+(o.client_name?(" · "+esc(o.client_name)):"")+'</div>';
+  var lockWarn = o.lock_active ? ('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>. <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button></div>') : '';
+  if(o.status==="prepared"){
+    setMain(topbar("Procesează "+esc(o.code), back) + lockWarn
+      + '<div class="card" style="padding:14px"><div class="card" style="background:rgba(34,197,94,.12);padding:10px;margin-bottom:10px"><b>Comandă pregătită — stoc rezervat</b><div class="muted" style="font-size:12.5px;margin-top:4px">Stocul NU a scăzut încă. Apasă „Marfa a plecat" doar când marfa iese fizic din depozit.</div></div>'
+      + '<button onclick="departOrder('+o.id+')">🚚 Marfa a plecat (scade stocul)</button></div>');
+    return;
+  }
+  var blocked = inbound && _opk.newItems>0;
+  var warn = blocked ? ('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🆕 Comanda are '+_opk.newItems+' produs(e) nou anunțat(e). Definește-le întâi din „Vezi" (le dai cod EAN) ca să intre în stoc, apoi procesează. <button class="ghost sm" onclick="orderDetail('+o.id+')">Deschide „Vezi"</button></div>') : '';
+  var rows=_opk.lines.map(function(l,idx){
+    var ok=l.done>=l.need, rest=l.need-l.done;
+    var bar=l.packed?"var(--good)":(ok?"var(--brand)":"var(--warn)");
+    var qtyCtl=(!ok && l.need>1) ? ('<div class="row" style="gap:6px;margin-top:10px;align-items:center">'
+      +'<button class="ghost sm" onclick="opkDec('+idx+')" style="width:44px">−</button>'
+      +'<input id="opkq_'+idx+'" type="number" min="1" max="'+rest+'" value="'+rest+'" style="width:80px;text-align:center">'
+      +'<button class="sm" onclick="opkAddQty('+idx+')">Adaugă</button>'
+      +'<button class="sm" onclick="opkAll('+idx+')" style="background:var(--brand)">Toate ('+rest+')</button></div>') : '';
+    var one=(!ok && l.need===1) ? ('<div class="row" style="margin-top:8px"><button class="sm" onclick="opkAll('+idx+')">Marchează '+(inbound?"recepționat":"cules")+'</button></div>') : '';
+    var packed=(!inbound && ok) ? ('<label class="row" style="gap:8px;align-items:center;margin-top:10px"><input type="checkbox" '+(l.packed?"checked":"")+' onchange="opkTogglePacked('+idx+')"> Pus în colet</label>') : '';
+    return '<div class="card" style="margin-bottom:8px;border-left:4px solid '+bar+'">'
+      +'<div class="row" style="justify-content:space-between;align-items:center">'
+      +'<div><b>'+esc(l.name)+'</b><div class="muted" style="font-size:12px">'+esc(l.sku||"")+'</div></div>'
+      +'<div style="text-align:right"><b style="font-size:20px;color:'+(ok?"var(--good)":"var(--text)")+'">'+l.done+'</b><span class="muted"> / '+l.need+' '+esc(l.unit||"")+'</span></div>'
+      +'</div>'+qtyCtl+one+packed+'</div>';
+  }).join("");
+  var allDone=_opk.lines.length>0 && _opk.lines.every(function(l){return l.done>=l.need;});
+  var allPacked=inbound || _opk.lines.every(function(l){return l.done>=l.need && l.packed;});
+  var footer='';
+  if(!blocked && allDone && allPacked){
+    footer='<div class="card" style="background:rgba(34,197,94,.12);padding:10px;margin:12px 0"><b>'+(inbound?"Tot recepționat ✓":"Tot cules și pus în colet ✓")+'</b></div>'
+      +'<div class="field"><label>'+(inbound?"Recepționează în locația":"Pregătește din locația")+'</label>'
+      +'<div class="row"><select id="opk_loc" style="flex:1"></select>'
+      +'<button onclick="opkComplete()">'+(inbound?"Recepționează":"Pregătește (rezervă stocul)")+'</button></div>'
+      +(inbound?'':'<div class="fhint">Stocul se rezervă acum. Va scădea la «Marfa a plecat».</div>')+'</div>';
+  } else if(!blocked && allDone && !allPacked){
+    footer='<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-top:12px">Bifează „Pus în colet" la toate produsele ca să poți pregăti.</div>';
+  }
+  var fillBtn=(!blocked && _opk.lines.length) ? ('<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="opkFillAll()">✓ Marchează tot '+(inbound?"recepționat":"cules și pus în colet")+'</button></div>') : '';
+  setMain(topbar("Procesează "+esc(o.code), back) + info + lockWarn + warn + fillBtn + rows
+    + (_opk.lines.length?'':'<div class="muted center" style="padding:14px">Comanda nu are linii de produs.</div>')
+    + '<div id="opk_footer">'+footer+'</div>');
+  if(el("opk_loc")){
+    api("GET","/api/locations").then(function(r){
+      el("opk_loc").innerHTML=r.locations.filter(function(l){return l.active;}).map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join("");
+    });
+  }
+}
+window.opkAddQty=function(idx){ var l=_opk&&_opk.lines[idx]; if(!l) return; var inp=el("opkq_"+idx); var q=inp?Math.floor(Number(inp.value)):0; if(!(q>0)){ toast("Cantitate invalidă","bad"); return; } var room=l.need-l.done; if(q>room) q=room; l.done+=q; opkRender(); };
+window.opkAll=function(idx){ var l=_opk&&_opk.lines[idx]; if(!l) return; l.done=l.need; opkRender(); };
+window.opkDec=function(idx){ var l=_opk&&_opk.lines[idx]; if(!l) return; if(l.done>0){ l.done--; opkRender(); } };
+window.opkTogglePacked=function(idx){ var l=_opk&&_opk.lines[idx]; if(!l) return; l.packed=!l.packed; opkRender(); };
+window.opkFillAll=function(){ if(!_opk) return; _opk.lines.forEach(function(l){ l.done=l.need; l.packed=true; }); opkRender(); };
+window.opkComplete=function(){
+  if(!_opk) return;
+  var loc=el("opk_loc"); if(!loc||!loc.value){ toast("Alege locația","bad"); return; }
+  api("POST","/api/orders/"+_opk.id+"/complete",{location_id:Number(loc.value)})
+    .then(function(r){ toast(r&&r.status==="prepared"?"Pregătită ✓ (stoc rezervat)":"Comandă finalizată ✓"); _opk=null; go("orders"); })
+    .catch(function(e){ toast(e.message,"bad"); });
 };
 window.odLoadServices = function(orderId, status){
   if(!el("od_services")) return;
