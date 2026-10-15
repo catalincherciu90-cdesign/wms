@@ -257,10 +257,14 @@ function toast(msg, kind){
 
 function api(method, path, body){
   var opts = { method: method, headers: {} };
+  var hadToken = !!token;
   if (token) opts.headers["Authorization"] = "Bearer " + token;
   if (body){ opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  var isAuthEndpoint = path.indexOf("/api/auth/login")===0 || path.indexOf("/api/auth/qr")===0;
   return fetch(API + path, opts).then(function(r){
-    if (r.status === 401){ logout(); throw new Error("Sesiune expirată"); }
+    // „Sesiune expirată" doar dacă aveam un token (sesiune reală) și NU e endpoint de logare.
+    // Un 401 de la logare = credențiale greșite → lăsăm mesajul serverului („Credențiale invalide").
+    if (r.status === 401 && hadToken && !isAuthEndpoint){ logout(); throw new Error("Sesiune expirată"); }
     var ct = r.headers.get("Content-Type") || "";
     if (ct.indexOf("application/json") < 0) return r;
     return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||("HTTP "+r.status)); return d; });
