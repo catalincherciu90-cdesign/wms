@@ -17,6 +17,11 @@ async function getSetting(env, key, def) {
   } catch (e) { return def; }
 }
 
+async function setSetting(env, key, value) {
+  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .bind(key, String(value)).run();
+}
+
 async function nextNumber(env, series) {
   let next = 1;
   try {
@@ -54,8 +59,9 @@ export async function get(request, env, ctx, user, params) {
 export async function create(request, env, ctx, user) {
   const b = await readJson(request);
   const series = ((b && b.series) || 'WSD').toString().trim() || 'WSD';
-  let number = Number(b && b.number);
-  if (!number || number < 1) number = await nextNumber(env, series);
+  // Numărul se atribuie AUTOMAT la salvare (se ignoră orice valoare din formular),
+  // ca să fie unic și consecutiv chiar dacă lucrează mai mulți simultan.
+  const number = await nextNumber(env, series);
   const consignee = ((b && b.consignee_name) || '').toString();
   const data = { ...(b || {}) };
   delete data.series; delete data.number; delete data.id; delete data.created_at;
@@ -63,6 +69,16 @@ export async function create(request, env, ctx, user) {
     'INSERT INTO cmrs (series, number, order_id, consignee_name, data, created_by) VALUES (?, ?, ?, ?, ?, ?)'
   ).bind(series, number, b && b.order_id ? Number(b.order_id) : null, consignee, JSON.stringify(data), user.sub).run();
   return json({ ok: true, id: res.meta.last_row_id, series, number }, 201);
+}
+
+// Setează numărul de pornire (următorul CMR) și, opțional, seria/transportatorul. Doar admin.
+export async function saveConfig(request, env, ctx, user) {
+  const b = await readJson(request);
+  if (b && b.next != null && Number(b.next) > 0) await setSetting(env, 'cmr_next', Math.floor(Number(b.next)));
+  if (b && b.series) await setSetting(env, 'cmr_series', String(b.series).trim());
+  if (b && b.carrier != null) await setSetting(env, 'cmr_carrier', String(b.carrier));
+  const series = (await getSetting(env, 'cmr_series', 'WSD')) || 'WSD';
+  return json({ ok: true, next: await nextNumber(env, series) });
 }
 
 export async function update(request, env, ctx, user, params) {

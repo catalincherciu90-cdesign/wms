@@ -3365,8 +3365,23 @@ function cmrToday(){ var d=new Date(); function p(n){return (n<10?"0":"")+n;} re
 function cf(label,id,val,ph){ return '<div class="field"><label>'+esc(label)+'</label><input id="'+id+'" value="'+esc(val||"")+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'></div>'; }
 function cfa(label,id,val,rows){ return '<div class="field"><label>'+esc(label)+'</label><textarea id="'+id+'" rows="'+(rows||2)+'">'+esc(val||"")+'</textarea></div>'; }
 VIEWS.cmr = function(){
-  setMain(topbar("CMR — scrisori de transport", can("operator")?'<button onclick="cmrForm()">+ CMR nou</button>':'') + '<div class="card" id="cmr_list">…</div>');
+  var btns = can("operator")?'<button onclick="cmrForm()">+ CMR nou</button>':'';
+  if(can("admin")) btns += ' <button class="ghost" onclick="cmrConfig()">⚙️ Număr de pornire</button>';
+  setMain(topbar("CMR — scrisori de transport", btns) + '<div class="card" id="cmr_list">…</div>');
   loadCmr();
+};
+window.cmrConfig = function(){
+  api("GET","/api/cmr/defaults").then(function(d){
+    _cmrDefaults=d;
+    modal("Număr CMR",
+      '<p class="muted" style="font-size:13px">Numărul se atribuie automat la salvare. Aici setezi de la ce număr să pornească (ex: 183, ca să continue seria ta).</p>'
+      + field("Următorul număr CMR","cmr_cfg_next",d.next||"","","number","Primul CMR nou va primi acest număr; apoi crește automat.")
+      + field("Serie","cmr_cfg_series",d.series||"WSD","","text","Ex: WSD"),
+      function(){
+        var body={ next:Number(el("cmr_cfg_next").value)||0, series:el("cmr_cfg_series").value||"WSD" };
+        api("POST","/api/cmr/config",body).then(function(){ _cmrDefaults=null; closeModal(); toast("Salvat"); }).catch(function(e){ toast(e.message,"bad"); });
+      });
+  }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.loadCmr = function(){
   api("GET","/api/cmr").then(function(d){
@@ -3391,7 +3406,10 @@ window.cmrForm = function(id, pre){
     var body=''
       + '<div class="card" style="padding:14px;margin-bottom:12px"><div class="row" style="gap:10px;flex-wrap:wrap">'
       + '<div style="width:120px">'+cf("Serie","cmr_series",series)+'</div>'
-      + '<div style="width:140px">'+cf("Număr","cmr_number",number)+'</div></div></div>'
+      + '<div style="width:170px">'+(id
+          ? cf("Număr","cmr_number",number)
+          : '<div class="field"><label>Număr</label><input id="cmr_number" value="'+esc(cmrNo(number))+'" readonly style="background:var(--panel-2)">'+fhint("Se atribuie automat la salvare.")+'</div>')
+        +'</div></div></div>'
       + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start">'
       + '<div class="card" style="padding:14px"><h2 style="font-size:15px">1 · Expeditor</h2>'+cf("Nume","cmr_sender_name",c.sender_name)+cfa("Adresă / țară","cmr_sender_addr",c.sender_addr)+'</div>'
       + '<div class="card" style="padding:14px"><h2 style="font-size:15px">2 · Destinatar</h2>'+cf("Nume","cmr_consignee_name",c.consignee_name)+cfa("Adresă / țară","cmr_consignee_addr",c.consignee_addr)+'</div>'
