@@ -30,7 +30,7 @@ export async function summary(request, env) {
   const clientId = url.searchParams.get('client_id');
   const warehouseId = url.searchParams.get('warehouse_id');
   let sql = `
-    SELECT p.id AS product_id, p.sku, p.name, p.unit, p.reorder_point,
+    SELECT p.id AS product_id, p.sku, p.name, p.unit, p.reorder_point, p.pcs_per_inner, p.inner_per_master,
            COALESCE(SUM(i.quantity), 0) AS total,
            (SELECT COALESCE(SUM(ol.quantity),0) FROM order_lines ol JOIN orders o ON o.id = ol.order_id
               WHERE ol.product_id = p.id AND o.type='outbound' AND o.status NOT IN ('completed','cancelled')) AS reserved,

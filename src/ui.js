@@ -1444,6 +1444,8 @@ window.loadProducts = function(){
         : (can("operator") ? '<button class="ghost sm" onclick="genProductBarcode('+p.id+')">⌗ Generează cod</button>' : '<span class="muted">fără cod</span>');
       var stk=Number(p.stock||0), prag=Number(p.reorder_point||0);
       var stkCell=(prag>0&&stk<=prag)?('<span class="pill bad">'+esc(stk)+'</span>'):('<b>'+esc(stk)+'</b>');
+      var pbd=packBreakdown(stk, p.pcs_per_inner, p.inner_per_master);
+      if(pbd) stkCell+='<div class="muted" style="font-size:10.5px;white-space:nowrap">📦 '+esc(pbd)+'</div>';
       return '<tr>'+chk+'<td><b>'+ean+'</b>'+skuLine+'</td><td>'+esc(p.name)+'</td><td>'+owner+'</td><td>'+esc(p.category||"—")+'</td>'
         + '<td class="right">'+stkCell+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
@@ -1542,6 +1544,22 @@ window.genMissingBarcodes = function(){
     });
   var sv=el("modalSave"); if(sv) sv.textContent="Generează";
 };
+// Desparte o cantitate (bucăți) pe niveluri de ambalare: cutii mari + mici + buc.
+function packBreakdown(total, pcsInner, innerMaster){
+  total=Math.max(0,Math.floor(Number(total)||0));
+  pcsInner=Math.floor(Number(pcsInner)||0); innerMaster=Math.floor(Number(innerMaster)||0);
+  if(pcsInner<=0) return "";
+  var parts=[], rem=total, threeLvl=innerMaster>0;
+  if(threeLvl){
+    var pcsMaster=pcsInner*innerMaster;
+    var masters=Math.floor(rem/pcsMaster); rem=rem%pcsMaster;
+    if(masters>0) parts.push(masters+" "+(masters===1?"cutie mare":"cutii mari"));
+  }
+  var inners=Math.floor(rem/pcsInner); rem=rem%pcsInner;
+  if(inners>0) parts.push(inners+" "+(threeLvl?(inners===1?"cutie mică":"cutii mici"):(inners===1?"cutie":"cutii")));
+  if(rem>0||!parts.length) parts.push(rem+" buc");
+  return parts.join(" + ");
+}
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",
@@ -1550,9 +1568,11 @@ window.productForm = function(id){
     + field("Nume","p_name",p.name||"","","text","Denumirea clară a produsului (ex: Detergent lichid 2L).")
     + field("Categorie","p_category",p.category||"","","text","Categoria produsului (ex: Alimente, Cosmetice).")
     + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Cui aparține marfa: un client sau intern al firmei.")+'</div>'
-    + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc","","text","Unitatea de măsură (ex: buc, kg, cutie).")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number","Sub acest stoc primești alertă de reaprovizionare.")+'</div></div>',
+    + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc","","text","Unitatea de măsură (ex: buc, kg, cutie).")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number","Sub acest stoc primești alertă de reaprovizionare.")+'</div></div>'
+    + '<div class="field" style="margin-bottom:4px"><label style="font-size:12.5px;color:var(--muted)">📦 Ambalare (opțional) — pentru stoc pe cutii</label></div>'
+    + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","p_pcs_inner",p.pcs_per_inner||"","","number","Câte bucăți încap într-o cutie mică (ex: 10).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","p_inner_master",p.inner_per_master||"","","number","Câte cutii mici încap într-o cutie mare (ex: 6).")+'</div></div>',
     function(){
-      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null };
+      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
@@ -1742,8 +1762,10 @@ window.loadStockData = function(){
     var rows=(d.summary||[]).map(function(s){
       var resv=Number(s.reserved||0), avail=Number(s.available!=null?s.available:(s.total-resv));
       var resvCell = resv>0 ? '<span class="pill warn">'+resv+'</span>' : '<span class="muted">0</span>';
+      var pbd=packBreakdown(s.total, s.pcs_per_inner, s.inner_per_master);
+      var totCell=esc(s.total)+' '+esc(s.unit)+(pbd?('<div class="muted" style="font-size:10.5px;white-space:nowrap">📦 '+esc(pbd)+'</div>'):'');
       return '<tr><td><b>'+esc(s.sku)+'</b></td><td>'+esc(s.name)+'</td>'
-        +'<td class="right">'+esc(s.total)+' '+esc(s.unit)+'</td>'
+        +'<td class="right">'+totCell+'</td>'
         +'<td class="right">'+resvCell+'</td>'
         +'<td class="right"><b>'+avail+'</b></td>'
         +'<td>'+(s.low?'<span class="pill bad">sub prag</span>':(avail<=0&&s.total>0?'<span class="pill warn">tot rezervat</span>':'<span class="pill good">ok</span>'))+'</td></tr>';
