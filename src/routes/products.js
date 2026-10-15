@@ -44,11 +44,12 @@ export async function create(request, env) {
     // (ca să putem genera un cod intern EAN-13 bazat pe id când lipsește EAN-ul).
     const tmpSku = 'TMP-' + Math.random().toString(36).slice(2, 10).toUpperCase();
     const res = await env.DB.prepare(
-      `INSERT INTO products (sku, barcode, name, description, category, unit, reorder_point, client_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO products (sku, barcode, name, description, category, unit, reorder_point, client_id, pcs_per_inner, inner_per_master)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       tmpSku, barcodeIn || null, b.name.trim(), b.description || null,
-      b.category || null, b.unit || 'buc', Number(b.reorder_point) || 0, b.client_id ? Number(b.client_id) : null
+      b.category || null, b.unit || 'buc', Number(b.reorder_point) || 0, b.client_id ? Number(b.client_id) : null,
+      Number(b.pcs_per_inner) || null, Number(b.inner_per_master) || null
     ).run();
     const id = res.meta.last_row_id;
     const barcode = barcodeIn || internalEan(id); // cod intern dacă nu are EAN
@@ -102,10 +103,11 @@ export async function update(request, env, ctx, user, params) {
   if (!existing) return error('Produs inexistent', 404);
   const m = { ...existing, ...b };
   await env.DB.prepare(
-    `UPDATE products SET sku=?, barcode=?, name=?, description=?, category=?, unit=?, reorder_point=?, client_id=?, active=? WHERE id=?`
+    `UPDATE products SET sku=?, barcode=?, name=?, description=?, category=?, unit=?, reorder_point=?, client_id=?, pcs_per_inner=?, inner_per_master=?, active=? WHERE id=?`
   ).bind(
     m.sku, m.barcode || null, m.name, m.description || null, m.category || null,
-    m.unit || 'buc', Number(m.reorder_point) || 0, m.client_id ? Number(m.client_id) : null, m.active ? 1 : 0, id
+    m.unit || 'buc', Number(m.reorder_point) || 0, m.client_id ? Number(m.client_id) : null,
+    Number(m.pcs_per_inner) || null, Number(m.inner_per_master) || null, m.active ? 1 : 0, id
   ).run();
   const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first();
   return json({ product });
