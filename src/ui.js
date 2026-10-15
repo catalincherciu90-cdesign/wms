@@ -3372,10 +3372,12 @@ window.loadOrders = function(){
         : esc(o.partner_name||"—");
       var canProc = can("operator") && o.status!=="completed" && o.status!=="cancelled";
       var procBtn = canProc ? ('<button class="sm" onclick="orderProcess('+o.id+')">'+(o.status==="prepared"?"🚚 Procesează":"▶ Procesează")+'</button> ') : '';
+      var lockBadge = o.lock_active ? (' <span class="pill warn" style="font-size:10px">🔒 '+esc(o.locked_name||"în procesare")+'</span>') : '';
+      var unlockBtn = (o.lock_active && can("operator")) ? ('<button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează</button> ') : '';
       return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
-        +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
+        +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+lockBadge+'</td>'
         +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
-        +'<td class="right">'+procBtn+'<button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
+        +'<td class="right">'+unlockBtn+procBtn+'<button class="ghost sm" onclick="orderDetail('+o.id+')">Vezi</button></td></tr>';
     }).join("");
     el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
   });
@@ -3448,6 +3450,7 @@ window.orderDetail = function(id){
     }
     modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
       '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
+      + (o.lock_active?('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>.'+(can("operator")?' <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button>':'')+'</div>'):'')
       + recip + lines + newItems
       + '<div id="od_services" style="margin-top:14px"></div>'
       + actions, null);
@@ -3463,6 +3466,19 @@ window.orderDetail = function(id){
 };
 /* ---- Procesare comandă în admin: ecran de picking (ca pe Zebra) ---- */
 var _opk=null;
+/* Scoate utilizatorul blocat pe o comandă (eliberează procesarea). */
+window.orderUnlock = function(id){
+  modal("Eliberează comanda",
+    '<p>Scoți utilizatorul care procesează această comandă și o eliberezi pentru altcineva?</p>'
+    +'<p class="muted" style="font-size:13px">Folosește asta când cineva a rămas blocat pe comandă (a închis aplicația / s-a oprit terminalul). Nu se pierde nimic — comanda rămâne în același status.</p>',
+    function(){
+      api("POST","/api/orders/"+id+"/unlock",{}).then(function(r){
+        closeModal(); toast(r&&r.freed?("Eliberată (era la "+r.freed+")"):"Comandă eliberată");
+        if(_opk && _opk.id===id) orderProcess(id); else loadOrders();
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, eliberează"; sv.className="danger"; sv.style.display=""; }
+};
 window.orderProcess = function(id){
   api("GET","/api/orders/"+id).then(function(d){
     var o=d.order;
@@ -3476,8 +3492,9 @@ function opkRender(){
   var o=_opk.order, inbound=_opk.inbound;
   var back='<button class="ghost sm" onclick="go(\\'orders\\')">← Comenzi</button>';
   var info='<div class="muted" style="margin-bottom:10px">'+(inbound?"Intrare / recepție":"Ieșire / picking")+(o.partner_name?(" · "+esc(o.partner_name)):"")+(o.client_name?(" · "+esc(o.client_name)):"")+'</div>';
+  var lockWarn = o.lock_active ? ('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>. <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button></div>') : '';
   if(o.status==="prepared"){
-    setMain(topbar("Procesează "+esc(o.code), back)
+    setMain(topbar("Procesează "+esc(o.code), back) + lockWarn
       + '<div class="card" style="padding:14px"><div class="card" style="background:rgba(34,197,94,.12);padding:10px;margin-bottom:10px"><b>Comandă pregătită — stoc rezervat</b><div class="muted" style="font-size:12.5px;margin-top:4px">Stocul NU a scăzut încă. Apasă „Marfa a plecat" doar când marfa iese fizic din depozit.</div></div>'
       + '<button onclick="departOrder('+o.id+')">🚚 Marfa a plecat (scade stocul)</button></div>');
     return;
@@ -3513,7 +3530,7 @@ function opkRender(){
     footer='<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-top:12px">Bifează „Pus în colet" la toate produsele ca să poți pregăti.</div>';
   }
   var fillBtn=(!blocked && _opk.lines.length) ? ('<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="opkFillAll()">✓ Marchează tot '+(inbound?"recepționat":"cules și pus în colet")+'</button></div>') : '';
-  setMain(topbar("Procesează "+esc(o.code), back) + info + warn + fillBtn + rows
+  setMain(topbar("Procesează "+esc(o.code), back) + info + lockWarn + warn + fillBtn + rows
     + (_opk.lines.length?'':'<div class="muted center" style="padding:14px">Comanda nu are linii de produs.</div>')
     + '<div id="opk_footer">'+footer+'</div>');
   if(el("opk_loc")){

@@ -135,16 +135,16 @@ export async function lock(request, env, ctx, user, params) {
   return json({ ok: true, locked_by: user.sub, locked_name: user.name || ('#' + user.sub) });
 }
 
-// Eliberează procesarea (deținătorul sau un admin).
+// Eliberează procesarea comenzii (scoate utilizatorul blocat).
+// Orice operator+ o poate elibera — util când cineva a rămas blocat pe comandă
+// (dispozitiv închis/căzut) iar altcineva trebuie să preia procesarea.
 export async function unlock(request, env, ctx, user, params) {
   const id = Number(params.id);
-  const order = await env.DB.prepare('SELECT locked_by FROM orders WHERE id = ?').bind(id).first();
+  const order = await env.DB.prepare('SELECT locked_by, locked_name FROM orders WHERE id = ?').bind(id).first();
   if (!order) return error('Comandă inexistentă', 404);
-  if (order.locked_by && order.locked_by !== user.sub && user.role !== 'admin') {
-    return error('Comanda e blocată de alt utilizator', 403);
-  }
+  const freed = order.locked_name || null;
   await releaseLock(env, id);
-  return json({ ok: true });
+  return json({ ok: true, freed });
 }
 
 // Finalizează comanda: aplică mișcările de stoc într-o locație aleasă.
