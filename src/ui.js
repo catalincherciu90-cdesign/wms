@@ -3372,7 +3372,8 @@ window.loadCmr = function(){
     var rows=(d.cmrs||[]).map(function(c){
       return '<tr><td><b>'+esc(c.series)+' '+cmrNo(c.number)+'</b></td><td>'+esc(c.consignee_name||"—")+'</td>'
         +'<td class="muted">'+esc(String(c.created_at).slice(0,16))+'</td>'
-        +'<td class="right"><button class="sm" onclick="cmrPrint('+c.id+')">🖨️ Printează</button> '
+        +'<td class="right"><button class="ghost sm" onclick="cmrPreview('+c.id+')">👁️ Previzualizare</button> '
+        +'<button class="sm" onclick="cmrPrint('+c.id+')">🖨️ Printează</button> '
         +'<button class="ghost sm" onclick="cmrForm('+c.id+')">Editează</button>'
         +(can("admin")?' <button class="danger sm" onclick="cmrDelete('+c.id+')">Șterge</button>':'')+'</td></tr>';
     }).join("");
@@ -3418,6 +3419,7 @@ window.cmrForm = function(id, pre){
       + '<div class="card" style="padding:14px"><h2 style="font-size:15px">21 · Întocmit</h2>'+cf("Loc","cmr_est_place",c.est_place)+cf("Data","cmr_est_date",c.est_date,"ex: "+cmrToday())+'</div>'
       + '</div>'
       + '<div class="row" style="margin-top:14px;gap:10px"><button onclick="cmrSave('+(id||0)+')">💾 Salvează</button>'
+      + '<button class="ghost" onclick="cmrPreviewForm()">👁️ Previzualizare</button>'
       + (id?'<button class="ghost" onclick="cmrPrint('+id+')">🖨️ Printează</button>':'')+'</div>';
     setMain(topbar(id?("Editează CMR "+esc(series)+" "+cmrNo(number)):"CMR nou", back) + body);
   }).catch(function(e){ toast(e.message,"bad"); });
@@ -3455,47 +3457,56 @@ window.cmrFromOrder = function(orderId){
     cmrForm(null, pre);
   }).catch(function(e){ toast(e.message,"bad"); });
 };
-window.cmrPrint = function(id){
-  api("GET","/api/cmr/"+id).then(function(r){
-    var c=r.cmr||{};
-    var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up ca să printezi","bad"); return; }
-    function x(s){ return String(s==null?"":s).replace(/[&<>]/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[ch];}).replace(/\\n/g,"<br>"); }
-    var no=cmrNo(c.number);
-    function box(n,title,content){ return '<div class="box"><div class="bn">'+(n?('<b>'+n+'</b> '):'')+title+'</div><div class="bc">'+(content||"")+'</div></div>'; }
-    var html='<html><head><meta charset="utf-8"><title>CMR '+x(c.series)+' '+no+'</title><style>'
-      +'@page{size:A4;margin:10mm} *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#000;font-size:11px;margin:0}'
-      +'.cmr{width:190mm;margin:0 auto} .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}'
-      +'.hd h1{font-size:15px;margin:0} .ser{text-align:right;font-size:13px}'
-      +'.grid2{display:flex} .col{flex:1} .box{border:1px solid #000;border-top:none;border-left:none;padding:3px 5px;min-height:46px}'
-      +'.row0 .box{border-top:1px solid #000} .col:first-child .box{border-left:1px solid #000}'
-      +'.bn{font-size:9px;color:#333} .bc{font-size:11px;white-space:pre-wrap;font-weight:700;padding-top:2px}'
-      +'table.goods{width:100%;border-collapse:collapse} table.goods th,table.goods td{border:1px solid #000;border-top:none;padding:3px 4px;font-size:10px;vertical-align:top} table.goods th{font-size:8.5px;color:#333;background:#f3f3f3} table.goods td{height:58px;font-weight:700}'
-      +'.sig .box{flex:1;min-height:66px}'
-      +'</style></head><body><div class="cmr">'
-      +'<div class="hd"><div><h1>SCRISOARE DE TRANSPORT</h1><div style="font-size:9px">CONSIGNMENT NOTE / LETTRE DE VOITURE — <b>CMR</b></div></div><div class="ser">Seria: <b>'+x(c.series)+'</b> &nbsp; Nr: <b>'+no+'</b></div></div>'
-      +'<div class="grid2 row0"><div class="col">'+box("1","Expeditor (nume, adresă, țară)", x(c.sender_name)+(c.sender_addr?('<br>'+x(c.sender_addr)):''))+'</div>'
-      +'<div class="col">'+box("16","Transportator (nume, adresă, țară)", x(c.carrier))+'</div></div>'
-      +'<div class="grid2"><div class="col">'+box("2","Destinatar (nume, adresă, țară)", x(c.consignee_name)+(c.consignee_addr?('<br>'+x(c.consignee_addr)):''))+'</div>'
-      +'<div class="col">'+box("17","Transportatori succesivi", "")+'</div></div>'
-      +'<div class="grid2"><div class="col">'+box("3","Locul descărcării", x(c.delivery))+'</div>'
-      +'<div class="col">'+box("18","Rezerve / date transport", "Auto nr.: "+x(c.auto)+"<br>Semiremorcă nr.: "+x(c.trailer)+"<br>Conducător 1: "+x(c.driver1)+(c.driver2?("<br>Conducător 2: "+x(c.driver2)):""))+'</div></div>'
-      +'<div class="grid2"><div class="col">'+box("4","Locul și data încărcării", x(c.loading_place)+(c.loading_date?('<br>'+x(c.loading_date)):''))+'</div>'
-      +'<div class="col">'+box("5","Documente anexate", x(c.docs))+'</div></div>'
-      +'<table class="goods"><thead><tr><th>6 · Mărci și numere</th><th>7 · Nr. colete</th><th>8 · Mod ambalare</th><th>9 · Natura mărfii</th><th>10 · Nr. statistic</th><th>11 · Greutate brută (kg)</th><th>12 · Cubaj (m³)</th></tr></thead>'
-      +'<tbody><tr><td>'+x(c.marks)+'</td><td>'+x(c.packages)+'</td><td>'+x(c.packing)+'</td><td>'+x(c.goods)+'</td><td>'+x(c.stat)+'</td><td>'+x(c.weight)+'</td><td>'+x(c.volume)+'</td></tr></tbody></table>'
-      +'<div class="grid2"><div class="col">'+box("13","Instrucțiunile expeditorului", x(c.instr))+'</div>'
-      +'<div class="col">'+box("19","Convenții speciale", x(c.special))+'</div></div>'
-      +'<div class="grid2"><div class="col">'+box("14","Plata transportului", x(c.pay))+'</div>'
-      +'<div class="col">'+box("15","Rambursare", x(c.cod))+'</div></div>'
-      +'<div class="grid2"><div class="col">'+box("21","Întocmit în / la data", x(c.est_place)+(c.est_date?(' · '+x(c.est_date)):''))+'</div>'
-      +'<div class="col">'+box("","", "")+'</div></div>'
-      +'<div class="grid2 sig"><div class="col">'+box("22","Semnătura și ștampila expeditorului","")+'</div>'
-      +'<div class="col">'+box("23","Semnătura și ștampila transportatorului","")+'</div>'
-      +'<div class="col">'+box("24","Recepția mărfii (destinatar)","")+'</div></div>'
-      +'</div><scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr'+'ipt></body></html>';
-    w.document.write(html); w.document.close();
-  }).catch(function(e){ toast(e.message,"bad"); });
-};
+// Construiește HTML-ul CMR. preview=true → bară cu „Printează/Închide" (nu la tipar) și fundal gri; altfel se printează automat.
+function cmrBuildHtml(c, preview){
+  function x(s){ return String(s==null?"":s).replace(/[&<>]/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[ch];}).replace(/\\n/g,"<br>"); }
+  var no=cmrNo(c.number);
+  function box(n,title,content){ return '<div class="box"><div class="bn">'+(n?('<b>'+n+'</b> '):'')+title+'</div><div class="bc">'+(content||"")+'</div></div>'; }
+  var bar = preview ? ('<div class="no-print" style="position:sticky;top:0;z-index:5;background:#1f2937;padding:10px;text-align:center">'
+      +'<button onclick="window.print()" style="padding:9px 18px;font-size:14px;cursor:pointer;margin:0 4px">🖨️ Printează</button>'
+      +'<button onclick="window.close()" style="padding:9px 18px;font-size:14px;cursor:pointer;margin:0 4px">✕ Închide</button></div>') : '';
+  var autoprint = preview ? '' : '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr'+'ipt>';
+  return '<html><head><meta charset="utf-8"><title>CMR '+x(c.series)+' '+no+'</title><style>'
+    +'@page{size:A4;margin:10mm} *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#000;font-size:11px;margin:0;background:'+(preview?'#e9ebf0':'#fff')+'}'
+    +'.cmr{width:190mm;margin:'+(preview?'16px auto':'0 auto')+';background:#fff'+(preview?';padding:10mm;box-shadow:0 2px 14px rgba(0,0,0,.25)':'')+'} .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}'
+    +'.hd h1{font-size:15px;margin:0} .ser{text-align:right;font-size:13px}'
+    +'.grid2{display:flex} .col{flex:1} .box{border:1px solid #000;border-top:none;border-left:none;padding:3px 5px;min-height:46px}'
+    +'.row0 .box{border-top:1px solid #000} .col:first-child .box{border-left:1px solid #000}'
+    +'.bn{font-size:9px;color:#333} .bc{font-size:11px;white-space:pre-wrap;font-weight:700;padding-top:2px}'
+    +'table.goods{width:100%;border-collapse:collapse} table.goods th,table.goods td{border:1px solid #000;border-top:none;padding:3px 4px;font-size:10px;vertical-align:top} table.goods th{font-size:8.5px;color:#333;background:#f3f3f3} table.goods td{height:58px;font-weight:700}'
+    +'.sig .box{flex:1;min-height:66px}'
+    +'@media print{.no-print{display:none!important} body{background:#fff} .cmr{box-shadow:none;margin:0 auto;padding:0}}'
+    +'</style></head><body>'+bar+'<div class="cmr">'
+    +'<div class="hd"><div><h1>SCRISOARE DE TRANSPORT</h1><div style="font-size:9px">CONSIGNMENT NOTE / LETTRE DE VOITURE — <b>CMR</b></div></div><div class="ser">Seria: <b>'+x(c.series)+'</b> &nbsp; Nr: <b>'+no+'</b></div></div>'
+    +'<div class="grid2 row0"><div class="col">'+box("1","Expeditor (nume, adresă, țară)", x(c.sender_name)+(c.sender_addr?('<br>'+x(c.sender_addr)):''))+'</div>'
+    +'<div class="col">'+box("16","Transportator (nume, adresă, țară)", x(c.carrier))+'</div></div>'
+    +'<div class="grid2"><div class="col">'+box("2","Destinatar (nume, adresă, țară)", x(c.consignee_name)+(c.consignee_addr?('<br>'+x(c.consignee_addr)):''))+'</div>'
+    +'<div class="col">'+box("17","Transportatori succesivi", "")+'</div></div>'
+    +'<div class="grid2"><div class="col">'+box("3","Locul descărcării", x(c.delivery))+'</div>'
+    +'<div class="col">'+box("18","Rezerve / date transport", "Auto nr.: "+x(c.auto)+"<br>Semiremorcă nr.: "+x(c.trailer)+"<br>Conducător 1: "+x(c.driver1)+(c.driver2?("<br>Conducător 2: "+x(c.driver2)):""))+'</div></div>'
+    +'<div class="grid2"><div class="col">'+box("4","Locul și data încărcării", x(c.loading_place)+(c.loading_date?('<br>'+x(c.loading_date)):''))+'</div>'
+    +'<div class="col">'+box("5","Documente anexate", x(c.docs))+'</div></div>'
+    +'<table class="goods"><thead><tr><th>6 · Mărci și numere</th><th>7 · Nr. colete</th><th>8 · Mod ambalare</th><th>9 · Natura mărfii</th><th>10 · Nr. statistic</th><th>11 · Greutate brută (kg)</th><th>12 · Cubaj (m³)</th></tr></thead>'
+    +'<tbody><tr><td>'+x(c.marks)+'</td><td>'+x(c.packages)+'</td><td>'+x(c.packing)+'</td><td>'+x(c.goods)+'</td><td>'+x(c.stat)+'</td><td>'+x(c.weight)+'</td><td>'+x(c.volume)+'</td></tr></tbody></table>'
+    +'<div class="grid2"><div class="col">'+box("13","Instrucțiunile expeditorului", x(c.instr))+'</div>'
+    +'<div class="col">'+box("19","Convenții speciale", x(c.special))+'</div></div>'
+    +'<div class="grid2"><div class="col">'+box("14","Plata transportului", x(c.pay))+'</div>'
+    +'<div class="col">'+box("15","Rambursare", x(c.cod))+'</div></div>'
+    +'<div class="grid2"><div class="col">'+box("21","Întocmit în / la data", x(c.est_place)+(c.est_date?(' · '+x(c.est_date)):''))+'</div>'
+    +'<div class="col">'+box("","", "")+'</div></div>'
+    +'<div class="grid2 sig"><div class="col">'+box("22","Semnătura și ștampila expeditorului","")+'</div>'
+    +'<div class="col">'+box("23","Semnătura și ștampila transportatorului","")+'</div>'
+    +'<div class="col">'+box("24","Recepția mărfii (destinatar)","")+'</div></div>'
+    +'</div>'+autoprint+'</body></html>';
+}
+function cmrOpenWin(c, preview){
+  var w=window.open("","_blank"); if(!w){ toast("Permite ferestrele pop-up","bad"); return; }
+  w.document.write(cmrBuildHtml(c, preview)); w.document.close();
+}
+window.cmrPrint = function(id){ api("GET","/api/cmr/"+id).then(function(r){ cmrOpenWin(r.cmr||{}, false); }).catch(function(e){ toast(e.message,"bad"); }); };
+window.cmrPreview = function(id){ api("GET","/api/cmr/"+id).then(function(r){ cmrOpenWin(r.cmr||{}, true); }).catch(function(e){ toast(e.message,"bad"); }); };
+// Previzualizare din formular, cu datele completate acum (chiar nesalvat)
+window.cmrPreviewForm = function(){ cmrOpenWin(cmrCollect(), true); };
 VIEWS.orders = function(){
   var addBtn = can("operator") ? '<button onclick="orderForm()">+ Comandă</button>' : '';
   var tabs = '<div class="toolbar">'+filterTab("orderFilter","","Toate","loadOrders")
