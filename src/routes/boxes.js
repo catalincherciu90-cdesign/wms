@@ -100,8 +100,9 @@ export async function receive(request, env, ctx, user) {
   if (!product) return error('Produs inexistent', 404);
   const loc = await env.DB.prepare('SELECT id, code FROM locations WHERE id = ?').bind(locationId).first();
   if (!loc) return error('Locație inexistentă', 404);
-  const pi = Math.floor(Number(product.pcs_per_inner) || 0);
-  const im = Math.floor(Number(product.inner_per_master) || 0);
+  // Ambalarea folosită la ACEASTĂ recepție: override din body (configurație/lot) sau implicitul produsului.
+  const pi = Math.floor(Number(b?.pcs_per_inner) > 0 ? Number(b.pcs_per_inner) : (product.pcs_per_inner || 0));
+  const im = Math.floor(Number(b?.inner_per_master) > 0 ? Number(b.inner_per_master) : (product.inner_per_master || 0));
   if ((masters > 0 || looseInners > 0) && pi <= 0) return error('Setează „Bucăți / cutie mică" la produs ca să recepționezi pe cutii', 400);
   if (masters > 0 && im <= 0) return error('Setează „Cutii mici / cutie mare" la produs', 400);
   if (masters > 200 || looseInners > 500) return error('Prea multe cutii într-o recepție (max 200 mari / 500 mici)', 400);

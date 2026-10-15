@@ -1569,18 +1569,44 @@ window.productForm = function(id){
     + field("Categorie","p_category",p.category||"","","text","Categoria produsului (ex: Alimente, Cosmetice).")
     + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Cui aparține marfa: un client sau intern al firmei.")+'</div>'
     + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc","","text","Unitatea de măsură (ex: buc, kg, cutie).")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number","Sub acest stoc primești alertă de reaprovizionare.")+'</div></div>'
-    + '<div class="field" style="margin-bottom:4px"><label style="font-size:12.5px;color:var(--muted)">📦 Ambalare (opțional) — pentru stoc pe cutii</label></div>'
-    + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","p_pcs_inner",p.pcs_per_inner||"","","number","Câte bucăți încap într-o cutie mică (ex: 10).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","p_inner_master",p.inner_per_master||"","","number","Câte cutii mici încap într-o cutie mare (ex: 6).")+'</div></div>',
+    + '<div class="field" style="margin-bottom:4px"><label style="font-size:12.5px;color:var(--muted)">📦 Ambalare implicită (opțional) — pentru stoc pe cutii</label></div>'
+    + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","p_pcs_inner",p.pcs_per_inner||"","","number","Câte bucăți încap într-o cutie mică (ex: 10).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","p_inner_master",p.inner_per_master||"","","number","Câte cutii mici încap într-o cutie mare (ex: 6).")+'</div></div>'
+    + (id?'<div id="p_packs" style="margin-top:6px"></div>':'<div class="fhint">Mai multe configurații (loturi diferite) le adaugi după ce salvezi produsul.</div>'),
     function(){
       var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
   setTimeout(function(){ if(el("p_barcode")) bcInfo(); }, 20);
+  if(id) loadProdPacks(id);
   api("GET","/api/clients").then(function(d){
     var sel=el("p_client"); if(!sel) return;
     sel.innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'"'+(String(p.client_id||"")===String(c.id)?' selected':'')+'>'+esc(c.name)+'</option>';}).join("");
   }).catch(function(){});
+};
+window.loadProdPacks = function(id){
+  var host=el("p_packs"); if(!host) return;
+  api("GET","/api/products/"+id+"/packs").then(function(d){
+    var rows=(d.packs||[]).map(function(c){
+      return '<div class="row" style="justify-content:space-between;align-items:center;font-size:13px;padding:3px 0;border-top:1px solid var(--border)"><span><b>'+esc(c.name)+'</b> <span class="muted">— '+esc(c.pcs_per_inner)+(c.inner_per_master?(" buc × "+esc(c.inner_per_master)+" mici"):" buc")+'</span></span>'
+        +'<button class="danger sm" onclick="delProdPack('+id+','+c.id+')">✕</button></div>';
+    }).join("");
+    host.innerHTML='<div style="font-size:12px;color:var(--muted);margin:6px 0 2px">Configurații de ambalare (loturi):</div>'
+      +(rows||'<div class="muted" style="font-size:12px">Nicio configurație. Adaugă una mai jos.</div>')
+      +'<div class="row" style="gap:6px;margin-top:6px;align-items:flex-end">'
+      +'<div style="flex:1.4"><input id="pk_name" placeholder="Nume (ex: Lot A)" style="font-size:13px"></div>'
+      +'<div style="flex:1"><input id="pk_pcs" type="number" placeholder="buc/mică" style="font-size:13px"></div>'
+      +'<div style="flex:1"><input id="pk_inner" type="number" placeholder="mici/mare" style="font-size:13px"></div>'
+      +'<button class="sm" onclick="addProdPack('+id+')">+ Adaugă</button></div>';
+  }).catch(function(){});
+};
+window.addProdPack = function(id){
+  var body={ name:(el("pk_name")&&el("pk_name").value)||"", pcs_per_inner:Number(el("pk_pcs").value)||0, inner_per_master:Number(el("pk_inner").value)||0 };
+  if(!(body.pcs_per_inner>0)){ toast("Pune bucăți/cutie mică (>0)","bad"); return; }
+  api("POST","/api/products/"+id+"/packs",body).then(function(){ toast("Configurație adăugată"); loadProdPacks(id); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.delProdPack = function(id, packId){
+  api("DELETE","/api/products/"+id+"/packs/"+packId).then(function(){ loadProdPacks(id); }).catch(function(e){ toast(e.message,"bad"); });
 };
 
 VIEWS.warehouses = function(){
@@ -3446,16 +3472,19 @@ window.boxPrintLabel = function(id, code, name){
   api("POST","/api/print/jobs",{type:"box", ref_id:id, code:code, title:name}).then(function(){ toast("Etichetă trimisă: "+code); }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.boxReceiveForm = function(){
-  var prodOpts=_boxProducts.map(function(p){ return '<option value="'+p.id+'" data-pi="'+(p.pcs_per_inner||0)+'" data-im="'+(p.inner_per_master||0)+'">'+esc((p.barcode||p.sku))+' · '+esc(p.name)+'</option>'; }).join("");
+  var prodOpts=_boxProducts.map(function(p){ return '<option value="'+p.id+'">'+esc((p.barcode||p.sku))+' · '+esc(p.name)+'</option>'; }).join("");
   var locOpts=_boxLocations.map(function(l){ return '<option value="'+l.id+'">'+esc(l.code)+'</option>'; }).join("");
   modal("Recepție pe cutii",
-    '<div class="field"><label>Produs</label><select id="bxr_prod" onchange="boxCalc()">'+prodOpts+'</select><div id="bxr_pack" class="muted" style="font-size:12px;margin-top:4px"></div></div>'
+    '<div class="field"><label>Produs</label><select id="bxr_prod" onchange="boxPackLoad()">'+prodOpts+'</select></div>'
+    + '<div class="field"><label>Configurație ambalare (lot)</label><select id="bxr_cfg" onchange="boxCfgApply()"></select><div id="bxr_pack" class="muted" style="font-size:12px;margin-top:4px"></div></div>'
+    + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","bxr_pi","","","number","Câte bucăți în cutia mică (acest lot).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","bxr_im","","","number","Câte cutii mici în cutia mare.")+'</div></div>'
     + '<div class="field"><label>Locație</label><select id="bxr_loc">'+locOpts+'</select></div>'
     + '<div class="row"><div style="flex:1">'+field("Cutii mari","bxr_masters","","","number","Nr. cutii mari pline.")+'</div><div style="flex:1">'+field("Cutii mici libere","bxr_inners","","","number","Cutii mici în plus, fără cutie mare.")+'</div><div style="flex:1">'+field("Bucăți libere","bxr_pieces","","","number","Bucăți în afara cutiilor.")+'</div></div>'
     + field("Lot (opțional)","bxr_lot","","","text","Nr. lot, dacă există.")
     + '<div id="bxr_total" class="card" style="padding:8px 10px;background:var(--panel-2);font-size:13px"></div>',
     function(){
       var body={ product_id:Number(el("bxr_prod").value), location_id:Number(el("bxr_loc").value),
+        pcs_per_inner:Number(el("bxr_pi").value)||0, inner_per_master:Number(el("bxr_im").value)||0,
         masters:Number(el("bxr_masters").value)||0, inners:Number(el("bxr_inners").value)||0, pieces:Number(el("bxr_pieces").value)||0, lot:el("bxr_lot").value||null };
       api("POST","/api/boxes/receive",body).then(function(r){
         closeModal(); toast("Recepționat ✓ ("+(r.total_pieces||0)+" buc)");
@@ -3464,13 +3493,32 @@ window.boxReceiveForm = function(){
       }).catch(function(e){ toast(e.message,"bad"); });
     });
   var sv=el("modalSave"); if(sv) sv.textContent="Recepționează";
-  ["bxr_masters","bxr_inners","bxr_pieces"].forEach(function(idf){ var e=el(idf); if(e) e.oninput=boxCalc; });
+  ["bxr_masters","bxr_inners","bxr_pieces","bxr_pi","bxr_im"].forEach(function(idf){ var e=el(idf); if(e) e.oninput=boxCalc; });
+  boxPackLoad();
+};
+window.boxPackLoad = function(){
+  var sel=el("bxr_prod"); if(!sel) return;
+  var pid=Number(sel.value); var p=(_boxProducts||[]).find(function(x){return x.id===pid;})||{};
+  var defOpt='<option value="def" data-pi="'+(p.pcs_per_inner||0)+'" data-im="'+(p.inner_per_master||0)+'">Implicit produs ('+(p.pcs_per_inner||0)+(p.inner_per_master?("×"+p.inner_per_master):"")+')</option>';
+  if(el("bxr_cfg")) el("bxr_cfg").innerHTML=defOpt+'<option value="custom">Personalizat…</option>';
+  if(el("bxr_pi")) el("bxr_pi").value=p.pcs_per_inner||"";
+  if(el("bxr_im")) el("bxr_im").value=p.inner_per_master||"";
+  api("GET","/api/products/"+pid+"/packs").then(function(d){
+    var cfgOpts=(d.packs||[]).map(function(c){ return '<option value="cfg:'+c.id+'" data-pi="'+c.pcs_per_inner+'" data-im="'+(c.inner_per_master||0)+'">'+esc(c.name)+' ('+c.pcs_per_inner+(c.inner_per_master?("×"+c.inner_per_master):"")+')</option>'; }).join("");
+    if(el("bxr_cfg")) el("bxr_cfg").innerHTML=defOpt+cfgOpts+'<option value="custom">Personalizat…</option>';
+  }).catch(function(){});
+  boxCalc();
+};
+window.boxCfgApply = function(){
+  var sel=el("bxr_cfg"); if(!sel) return;
+  var o=sel.options[sel.selectedIndex];
+  if(sel.value==="custom"){ if(el("bxr_pi")) el("bxr_pi").focus(); }
+  else { if(el("bxr_pi")) el("bxr_pi").value=Number(o.getAttribute("data-pi"))||""; if(el("bxr_im")) el("bxr_im").value=Number(o.getAttribute("data-im"))||""; }
   boxCalc();
 };
 window.boxCalc = function(){
-  var sel=el("bxr_prod"); if(!sel) return;
-  var o=sel.options[sel.selectedIndex]; var pi=Number(o?o.getAttribute("data-pi"):0)||0, im=Number(o?o.getAttribute("data-im"):0)||0;
-  var packEl=el("bxr_pack"); if(packEl) packEl.textContent = pi>0 ? ("Ambalare: "+pi+" buc/cutie mică"+(im>0?(" · "+im+" cutii mici/cutie mare = "+(pi*im)+" buc/cutie mare"):" (fără cutie mare definită)")) : "⚠ Produsul nu are ambalarea definită (editează-l).";
+  var pi=Number((el("bxr_pi")||{}).value)||0, im=Number((el("bxr_im")||{}).value)||0;
+  var packEl=el("bxr_pack"); if(packEl) packEl.textContent = pi>0 ? ("1 cutie mare = "+(im>0?(im+" mici × "+pi+" = "+(pi*im)+" buc"):(pi+" buc/cutie, fără cutie mare"))) : "⚠ Setează ambalarea (buc/cutie mică).";
   var m=Number((el("bxr_masters")||{}).value)||0, inn=Number((el("bxr_inners")||{}).value)||0, pcs=Number((el("bxr_pieces")||{}).value)||0;
   var tot=m*pi*im+inn*pi+pcs;
   var t=el("bxr_total"); if(t) t.innerHTML='Total: <b>'+tot+'</b> buc'+(m>0?(' · '+m+' cutii mari'):'')+(inn>0?(' · '+inn+' cutii mici'):'')+(pcs>0?(' · '+pcs+' buc libere'):'');

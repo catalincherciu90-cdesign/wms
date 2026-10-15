@@ -1,6 +1,37 @@
 // Rute produse / SKU
 import { json, error, csv, readJson } from '../lib/http.js';
 
+// ─── Configurații de ambalare per produs (loturi diferite) ───
+export async function packsList(request, env, ctx, user, params) {
+  const pid = Number(params.id);
+  const { results } = await env.DB.prepare(
+    'SELECT id, name, pcs_per_inner, inner_per_master FROM pack_configs WHERE product_id = ? AND active = 1 ORDER BY id'
+  ).bind(pid).all();
+  return json({ packs: results });
+}
+
+export async function packAdd(request, env, ctx, user, params) {
+  const pid = Number(params.id);
+  const b = await readJson(request);
+  const pi = Math.floor(Number(b?.pcs_per_inner) || 0);
+  const im = Math.floor(Number(b?.inner_per_master) || 0);
+  if (pi <= 0) return error('„Bucăți / cutie mică" obligatoriu (>0)', 400);
+  const prod = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(pid).first();
+  if (!prod) return error('Produs inexistent', 404);
+  const name = (b?.name || '').toString().trim() || (pi + (im > 0 ? '×' + im : '') + ' buc');
+  const res = await env.DB.prepare(
+    'INSERT INTO pack_configs (product_id, name, pcs_per_inner, inner_per_master) VALUES (?, ?, ?, ?)'
+  ).bind(pid, name, pi, im || null).run();
+  const pack = await env.DB.prepare('SELECT id, name, pcs_per_inner, inner_per_master FROM pack_configs WHERE id = ?').bind(res.meta.last_row_id).first();
+  return json({ ok: true, pack }, 201);
+}
+
+export async function packRemove(request, env, ctx, user, params) {
+  const id = Number(params.packId);
+  await env.DB.prepare('DELETE FROM pack_configs WHERE id = ?').bind(id).run();
+  return json({ ok: true });
+}
+
 export async function list(request, env) {
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
