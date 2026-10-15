@@ -239,6 +239,7 @@ function renderHome(){
     +tile("boxrecv","🧃","Recepție<br>pe cutii")
     +tile("ship","📤","Expediere")
     +tile("palletship","🚚","Expediere<br>palet/colet")
+    +tile("boxship","📤","Expediere<br>cutie")
     +tile("spargere","✂️","Spargere<br>palet")
     +tile("printlabel","🖨️","Imprimă<br>etichetă")
     +tile("transfer","🔄","Transfer")
@@ -250,7 +251,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="boxrecv") screenBoxReceive(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="boxrecv") screenBoxReceive(); else if(op==="boxship") screenBoxShip(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -393,6 +394,39 @@ function mvSubmit(){
     screenMove(mv.kind); // reset pentru următorul scan
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Expediere cutie (scanezi cutia mare/mică → pleacă) ---- */
+function screenBoxShip(){
+  window._bxs={box:null};
+  scanTarget=function(code){ bxsScan(code); };
+  shell("Expediere cutie",
+    '<div class="scanbox"><input id="bxs_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează cutia (CM- / CT-)"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'bxs_scan\').value=c;bxsScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="bxs_box"></div>', {back:"renderHome()"});
+  wireScan("bxs_scan", bxsScan);
+}
+function bxsScan(code){
+  code=(code||"").trim(); if(!code) return;
+  api("GET","/api/boxes/"+encodeURIComponent(code)).then(function(r){
+    var b=r&&r.box; if(!b){ feedback(false); toast("Cutie negăsită",true); return; }
+    feedback(true); window._bxs.box=b;
+    var kindTxt = b.kind==="master" ? "📦 Cutie mare" : "🔲 Cutie mică";
+    el("bxs_box").innerHTML='<div class="card">'
+      +'<div style="font-size:17px;font-weight:800">'+kindTxt+' '+esc(b.code)+'</div>'
+      +'<div class="muted" style="font-size:13px;margin-top:4px">'+esc(b.product_name||"")+' · '+esc(b.quantity||0)+' buc'+(b.location_code?(' · 📍 '+esc(b.location_code)):'')+(b.client_name?(' · '+esc(b.client_name)):'')+(b.lot?(' · lot '+esc(b.lot)):'')+'</div>'
+      + (b.status==="shipped"
+          ? '<div class="card center" style="background:rgba(240,80,80,.15);margin-top:8px">Deja expediată</div>'
+          : '<button class="big" style="margin-top:10px" onclick="bxsShip()">🚚 Marfa a plecat (expediază)</button>')
+      +'</div>';
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+}
+window.bxsShip=function(){
+  var b=window._bxs&&window._bxs.box; if(!b){ toast("Scanează o cutie",true); return; }
+  api("POST","/api/boxes/"+b.id+"/ship",{}).then(function(r){
+    feedback(true); toast("Expediat ✓ "+(r.pieces||0)+" buc"+(r.kind==="master"?(" · "+(r.boxes_shipped||0)+" cutii"):""));
+    screenBoxShip();
+  }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Recepție pe cutii (cutie mare → cutii mici → produse) ---- */
 function screenBoxReceive(){
