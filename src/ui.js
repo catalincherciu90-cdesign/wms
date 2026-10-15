@@ -1022,7 +1022,7 @@ var NAV = [
   ["dashboard","Dashboard","viewer"],
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
-  { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"] ] },
+  { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"], ["boxes","Cutii (fizice)","viewer"] ] },
   { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Imprimare","operator"], ["labeleditor","Editor etichetă","admin"] ] },
   ["orders","Comenzi","viewer"],
   ["cmr","CMR (transport)","operator"],
@@ -3380,6 +3380,111 @@ window.partnerForm = function(id){
 
 /* ---------------- Comenzi ---------------- */
 var orderFilter = "";
+/* ---------------- Cutii fizice (cutie mare → cutii mici → produse) ---------------- */
+var _boxProducts=[], _boxLocations=[];
+VIEWS.boxes = function(){
+  var addBtn = can("operator") ? '<button onclick="boxReceiveForm()">+ Recepție pe cutii</button>' : '';
+  setMain(topbar("Cutii fizice", addBtn)
+    + '<div class="card" style="padding:10px 14px;margin-bottom:12px"><div class="muted" style="font-size:12.5px">Cutii mari (📦) care conțin cutii mici (🔲) cu produse. Stocul pe bucăți rămâne sincronizat cu Stocul normal. Definește ambalarea la produs (Bucăți/cutie mică, Cutii mici/cutie mare).</div></div>'
+    + '<div class="toolbar"><label style="margin:0">Client:</label><select id="bx_client" onchange="loadBoxTree()" style="max-width:220px"><option value="">Toți</option></select>'
+    + ' <label style="margin:0">Locație:</label><select id="bx_loc" onchange="loadBoxTree()" style="max-width:200px"><option value="">Toate</option></select></div>'
+    + '<div class="card" id="bx_tree">…</div>');
+  Promise.all([api("GET","/api/products"), api("GET","/api/locations"), api("GET","/api/clients")]).then(function(r){
+    _boxProducts=r[0].products||[]; _boxLocations=(r[1].locations||[]).filter(function(l){return l.active;});
+    var lc=el("bx_loc"); if(lc) lc.innerHTML='<option value="">Toate</option>'+_boxLocations.map(function(l){return '<option value="'+l.id+'">'+esc(l.code)+'</option>';}).join("");
+    var cc=el("bx_client"); if(cc) cc.innerHTML='<option value="">Toți</option>'+((r[2].clients||[]).filter(function(c){return c.active;}).map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join(""));
+    loadBoxTree();
+  }).catch(function(e){ el("bx_tree").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+};
+window.loadBoxTree = function(){
+  var cid=el("bx_client")?el("bx_client").value:"", lid=el("bx_loc")?el("bx_loc").value:"";
+  var qp=[]; if(cid) qp.push("client_id="+cid); if(lid) qp.push("location_id="+lid);
+  api("GET","/api/boxes/tree"+(qp.length?("?"+qp.join("&")):"")).then(function(d){
+    el("bx_tree").innerHTML=renderBoxTree(d.boxes||[]);
+  }).catch(function(e){ el("bx_tree").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+};
+function renderBoxTree(boxes){
+  var masters=boxes.filter(function(b){return b.kind==="master";});
+  var inners=boxes.filter(function(b){return b.kind==="inner";});
+  var byParent={}; inners.forEach(function(x){ var p=x.parent_id||0; (byParent[p]=byParent[p]||[]).push(x); });
+  var loose=byParent[0]||[];
+  var totPieces=inners.reduce(function(s,k){return s+(Number(k.quantity)||0);},0);
+  var sum='<div class="row" style="gap:16px;margin-bottom:10px;font-size:13px"><span>📦 <b>'+masters.length+'</b> cutii mari</span><span>🔲 <b>'+inners.length+'</b> cutii mici</span><span>Σ <b>'+totPieces+'</b> buc</span></div>';
+  if(!masters.length && !loose.length) return sum+'<div class="muted center" style="padding:16px">Nicio cutie în stoc. Apasă „+ Recepție pe cutii".</div>';
+  var mHtml=masters.map(function(m){
+    var kids=byParent[m.id]||[];
+    var pieces=kids.reduce(function(s,k){return s+(Number(k.quantity)||0);},0);
+    var kidList=kids.map(function(k){ return '<span class="pill mut" style="font-size:10.5px;margin:2px">'+esc(k.code)+' ('+esc(k.quantity)+')</span>'; }).join("");
+    var act=can("operator")?('<button class="sm" onclick="boxShip('+m.id+',\\'master\\',\\''+esc(m.code)+'\\')">🚚 Expediază</button> <button class="ghost sm" onclick="boxPrintLabel('+m.id+',\\''+esc(m.code)+'\\',\\''+esc(String(m.product_name||"").replace(/\\'/g,""))+'\\')">🖨️</button>'):'';
+    return '<div class="card" style="margin-bottom:8px;padding:10px 12px;border-left:4px solid var(--brand)">'
+      +'<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+      +'<div><b>📦 '+esc(m.code)+'</b> · '+esc(m.product_name)+(m.client_name?(' <span class="muted">· '+esc(m.client_name)+'</span>'):'')+'<div class="muted" style="font-size:12px">'+esc(kids.length)+' cutii mici · '+pieces+' buc'+(m.location_code?(' · 📍 '+esc(m.location_code)):'')+(m.lot?(' · lot '+esc(m.lot)):'')+'</div></div>'
+      +'<div class="row" style="gap:6px">'+act+'</div></div>'
+      +(kidList?'<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Vezi cutiile mici</summary><div style="margin-top:4px">'+kidList+'</div></details>':'')
+      +'</div>';
+  }).join("");
+  var looseHtml='';
+  if(loose.length){
+    var lrows=loose.map(function(k){
+      var act=can("operator")?('<button class="sm" onclick="boxShip('+k.id+',\\'inner\\',\\''+esc(k.code)+'\\')">🚚 Expediază</button> <button class="ghost sm" onclick="boxPrintLabel('+k.id+',\\''+esc(k.code)+'\\',\\''+esc(String(k.product_name||"").replace(/\\'/g,""))+'\\')">🖨️</button>'):'';
+      return '<tr><td><b>🔲 '+esc(k.code)+'</b></td><td>'+esc(k.product_name)+'</td><td class="right">'+esc(k.quantity)+' buc</td><td>'+esc(k.location_code||"—")+'</td><td class="right">'+act+'</td></tr>';
+    }).join("");
+    looseHtml='<h2 style="font-size:14px;margin:14px 0 6px">Cutii mici libere (fără cutie mare)</h2><table><thead><tr><th>Cod</th><th>Produs</th><th class="right">Conținut</th><th>Locație</th><th></th></tr></thead><tbody>'+lrows+'</tbody></table>';
+  }
+  return sum+mHtml+looseHtml;
+}
+window.boxShip = function(id, kind, code){
+  modal("Expediază "+(kind==="master"?"cutia mare":"cutia")+" "+esc(code),
+    '<p>Confirmi expedierea '+(kind==="master"?'cutiei mari <b>'+esc(code)+'</b> (cu toate cutiile mici din ea)':'cutiei <b>'+esc(code)+'</b>')+'?</p>'
+    +'<p class="muted" style="font-size:13px">Bucățile se scad din stoc, iar cutia se marchează ca expediată.</p>',
+    function(){
+      api("POST","/api/boxes/"+id+"/ship",{}).then(function(r){ closeModal(); toast("Expediat ✓ ("+(r.pieces||0)+" buc)"); loadBoxTree(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Da, expediază"; sv.className=""; }
+};
+window.boxPrintLabel = function(id, code, name){
+  api("POST","/api/print/jobs",{type:"box", ref_id:id, code:code, title:name}).then(function(){ toast("Etichetă trimisă: "+code); }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.boxReceiveForm = function(){
+  var prodOpts=_boxProducts.map(function(p){ return '<option value="'+p.id+'" data-pi="'+(p.pcs_per_inner||0)+'" data-im="'+(p.inner_per_master||0)+'">'+esc((p.barcode||p.sku))+' · '+esc(p.name)+'</option>'; }).join("");
+  var locOpts=_boxLocations.map(function(l){ return '<option value="'+l.id+'">'+esc(l.code)+'</option>'; }).join("");
+  modal("Recepție pe cutii",
+    '<div class="field"><label>Produs</label><select id="bxr_prod" onchange="boxCalc()">'+prodOpts+'</select><div id="bxr_pack" class="muted" style="font-size:12px;margin-top:4px"></div></div>'
+    + '<div class="field"><label>Locație</label><select id="bxr_loc">'+locOpts+'</select></div>'
+    + '<div class="row"><div style="flex:1">'+field("Cutii mari","bxr_masters","","","number","Nr. cutii mari pline.")+'</div><div style="flex:1">'+field("Cutii mici libere","bxr_inners","","","number","Cutii mici în plus, fără cutie mare.")+'</div><div style="flex:1">'+field("Bucăți libere","bxr_pieces","","","number","Bucăți în afara cutiilor.")+'</div></div>'
+    + field("Lot (opțional)","bxr_lot","","","text","Nr. lot, dacă există.")
+    + '<div id="bxr_total" class="card" style="padding:8px 10px;background:var(--panel-2);font-size:13px"></div>',
+    function(){
+      var body={ product_id:Number(el("bxr_prod").value), location_id:Number(el("bxr_loc").value),
+        masters:Number(el("bxr_masters").value)||0, inners:Number(el("bxr_inners").value)||0, pieces:Number(el("bxr_pieces").value)||0, lot:el("bxr_lot").value||null };
+      api("POST","/api/boxes/receive",body).then(function(r){
+        closeModal(); toast("Recepționat ✓ ("+(r.total_pieces||0)+" buc)");
+        if(can("operator") && r.boxes && r.boxes.length) boxOfferPrint(r.boxes);
+        if(view==="boxes") loadBoxTree();
+      }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv) sv.textContent="Recepționează";
+  ["bxr_masters","bxr_inners","bxr_pieces"].forEach(function(idf){ var e=el(idf); if(e) e.oninput=boxCalc; });
+  boxCalc();
+};
+window.boxCalc = function(){
+  var sel=el("bxr_prod"); if(!sel) return;
+  var o=sel.options[sel.selectedIndex]; var pi=Number(o?o.getAttribute("data-pi"):0)||0, im=Number(o?o.getAttribute("data-im"):0)||0;
+  var packEl=el("bxr_pack"); if(packEl) packEl.textContent = pi>0 ? ("Ambalare: "+pi+" buc/cutie mică"+(im>0?(" · "+im+" cutii mici/cutie mare = "+(pi*im)+" buc/cutie mare"):" (fără cutie mare definită)")) : "⚠ Produsul nu are ambalarea definită (editează-l).";
+  var m=Number((el("bxr_masters")||{}).value)||0, inn=Number((el("bxr_inners")||{}).value)||0, pcs=Number((el("bxr_pieces")||{}).value)||0;
+  var tot=m*pi*im+inn*pi+pcs;
+  var t=el("bxr_total"); if(t) t.innerHTML='Total: <b>'+tot+'</b> buc'+(m>0?(' · '+m+' cutii mari'):'')+(inn>0?(' · '+inn+' cutii mici'):'')+(pcs>0?(' · '+pcs+' buc libere'):'');
+};
+function boxOfferPrint(boxes){
+  modal("Etichete cutii",
+    '<p>S-au creat <b>'+boxes.length+'</b> cutii. Trimit etichetele la imprimantă?</p>'
+    +'<p class="muted" style="font-size:12.5px">'+boxes.filter(function(b){return b.kind==="master";}).length+' etichete cutii mari + '+boxes.filter(function(b){return b.kind==="inner";}).length+' etichete cutii mici.</p>',
+    function(){
+      var n=0; boxes.forEach(function(b){ api("POST","/api/print/jobs",{type:"box", ref_id:b.id, code:b.code, title:b.code}).catch(function(){}); n++; });
+      closeModal(); toast(n+" etichete trimise la imprimantă");
+    });
+  var sv=el("modalSave"); if(sv) sv.textContent="Printează etichetele";
+}
 /* ---------------- CMR (scrisoare de transport) ---------------- */
 var _cmrDefaults=null;
 function cmrNo(n){ n=String(n||""); while(n.length<6) n="0"+n; return n; }
