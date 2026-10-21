@@ -75,7 +75,7 @@ export async function resolve(request, env, ctx, user, params) {
     LEFT JOIN pallets pa ON pa.id = bx.pallet_id
     LEFT JOIN locations l ON l.id = bx.location_id
     LEFT JOIN clients c ON c.id = pr.client_id
-    WHERE bx.code = ?`).bind(code).first();
+    WHERE bx.code = ? COLLATE NOCASE`).bind(code).first();
   if (!box) return error('Cutie inexistentă', 404);
   return json({ box });
 }
