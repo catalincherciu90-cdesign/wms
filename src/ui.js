@@ -1020,6 +1020,7 @@ window.supplyCancel = function(id, code){
 /* ---------------- App shell ---------------- */
 var NAV = [
   ["dashboard","Dashboard","viewer"],
+  ["tutorial","Tutorial / Ghid","viewer"],
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"], ["boxes","Cutii (fizice)","viewer"] ] },
@@ -1119,6 +1120,7 @@ VIEWS.dashboard = function(){
       + dashTile("departures","🚚","Marfa a plecat","operator")
       + dashTile("transfer","🔄","Transfer","operator")
       + dashTile("orders","📋","Comenzi","viewer")
+      + dashTile("tutorial","📖","Tutorial","viewer")
       + dashTile("cmr","📄","CMR","operator")
       + dashTile("products","📦","Produse","viewer")
       + dashTile("stock","🧮","Stoc","viewer")
@@ -1634,6 +1636,118 @@ window.addProdPack = function(id){
 window.delProdPack = function(id, packId){
   api("DELETE","/api/products/"+id+"/packs/"+packId).then(function(){ loadProdPacks(id); }).catch(function(e){ toast(e.message,"bad"); });
 };
+
+/* ---------------- Tutorial / Ghid ---------------- */
+function tutShot(label){
+  return '<div style="border:2px dashed var(--border);border-radius:10px;background:var(--panel-2);padding:16px;text-align:center;color:var(--muted);font-size:12.5px;margin:8px 0">📷 '+esc(label||"Captură de ecran")+' <span style="opacity:.7">— se adaugă în curând</span></div>';
+}
+function tutSec(id, icon, title, body){
+  return '<div class="card" id="tut_'+id+'" style="padding:18px;margin-bottom:14px;scroll-margin-top:12px">'
+    +'<div class="row" style="align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:30px">'+icon+'</span><h2 style="margin:0;font-size:19px">'+esc(title)+'</h2></div>'
+    +'<div style="font-size:14px;line-height:1.55">'+body+'</div></div>';
+}
+function tutSteps(arr){ return '<ol style="margin:6px 0 0;padding-left:20px">'+arr.map(function(s){return '<li style="margin:4px 0">'+s+'</li>';}).join("")+'</ol>'; }
+function tutTip(t){ return '<div style="background:rgba(47,109,246,.08);border-left:3px solid var(--brand);border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px">💡 '+t+'</div>'; }
+// diagramă simplă: cutie mare → cutii mici → produse
+function tutSvgBoxes(){
+  return '<div style="text-align:center;margin:6px 0"><svg viewBox="0 0 420 110" width="100%" style="max-width:420px;height:auto">'
+    +'<rect x="6" y="20" width="150" height="70" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>'
+    +'<text x="81" y="15" text-anchor="middle" font-size="11" fill="currentColor">📦 Cutie mare (bax)</text>'
+    +'<rect x="18" y="38" width="60" height="42" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+    +'<rect x="86" y="38" width="60" height="42" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+    +'<text x="48" y="63" text-anchor="middle" font-size="9" fill="currentColor">🔲 cutie</text>'
+    +'<text x="116" y="63" text-anchor="middle" font-size="9" fill="currentColor">🔲 cutie</text>'
+    +'<text x="195" y="60" text-anchor="middle" font-size="22" fill="currentColor">→</text>'
+    +'<rect x="225" y="35" width="80" height="48" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+    +'<text x="265" y="30" text-anchor="middle" font-size="11" fill="currentColor">🔲 Cutie mică</text>'
+    +'<text x="265" y="63" text-anchor="middle" font-size="14" fill="currentColor">🧴🧴🧴</text>'
+    +'<text x="330" y="60" text-anchor="middle" font-size="22" fill="currentColor">→</text>'
+    +'<text x="385" y="52" text-anchor="middle" font-size="12" fill="currentColor">bucăți</text>'
+    +'<text x="385" y="70" text-anchor="middle" font-size="18" fill="currentColor">🧴</text>'
+    +'</svg></div>';
+}
+// diagramă flux comandă de ieșire
+function tutSvgOrder(){
+  function b(x,t,sub){ return '<rect x="'+x+'" y="25" width="92" height="46" rx="8" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.5"/><text x="'+(x+46)+'" y="46" text-anchor="middle" font-size="11" fill="currentColor">'+t+'</text><text x="'+(x+46)+'" y="61" text-anchor="middle" font-size="9" fill="currentColor" opacity="0.7">'+sub+'</text>'; }
+  return '<div style="text-align:center;margin:6px 0"><svg viewBox="0 0 470 90" width="100%" style="max-width:470px;height:auto">'
+    +b(2,'Comandă','ciornă')+'<text x="104" y="52" font-size="20" fill="currentColor">→</text>'
+    +b(126,'Pregătită','stoc rezervat')+'<text x="228" y="52" font-size="20" fill="currentColor">→</text>'
+    +b(250,'Marfa a plecat','stoc scade')+'<text x="352" y="52" font-size="20" fill="currentColor">→</text>'
+    +b(374,'Finalizată','✓')
+    +'</svg></div>';
+}
+VIEWS.tutorial = function(){
+  var toc=[
+    ["intro","🧭","Cum e organizată aplicația"],["dashboard","📊","Dashboard"],["produse","📦","Produse & ambalare"],
+    ["stoc","🧮","Stoc"],["receptie","📥","Recepție marfă"],["comenzi","📋","Comenzi & expediere"],
+    ["paleti","🟫","Paleți"],["cutii","🧃","Cutii fizice (3 niveluri)"],["consum","♻️","Consumabile"],
+    ["cmr","📄","CMR (transport)"],["locatii","🗺️","Locații & gestiuni"],["clienti","👥","Clienți & portal"],
+    ["zebra","📱","Aplicația Zebra"],["miscari","🔁","Mișcări & loturi"],["etichete","🏷️","Etichete & imprimare"],
+    ["backup","💾","Backup"]
+  ];
+  var tocHtml='<div class="card" style="padding:14px;margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">Cuprins</div><div class="dgrid">'
+    + toc.map(function(t){ return '<div class="dtile" onclick="tutGo(\\''+t[0]+'\\')"><span class="di">'+t[1]+'</span>'+esc(t[2])+'</div>'; }).join("") + '</div></div>';
+
+  var body=''
+    + '<div class="card" style="padding:18px;margin-bottom:14px;background:linear-gradient(135deg,rgba(47,109,246,.10),transparent)"><h1 style="margin:0 0 6px;font-size:22px">📖 Ghid de utilizare WSD WMS</h1><div class="muted" style="font-size:14px">Tot ce trebuie să știi, pas cu pas. Apasă o secțiune din cuprins sau derulează. La fiecare pagină ai și blocul „ℹ️ Cum funcționează" cu ajutor rapid.</div></div>'
+    + tocHtml
+    + tutSec("intro","🧭","Cum e organizată aplicația",
+        '<p>Meniul din stânga grupează totul: <b>Depozit</b> (gestiuni, locații, paleți, cutii), <b>Operațiuni</b> (recepție, expediere, transfer, etichete), <b>Comenzi</b>, <b>CMR</b>, <b>Clienți</b>, <b>Rapoarte</b> etc. Rolurile: <b>viewer</b> (vede), <b>operator</b> (operează), <b>admin</b> (tot).</p>'
+        + tutShot("Meniul principal și dashboardul"))
+    + tutSec("dashboard","📊","Dashboard",
+        '<p>Privirea de ansamblu: produse, locații, unități în stoc, comenzi deschise, produse sub prag; grafice de activitate și statistici (comenzi pe status, top produse, stoc pe client).</p>'
+        + tutSteps(['Alege un <b>client</b> din selectorul de sus ca să filtrezi tot dashboardul pe el.','„Acces rapid" te duce direct la orice modul.','Panoul „Marfă pregătită" îți arată comenzile gata de plecare.']))
+    + tutSec("produse","📦","Produse & ambalare",
+        '<p>Catalogul de produse (marfă clienți + consumabile interne). Codul principal e <b>EAN-ul</b>.</p>'
+        + tutSteps(['<b>+ Produs</b> → scanezi/tastezi EAN-ul + nume; alegi clientul proprietar (sau „intern").','Dacă n-are EAN, lași gol → se generează cod intern.','<b>Ambalare</b>: pui „Bucăți / cutie mică" și „Cutii mici / cutie mare" → ai stoc și pe cutii.','<b>Cod bax</b> + „Bucăți / bax": codul de bare al cartonului (diferit de bucată) — scanat la recepție completează automat cantitatea.','<b>Configurații</b> multiple de ambalare (loturi diferite): le adaugi la produs după salvare.'])
+        + tutTip('La recepția pe cutii poți alege configurația potrivită lotului sau „Personalizat".'))
+    + tutSec("stoc","🧮","Stoc",
+        '<p>Stocul curent pe produs și pe locație, în bucăți. Dacă produsul are ambalare, apare și pe cutii (ex: <i>125 buc = 2 cutii mari + 5 buc</i>).</p>'
+        + tutSteps(['Filtrează pe <b>client</b> sau pe <b>gestiune</b>.','„Rezervat" = cât e prins în comenzi de ieșire nefinalizate; „Disponibil" = total − rezervat.']))
+    + tutSec("receptie","📥","Recepție marfă",
+        '<p>Bagi marfă în stoc. Mai multe moduri:</p>'
+        + tutSteps(['<b>Recepție simplă</b>: scanezi produsul, alegi locația, pui cantitatea, <b>Lot</b> și <b>Data</b> (de pe aviz).','<b>Recepție palet/colet</b>: creezi un palet (cod auto) cu produsele lui; intră automat în stoc.','<b>Recepție pe cutii</b>: produs + locație + nr. cutii mari / mici / bucăți → creează cutiile (CM-/CT-) și intră în stoc.','Scanezi <b>codul de bax</b> → produsul e recunoscut și cantitatea se completează cu buc/bax.'])
+        + tutShot("Formularul de recepție cu lot și dată"))
+    + tutSec("comenzi","📋","Comenzi & expediere",
+        '<p>Comenzi de la furnizori (intrare) și către clienți (ieșire). Ieșirile folosesc <b>stoc tampon</b>:</p>'
+        + tutSvgOrder()
+        + tutSteps(['<b>+ Comandă</b>: alegi tipul, partenerul, apoi liniile. Pe fiecare linie alegi unitatea: <b>bucăți / cutii / baxuri</b> (se înmulțește automat în bucăți).','<b>Procesează</b> (picking): culegi produsele (pe Zebra sau din admin), apoi „Pregătește" — stocul se <b>rezervă</b>, nu scade încă.','<b>Marfa a plecat</b> → stocul scade efectiv.','<b>📦 Din palet</b>: la fiecare linie poți scoate fix dintr-un palet anume (util când ai 2 paleți cu același produs, cantități/loturi diferite).'])
+        + tutTip('La „Vezi" pe o comandă vezi cine o procesează și poți elibera o comandă rămasă blocată.'))
+    + tutSec("paleti","🟫","Paleți",
+        '<p>Fiecare palet are cod propriu, o locație și produsele lui. Îl poți expedia întreg sau parțial; stocul scade din locația paletului.</p>'
+        + tutSteps(['La „Paleți" vezi toți paleții, conținutul și ocuparea locațiilor.','Poți <b>sparge</b> un palet (muți produse) sau genera etichete de cutii pentru el.']))
+    + tutSec("cutii","🧃","Cutii fizice (3 niveluri)",
+        '<p>Urmărești fizic fiecare cutie: cutie mare (📦 cod CM-) care conține cutii mici (🔲 cod CT-) cu produse.</p>'
+        + tutSvgBoxes()
+        + tutSteps(['<b>Recepție pe cutii</b> → se creează cutiile și intră în stoc.','<b>Vedere arbore</b>: vezi ce conține fiecare cutie mare.','<b>Expediere</b>: scoți o cutie mare întreagă (cu toate cutiile mici) sau o cutie mică; stocul scade.']))
+    + tutSec("consum","♻️","Consumabile",
+        '<p>Materialele interne (folie, bandă, mănuși…). Un buton rapid scade din stoc când le folosești.</p>'
+        + tutSteps(['La „Consumabile depozit", apasă <b>➖ Consumat</b> → pui cantitatea → scade din stoc.','Pe Zebra ai tile „♻️ Consumabile" cu buton „➖ 1" rapid.']))
+    + tutSec("cmr","📄","CMR (transport)",
+        '<p>Generezi scrisori de transport CMR pe hârtie albă A4.</p>'
+        + tutSteps(['<b>+ CMR nou</b>: numărul se atribuie automat (setezi numărul de pornire o dată). Transportatorul e pre-completat.','Completezi casetele (expeditor, destinatar, marfă, auto/șofer…).','<b>👁️ Previzualizare</b> sau <b>🖨️ Printează</b>. Sau „Fă CMR din comandă" ca să pre-completezi din comandă.']))
+    + tutSec("locatii","🗺️","Locații & gestiuni",
+        '<p><b>Locațiile</b> sunt spațiile din depozit (rafturi/zone). <b>Gestiunile</b> grupează locații — stocul gestiunii = suma locațiilor ei.</p>'
+        + tutSteps(['La „Locații" adaugi spații cu capacitate și le asociezi unei gestiuni.','La „Gestiuni" vezi stocul pe fiecare depozit.']))
+    + tutSec("clienti","👥","Clienți & portal",
+        '<p>Clienții pentru care depozitezi marfă (3PL). Fiecare poate avea cont de <b>portal</b>.</p>'
+        + tutSteps(['<b>+ Client</b> → date firmă. <b>Conturi</b> → login-uri de portal.','Clientul își vede în portal stocul, recepțiile și poate anunța aprovizionări.','„Deschide dosarul" îți arată tot despre un client (produse, comenzi, paleți, conturi).']))
+    + tutSec("zebra","📱","Aplicația Zebra (terminal)",
+        '<p>Aplicația de pe terminalul Zebra, cu scanare laser/cameră. Tot ce faci acolo se vede instant în admin.</p>'
+        + tutSteps(['Recepție / Expediere / Transfer, Recepție palet/colet, <b>Recepție pe cutii</b>, <b>Expediere cutie</b>.','<b>Scanează & caută</b>: recunoaște orice cod (produs / palet / colet / cutie).','Picking comenzi cu cantitate dintr-o dată; <b>Marfa a plecat</b>; <b>Consumabile</b>.','Imprimă etichete direct la imprimanta de pe PC.'])
+        + tutShot("Ecranul principal al aplicației Zebra"))
+    + tutSec("miscari","🔁","Mișcări & loturi",
+        '<p>Jurnalul complet al tuturor mișcărilor de stoc: cine, ce, când, cât, din ce <b>lot</b> și cu ce <b>dată</b>. Doar pentru consultare/audit.</p>')
+    + tutSec("etichete","🏷️","Etichete & imprimare",
+        '<p>Printezi etichete de produs, palet sau cutie, cu cod de bare.</p>'
+        + tutSteps(['Ții deschisă pagina „Imprimare" (Stație) pe calculatorul cu imprimanta.','De oriunde (admin sau Zebra) trimiți eticheta la imprimantă; stația o tipărește automat.','Poți regla formatul în „Editor etichetă".']))
+    + tutSec("backup","💾","Backup",
+        '<p>Copii de siguranță ale datelor. Doar admin.</p>'
+        + tutTip('Datele stau în cloud (Cloudflare D1); backupul îți dă în plus o copie descărcabilă.'));
+
+  setMain(topbar("Tutorial / Ghid") + body);
+};
+window.tutGo = function(id){ var e=el("tut_"+id); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); };
 
 VIEWS.warehouses = function(){
   var addBtn = can("admin") ? '<button onclick="warehouseForm()">+ Gestiune</button>' : '';
