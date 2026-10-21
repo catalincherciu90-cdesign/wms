@@ -486,12 +486,13 @@ function screenBoxReceive(){
     +'<button class="cam" onclick="openCam(function(c){el(\'bxr_scan\').value=c;bxrScan(c)})">📷 Scanează cu camera</button>'
     +'<div id="bxr_prod"></div>'
     +'<div id="bxr_form" style="display:none">'
-    +'<label>Configurație (lot)</label><select id="bxr_cfg" onchange="bxrCfgApply()"></select>'
-    +'<div style="display:flex;gap:8px"><div style="flex:1"><label>Buc/cutie mică</label><input id="bxr_pi" type="number" inputmode="numeric" min="0"></div><div style="flex:1"><label>Cutii mici/mare</label><input id="bxr_im" type="number" inputmode="numeric" min="0"></div></div>'
     +'<label>Locație</label><select id="bxr_loc">'+locOptions()+'</select>'
-    +'<label>Cutii mari</label><input id="bxr_m" type="number" inputmode="numeric" min="0" value="0">'
-    +'<label>Cutii mici libere</label><input id="bxr_i" type="number" inputmode="numeric" min="0" value="0">'
-    +'<label>Bucăți libere</label><input id="bxr_p" type="number" inputmode="numeric" min="0" value="0">'
+    +'<label>Configurație (lot)</label><select id="bxr_cfg" onchange="bxrCfgApply()"></select>'
+    +'<div style="font-weight:600;font-size:13px;margin:6px 0 2px">Ambalare (1 bax = câte cutii × câte produse):</div>'
+    +'<div style="display:flex;gap:8px"><div style="flex:1"><label>Cutii în bax</label><input id="bxr_im" type="number" inputmode="numeric" min="0"></div><div style="flex:1"><label>Produse în cutie</label><input id="bxr_pi" type="number" inputmode="numeric" min="0"></div></div>'
+    +'<label>Nr. baxuri recepționate</label><input id="bxr_m" type="number" inputmode="numeric" min="0" value="0">'
+    +'<label>Cutii în plus (fără bax)</label><input id="bxr_i" type="number" inputmode="numeric" min="0" value="0">'
+    +'<label>Bucăți în plus</label><input id="bxr_p" type="number" inputmode="numeric" min="0" value="0">'
     +'<label>Lot (opțional)</label><input id="bxr_lot" autocomplete="off">'
     +'<div id="bxr_tot" class="card" style="text-align:center;font-size:15px">Total: 0 buc</div>'
     +'<button class="big" onclick="bxrSubmit()">Confirmă recepția</button>'
@@ -528,7 +529,8 @@ window.bxrCalc=function(){
   var pi=Number((el("bxr_pi")||{}).value)||0, im=Number((el("bxr_im")||{}).value)||0;
   var m=Number((el("bxr_m")||{}).value)||0, i=Number((el("bxr_i")||{}).value)||0, pc=Number((el("bxr_p")||{}).value)||0;
   var tot=m*pi*im+i*pi+pc;
-  if(el("bxr_tot")) el("bxr_tot").innerHTML='Total: <b>'+tot+'</b> buc'+(m>0?(' · '+m+' cutii mari'):'')+(i>0?(' · '+i+' mici'):'');
+  var calc=(m>0&&im>0&&pi>0)?(m+'×'+im+'×'+pi+' = '):'';
+  if(el("bxr_tot")) el("bxr_tot").innerHTML=calc+'<b>'+tot+'</b> buc'+(i>0?(' · '+i+' cutii în plus'):'')+(pc>0?(' · '+pc+' buc în plus'):'');
 };
 window.bxrSubmit=function(){
   var p=window._bxr&&window._bxr.product; if(!p){ toast("Scanează un produs",true); return; }

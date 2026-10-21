@@ -1715,7 +1715,7 @@ VIEWS.tutorial = function(){
         + tutImg("stoc","Stocul pe produs — și pe cutii, în paralel"))
     + tutSec("receptie","📥","Recepție marfă",
         '<p>Bagi marfă în stoc. Mai multe moduri:</p>'
-        + tutSteps(['<b>Recepție simplă</b>: scanezi produsul, alegi locația, pui cantitatea, <b>Lot</b> și <b>Data</b> (de pe aviz).','<b>Recepție palet/colet</b>: creezi un palet (cod auto) cu produsele lui; intră automat în stoc.','<b>Recepție pe cutii</b>: produs + locație + nr. cutii mari / mici / bucăți → creează cutiile (CM-/CT-) și intră în stoc.','Scanezi <b>codul de bax</b> → produsul e recunoscut și cantitatea se completează cu buc/bax.'])
+        + tutSteps(['<b>Recepție simplă</b>: scanezi produsul, alegi locația, pui cantitatea, <b>Lot</b> și <b>Data</b> (de pe aviz).','<b>Recepție palet/colet</b>: creezi un palet (cod auto) cu produsele lui; intră automat în stoc.','<b>Recepție pe cutii (baxuri)</b>: produs + locație, apoi <b>nr. baxuri</b> × <b>cutii în bax</b> × <b>produse în cutie</b> → se calculează totalul, se creează cutiile (CM-/CT-) și intră în stoc.','Scanezi <b>codul de bax</b> → produsul e recunoscut și cantitatea se completează cu buc/bax.'])
         + tutImg("receptie","Formularul de recepție (cu lot și dată)"))
     + tutSec("comenzi","📋","Comenzi & expediere",
         '<p>Comenzi de la furnizori (intrare) și către clienți (ieșire). Ieșirile folosesc <b>stoc tampon</b>:</p>'
@@ -1748,7 +1748,7 @@ VIEWS.tutorial = function(){
         '<p>Aplicația de pe terminalul Zebra (scanare laser sau cameră). Tot ce faci acolo apare <b>instant în admin</b>. Te conectezi cu <b>email + parolă</b> sau prin <b>badge QR</b>. Pe ecranul principal ai toate operațiunile:</p>'
         + tutImg("zebra-home","Ecranul principal al aplicației Zebra",true)
         + '<div style="font-weight:700;margin:10px 0 4px">Operațiunile:</div>'
-        + tutSteps(['🔎 <b>Scanează & caută</b> — scanezi orice cod (produs / palet / colet / cutie) și vezi ce e și unde.','📥 <b>Recepție</b> — scanezi produsul (sau codul de bax), alegi locația, pui cantitatea, lotul și data.','📤 <b>Expediere</b> / 🔄 <b>Transfer</b> — scoți din stoc sau muți marfa între locații.','📦 <b>Recepție palet/colet</b> — creezi un palet cu produsele lui și poți atașa poză la aviz.','🧃 <b>Recepție pe cutii</b> — alegi nr. de cutii mari / mici / bucăți; se creează cutiile și etichetele.','📤 <b>Expediere cutie</b> — scanezi o cutie (CM-/CT-) și o expediezi.','✂️ <b>Spargere palet</b> — muți produse dintr-un palet în altul sau în locații.','📋 <b>Comenzi de pregătit</b> — culegi comanda (cu cantitate dintr-o dată), apoi „Pregătită".','🚚 <b>Marfa a plecat</b> — confirmi plecarea; stocul scade efectiv.','♻️ <b>Consumabile</b> — scazi rapid un consumabil (buton „➖ 1").','🖨️ <b>Imprimă etichetă</b> — trimiți eticheta la imprimanta de pe PC (+ test print).','✏️ <b>Actualizare stoc</b> / 🧮 <b>Inventar</b> — corectezi stocul sau faci inventar pe locație.'])
+        + tutSteps(['🔎 <b>Scanează & caută</b> — scanezi orice cod (produs / palet / colet / cutie) și vezi ce e și unde.','📥 <b>Recepție</b> — scanezi produsul (sau codul de bax), alegi locația, pui cantitatea, lotul și data.','📤 <b>Expediere</b> / 🔄 <b>Transfer</b> — scoți din stoc sau muți marfa între locații.','📦 <b>Recepție palet/colet</b> — creezi un palet cu produsele lui și poți atașa poză la aviz.','🧃 <b>Recepție pe cutii (baxuri)</b> — pui nr. baxuri × cutii în bax × produse în cutie; se calculează totalul și se creează cutiile + etichetele.','📤 <b>Expediere cutie</b> — scanezi o cutie (CM-/CT-) și o expediezi.','✂️ <b>Spargere palet</b> — muți produse dintr-un palet în altul sau în locații.','📋 <b>Comenzi de pregătit</b> — culegi comanda (cu cantitate dintr-o dată), apoi „Pregătită".','🚚 <b>Marfa a plecat</b> — confirmi plecarea; stocul scade efectiv.','♻️ <b>Consumabile</b> — scazi rapid un consumabil (buton „➖ 1").','🖨️ <b>Imprimă etichetă</b> — trimiți eticheta la imprimanta de pe PC (+ test print).','✏️ <b>Actualizare stoc</b> / 🧮 <b>Inventar</b> — corectezi stocul sau faci inventar pe locație.'])
         + '<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">'
         + tutImg("zebra-receptie","Recepție: produs/bax, locație, cantitate, lot, dată",true)
         + tutImg("zebra-cutii","Recepție pe cutii: mari / mici / bucăți",true)
@@ -3647,10 +3647,12 @@ window.boxReceiveForm = function(){
   var locOpts=_boxLocations.map(function(l){ return '<option value="'+l.id+'">'+esc(l.code)+'</option>'; }).join("");
   modal("Recepție pe cutii",
     '<div class="field"><label>Produs</label><select id="bxr_prod" onchange="boxPackLoad()">'+prodOpts+'</select></div>'
-    + '<div class="field"><label>Configurație ambalare (lot)</label><select id="bxr_cfg" onchange="boxCfgApply()"></select><div id="bxr_pack" class="muted" style="font-size:12px;margin-top:4px"></div></div>'
-    + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","bxr_pi","","","number","Câte bucăți în cutia mică (acest lot).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","bxr_im","","","number","Câte cutii mici în cutia mare.")+'</div></div>'
     + '<div class="field"><label>Locație</label><select id="bxr_loc">'+locOpts+'</select></div>'
-    + '<div class="row"><div style="flex:1">'+field("Cutii mari","bxr_masters","","","number","Nr. cutii mari pline.")+'</div><div style="flex:1">'+field("Cutii mici libere","bxr_inners","","","number","Cutii mici în plus, fără cutie mare.")+'</div><div style="flex:1">'+field("Bucăți libere","bxr_pieces","","","number","Bucăți în afara cutiilor.")+'</div></div>'
+    + '<div class="field"><label>Configurație ambalare (lot)</label><select id="bxr_cfg" onchange="boxCfgApply()"></select><div id="bxr_pack" class="muted" style="font-size:12px;margin-top:4px"></div></div>'
+    + '<div class="fhint" style="margin:2px 0 4px;font-weight:600">Ambalarea (1 bax = câte cutii × câte produse):</div>'
+    + '<div class="row"><div style="flex:1">'+field("Cutii în bax","bxr_im","","","number","Câte cutii sunt într-un bax (cutie mare).")+'</div><div style="flex:1">'+field("Produse în cutie","bxr_pi","","","number","Câte produse (bucăți) sunt într-o cutie.")+'</div></div>'
+    + '<div class="row"><div style="flex:1">'+field("Nr. baxuri recepționate","bxr_masters","","","number","Câte baxuri (cutii mari) pline primești.")+'</div></div>'
+    + '<details style="margin:2px 0 8px"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">+ Cutii / bucăți în plus (în afara baxurilor)</summary><div class="row" style="margin-top:6px"><div style="flex:1">'+field("Cutii în plus","bxr_inners","","","number","Cutii separate, care nu sunt într-un bax.")+'</div><div style="flex:1">'+field("Bucăți în plus","bxr_pieces","","","number","Bucăți răzlețe, în afara cutiilor.")+'</div></div></details>'
     + field("Lot (opțional)","bxr_lot","","","text","Nr. lot, dacă există.")
     + '<div id="bxr_total" class="card" style="padding:8px 10px;background:var(--panel-2);font-size:13px"></div>',
     function(){
@@ -3689,10 +3691,11 @@ window.boxCfgApply = function(){
 };
 window.boxCalc = function(){
   var pi=Number((el("bxr_pi")||{}).value)||0, im=Number((el("bxr_im")||{}).value)||0;
-  var packEl=el("bxr_pack"); if(packEl) packEl.textContent = pi>0 ? ("1 cutie mare = "+(im>0?(im+" mici × "+pi+" = "+(pi*im)+" buc"):(pi+" buc/cutie, fără cutie mare"))) : "⚠ Setează ambalarea (buc/cutie mică).";
+  var packEl=el("bxr_pack"); if(packEl) packEl.textContent = pi>0 ? ("1 bax = "+(im>0?(im+" cutii × "+pi+" produse = "+(pi*im)+" buc"):(pi+" buc/cutie, fără bax"))) : "⚠ Setează produse în cutie.";
   var m=Number((el("bxr_masters")||{}).value)||0, inn=Number((el("bxr_inners")||{}).value)||0, pcs=Number((el("bxr_pieces")||{}).value)||0;
   var tot=m*pi*im+inn*pi+pcs;
-  var t=el("bxr_total"); if(t) t.innerHTML='Total: <b>'+tot+'</b> buc'+(m>0?(' · '+m+' cutii mari'):'')+(inn>0?(' · '+inn+' cutii mici'):'')+(pcs>0?(' · '+pcs+' buc libere'):'');
+  var calc=(m>0&&im>0&&pi>0)?(m+' baxuri × '+im+' cutii × '+pi+' produse'):'';
+  var t=el("bxr_total"); if(t) t.innerHTML=(calc?(calc+' = '):'Total: ')+'<b>'+tot+'</b> buc'+(inn>0?(' · '+inn+' cutii în plus'):'')+(pcs>0?(' · '+pcs+' buc în plus'):'');
 };
 function boxOfferPrint(boxes){
   modal("Etichete cutii",
