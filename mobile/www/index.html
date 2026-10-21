@@ -336,6 +336,7 @@ function screenMove(kind){
     +'<div id="m_form" style="display:none">'
     +'<label>Locație</label><select id="m_loc">'+locOptions()+'</select>'
     +'<label>Cantitate</label><input id="m_qty" type="number" inputmode="numeric" min="1" value="1">'
+    +(kind==="receive"?'<label>Lot (opțional)</label><input id="m_lot" autocomplete="off"><label>Data recepției</label><input id="m_date" type="date">':'')
     +'<button class="big" onclick="mvSubmit()">'+(kind==="receive"?"Confirmă recepția":"Confirmă expedierea")+'</button>'
     +'</div>', {back:"renderHome()"});
   wireScan("m_scan", mvScan);
@@ -353,6 +354,7 @@ function mvScan(code){
     window._mv.product=p;
     el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
     el("m_form").style.display="block";
+    if(el("m_date")&&!el("m_date").value) el("m_date").value=new Date().toISOString().slice(0,10);
     el("m_qty").focus(); el("m_qty").select();
   }).catch(function(e){ toast(e.message,true); });
 }
@@ -380,6 +382,7 @@ window.mvCreateProduct=function(){
     window._mv.product=d.product;
     el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(d.product.barcode||d.product.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(d.product.name)+'</div></div>';
     el("m_form").style.display="block";
+    if(el("m_date")&&!el("m_date").value) el("m_date").value=new Date().toISOString().slice(0,10);
     if(el("m_qty")){ el("m_qty").focus(); el("m_qty").select(); }
   }).catch(function(e){ toast(e.message,true); });
 };
@@ -389,7 +392,9 @@ function mvSubmit(){
   if(!loc){ toast("Alege locația",true); return; }
   if(!(qty>0)){ toast("Cantitate invalidă",true); return; }
   var path = mv.kind==="receive" ? "/api/inventory/receive" : "/api/inventory/ship";
-  api("POST",path,{product_id:mv.product.id, location_id:loc, quantity:qty}).then(function(){
+  var body={product_id:mv.product.id, location_id:loc, quantity:qty};
+  if(mv.kind==="receive"){ if(el("m_lot")) body.lot=el("m_lot").value||null; if(el("m_date")) body.eff_date=el("m_date").value||null; }
+  api("POST",path,body).then(function(){
     feedback(true);
     toast((mv.kind==="receive"?"Recepționat: ":"Expediat: ")+qty+" × "+mv.product.name);
     screenMove(mv.kind); // reset pentru următorul scan
