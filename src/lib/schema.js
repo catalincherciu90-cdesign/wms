@@ -53,6 +53,9 @@ export async function ensureSchema(env) {
   // Lot + data efectivă (ex: data de pe aviz) pe fiecare mișcare de stoc — trasabilitate.
   try { await env.DB.prepare('ALTER TABLE stock_movements ADD COLUMN lot TEXT').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE stock_movements ADD COLUMN eff_date TEXT').run(); } catch (e) {}
+  // Cod de bare separat pentru bax (cartonul) + câte bucăți are un bax.
+  try { await env.DB.prepare('ALTER TABLE products ADD COLUMN bax_barcode TEXT').run(); } catch (e) {}
+  try { await env.DB.prepare('ALTER TABLE products ADD COLUMN bax_qty INTEGER').run(); } catch (e) {}
   // Cutii fizice pe niveluri: cutie mare (master) / cutie mică (inner), ierarhie + plasare pe locație.
   try { await env.DB.prepare("ALTER TABLE boxes ADD COLUMN kind TEXT NOT NULL DEFAULT 'inner'").run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE boxes ADD COLUMN parent_id INTEGER').run(); } catch (e) {}
