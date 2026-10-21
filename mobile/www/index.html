@@ -355,6 +355,7 @@ function mvScan(code){
     el("m_prod").innerHTML='<div class="card"><div class="muted" style="font-size:12px">'+esc(p.barcode||p.sku||"")+'</div><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div></div>';
     el("m_form").style.display="block";
     if(el("m_date")&&!el("m_date").value) el("m_date").value=new Date().toISOString().slice(0,10);
+    if(window._mv.kind==="receive" && code===p.bax_barcode && Number(p.bax_qty)>0){ el("m_qty").value=p.bax_qty; toast("Bax × "+p.bax_qty); }
     el("m_qty").focus(); el("m_qty").select();
   }).catch(function(e){ toast(e.message,true); });
 }
@@ -1194,7 +1195,7 @@ function locOptions(){ return '<option value="">— alege —</option>'+LOCS.map
 function resolveProduct(code){
   return api("GET","/api/products?q="+encodeURIComponent(code)).then(function(d){
     var list=d.products||[];
-    var exact=list.filter(function(p){ return p.barcode===code || p.sku===code; });
+    var exact=list.filter(function(p){ return p.barcode===code || p.sku===code || p.bax_barcode===code; });
     return (exact[0]||list[0]||null);
   });
 }

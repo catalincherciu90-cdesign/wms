@@ -1584,9 +1584,10 @@ window.productForm = function(id){
     + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc","","text","Unitatea de măsură (ex: buc, kg, cutie).")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number","Sub acest stoc primești alertă de reaprovizionare.")+'</div></div>'
     + '<div class="field" style="margin-bottom:4px"><label style="font-size:12.5px;color:var(--muted)">📦 Ambalare implicită (opțional) — pentru stoc pe cutii</label></div>'
     + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","p_pcs_inner",p.pcs_per_inner||"","","number","Câte bucăți încap într-o cutie mică (ex: 10).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","p_inner_master",p.inner_per_master||"","","number","Câte cutii mici încap într-o cutie mare (ex: 6).")+'</div></div>'
+    + '<div class="row"><div style="flex:1">'+field("Cod bax (carton)","p_bax_bc",p.bax_barcode||"","","text","Codul de bare de pe bax/carton — diferit de EAN-ul bucății. Scanat la recepție, completează automat cantitatea.")+'</div><div style="flex:1">'+field("Bucăți / bax","p_bax_qty",p.bax_qty||"","","number","Câte bucăți are un bax.")+'</div></div>'
     + (id?'<div id="p_packs" style="margin-top:6px"></div>':'<div class="fhint">Mai multe configurații (loturi diferite) le adaugi după ce salvezi produsul.</div>'),
     function(){
-      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null };
+      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null, bax_barcode:(el("p_bax_bc")&&el("p_bax_bc").value)||null, bax_qty:Number(el("p_bax_qty")&&el("p_bax_qty").value)||null };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
@@ -1858,7 +1859,14 @@ window.opScan = function(){
   var q=raw.toLowerCase(); if(!q) return;
   var prods=cache.opProducts||[];
   var found=prods.find(function(p){ return String(p.barcode||"").toLowerCase()===q || String(p.sku||"").toLowerCase()===q; });
-  if(found){ el("op_prod").value=found.id; toast("Găsit: "+found.sku); inp.value=""; var qt=el("op_qty"); if(qt) qt.focus(); }
+  var isBax=false;
+  if(!found){ found=prods.find(function(p){ return String(p.bax_barcode||"").toLowerCase()===q; }); if(found) isBax=true; }
+  if(found){
+    el("op_prod").value=found.id; inp.value="";
+    if(isBax && Number(found.bax_qty)>0 && el("op_qty")){ el("op_qty").value=found.bax_qty; toast("Bax: "+found.sku+" × "+found.bax_qty); }
+    else { toast("Găsit: "+found.sku); }
+    var qt=el("op_qty"); if(qt) qt.focus();
+  }
   else { toast("Cod negăsit: "+q,"bad"); inp.select(); }
 };
 VIEWS.receive = function(){ opForm("Recepție marfă","receive"); };
