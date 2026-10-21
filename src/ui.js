@@ -1275,6 +1275,18 @@ function miniBars(items){
       +'<div class="bar-t"><div class="bar-f" style="width:'+pct+'%;background-color:'+col+'"></div></div></div>';
   }).join("");
 }
+// Etichetă unitate de comandă (cutie/bax) pentru afișare
+function uomLabel(uom, n){
+  n=Number(n)||0;
+  if(uom==="cutie") return n===1?"cutie mică":"cutii mici";
+  if(uom==="cutie_mare") return n===1?"cutie mare":"cutii mari";
+  if(uom==="bax") return n===1?"bax":"baxuri";
+  return "buc";
+}
+function uomNote(l){
+  if(l&&l.uom&&l.uom!=="buc"&&l.uom_qty) return '<div class="muted" style="font-size:11px">comandat: '+esc(l.uom_qty)+' '+uomLabel(l.uom,l.uom_qty)+'</div>';
+  return "";
+}
 function orderStatusPill(s){
   var m={draft:["mut","ciornă"],confirmed:["warn","confirmată"],prepared:["warn","pregătită"],completed:["good","finalizată"],cancelled:["bad","anulată"]};
   var x=m[s]||["mut",s]; return '<span class="pill '+x[0]+'">'+x[1]+'</span>';
@@ -3758,7 +3770,7 @@ window.orderDetail = function(id){
   api("GET","/api/orders/"+id).then(function(d){
     var o=d.order;
     var lines='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th><th class="right">Făcut</th></tr></thead><tbody>'
-      + d.lines.map(function(l){ return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td></tr>'; }).join("")
+      + d.lines.map(function(l){ return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+uomNote(l)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td></tr>'; }).join("")
       + '</tbody></table>';
     // produse noi anunțate (de definit la recepție)
     var newItems='';
@@ -3860,7 +3872,7 @@ window.orderProcess = function(id){
     var o=d.order;
     if(o.status==="completed"||o.status==="cancelled"){ orderDetail(id); return; }
     _opk={ id:id, order:o, inbound:(o.type==="inbound"), newItems:(d.new_items||[]).length,
-      lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0, packed:false}; }) };
+      lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0, packed:false, uom:l.uom, uom_qty:l.uom_qty}; }) };
     opkRender();
   }).catch(function(e){ toast(e.message,"bad"); });
 };
@@ -3889,7 +3901,7 @@ function opkRender(){
     var packed=(!inbound && ok) ? ('<label class="row" style="gap:8px;align-items:center;margin-top:10px"><input type="checkbox" '+(l.packed?"checked":"")+' onchange="opkTogglePacked('+idx+')"> Pus în colet</label>') : '';
     return '<div class="card" style="margin-bottom:8px;border-left:4px solid '+bar+'">'
       +'<div class="row" style="justify-content:space-between;align-items:center">'
-      +'<div><b>'+esc(l.name)+'</b><div class="muted" style="font-size:12px">'+esc(l.sku||"")+'</div></div>'
+      +'<div><b>'+esc(l.name)+'</b><div class="muted" style="font-size:12px">'+esc(l.sku||"")+(l.uom&&l.uom!=="buc"&&l.uom_qty?(' · comandat '+esc(l.uom_qty)+' '+uomLabel(l.uom,l.uom_qty)):'')+'</div></div>'
       +'<div style="text-align:right"><b style="font-size:20px;color:'+(ok?"var(--good)":"var(--text)")+'">'+l.done+'</b><span class="muted"> / '+l.need+' '+esc(l.unit||"")+'</span></div>'
       +'</div>'+qtyCtl+one+packed+'</div>';
   }).join("");
@@ -4007,7 +4019,7 @@ window.deleteOrder = function(id, code, wasCompleted){
 };
 var orderLines=[];
 window.orderForm = function(){
-  orderLines=[{product_id:"",quantity:1}];
+  orderLines=[{product_id:"",uom:"buc",count:1,quantity:1}];
   setMain(topbar("Comandă nouă")
     + '<div class="card" style="padding:20px;max-width:640px"><div id="ofmsg"></div>'
     + '<div class="row"><div style="flex:1"><label>Tip</label><select id="of_type" onchange="ofLoadPartners()"><option value="inbound">Intrare (de la furnizor)</option><option value="outbound">Ieșire (către client)</option></select>'+fhint("Intrare = primești marfă. Ieșire = trimiți marfă.")+'</div>'
@@ -4025,21 +4037,44 @@ window.ofLoadPartners = function(){
     if(el("of_partner")) el("of_partner").innerHTML='<option value="">— fără —</option>'+d.partners.map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join("");
   });
 };
-window.ofAddLine = function(){ orderLines.push({product_id:"",quantity:1}); ofRenderLines(); };
-window.ofRemoveLine = function(i){ orderLines.splice(i,1); if(!orderLines.length) orderLines.push({product_id:"",quantity:1}); ofRenderLines(); };
+window.ofAddLine = function(){ orderLines.push({product_id:"",uom:"buc",count:1,quantity:1}); ofRenderLines(); };
+window.ofRemoveLine = function(i){ orderLines.splice(i,1); if(!orderLines.length) orderLines.push({product_id:"",uom:"buc",count:1,quantity:1}); ofRenderLines(); };
+// Unitățile disponibile pentru un produs (din ambalare): bucată, cutie mică, cutie mare, bax.
+function ofUoms(p){
+  var u=[{key:"buc",label:"bucăți",factor:1}];
+  var pi=Number(p&&p.pcs_per_inner)||0, im=Number(p&&p.inner_per_master)||0, bx=Number(p&&p.bax_qty)||0;
+  if(pi>0) u.push({key:"cutie",label:"cutii mici ("+pi+" buc)",factor:pi});
+  if(pi>0&&im>0) u.push({key:"cutie_mare",label:"cutii mari ("+(pi*im)+" buc)",factor:pi*im});
+  if(bx>0) u.push({key:"bax",label:"baxuri ("+bx+" buc)",factor:bx});
+  return u;
+}
+function ofFactor(p,key){ var u=ofUoms(p).find(function(x){return x.key===key;}); return u?u.factor:1; }
+window.ofSetProd = function(i,v){ orderLines[i].product_id=v; orderLines[i].uom="buc"; ofCalcLine(i); ofRenderLines(); };
+window.ofSetUom = function(i,v){ orderLines[i].uom=v; ofCalcLine(i); ofRenderLines(); };
+window.ofSetCount = function(i,v){ orderLines[i].count=Number(v)||0; ofCalcLine(i); ofRenderLines(); };
+function ofCalcLine(i){
+  var l=orderLines[i]; var p=(cache.ofProducts||[]).find(function(x){return String(x.id)===String(l.product_id);})||{};
+  var f=ofFactor(p,l.uom||"buc"); l.quantity=(Number(l.count)||0)*f; l.uom_qty=Number(l.count)||0;
+}
 function ofRenderLines(){
   var prods=cache.ofProducts||[];
   el("of_lines").innerHTML=orderLines.map(function(l,i){
-    var opts=prods.map(function(p){return '<option value="'+p.id+'"'+(String(l.product_id)===String(p.id)?' selected':'')+'>'+esc(p.sku+" — "+p.name)+'</option>';}).join("");
+    var p=prods.find(function(x){return String(x.id)===String(l.product_id);})||{};
+    var opts=prods.map(function(pr){return '<option value="'+pr.id+'"'+(String(l.product_id)===String(pr.id)?' selected':'')+'>'+esc(pr.sku+" — "+pr.name)+'</option>';}).join("");
+    var uoms=ofUoms(p);
+    var uomOpts=uoms.map(function(u){return '<option value="'+u.key+'"'+((l.uom||"buc")===u.key?' selected':'')+'>'+esc(u.label)+'</option>';}).join("");
+    var pieces=(Number(l.count)||0)*ofFactor(p,l.uom||"buc");
+    var pcsNote=(l.uom&&l.uom!=="buc")?('<div class="muted" style="font-size:11px">= '+pieces+' buc</div>'):'';
     return '<div class="row" style="margin-bottom:8px;align-items:flex-end">'
-      +'<div style="flex:3"><select onchange="orderLines['+i+'].product_id=this.value"><option value="">— produs —</option>'+opts+'</select></div>'
-      +'<div style="flex:1"><input type="number" min="1" value="'+esc(l.quantity)+'" onchange="orderLines['+i+'].quantity=Number(this.value)"></div>'
+      +'<div style="flex:3"><select onchange="ofSetProd('+i+',this.value)"><option value="">— produs —</option>'+opts+'</select></div>'
+      +'<div style="flex:1"><input type="number" min="1" value="'+esc(l.count!=null?l.count:1)+'" onchange="ofSetCount('+i+',this.value)"></div>'
+      +'<div style="flex:1.6"><select onchange="ofSetUom('+i+',this.value)">'+uomOpts+'</select>'+pcsNote+'</div>'
       +'<button class="ghost sm" onclick="ofRemoveLine('+i+')">✕</button></div>';
   }).join("");
 }
 window.ofSubmit = function(){
   var type=el("of_type").value;
-  var lines=orderLines.filter(function(l){return l.product_id && Number(l.quantity)>0;}).map(function(l){return {product_id:Number(l.product_id),quantity:Number(l.quantity)};});
+  var lines=orderLines.filter(function(l){return l.product_id && Number(l.quantity)>0;}).map(function(l){return {product_id:Number(l.product_id),quantity:Number(l.quantity),uom:(l.uom&&l.uom!=="buc")?l.uom:null,uom_qty:(l.uom&&l.uom!=="buc")?(Number(l.count)||null):null};});
   if(!lines.length){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">Adaugă cel puțin o linie validă</div>'; return; }
   var body={ type:type, partner_id:el("of_partner").value?Number(el("of_partner").value):null, note:el("of_note").value, lines:lines };
   api("POST","/api/orders",body).then(function(){ toast("Comandă creată"); go("orders"); }).catch(function(e){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
