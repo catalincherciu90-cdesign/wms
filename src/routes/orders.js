@@ -92,8 +92,8 @@ export async function create(request, env, ctx, user) {
   await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
 
   await env.DB.batch(b.lines.map((l) =>
-    env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity) VALUES (?, ?, ?)')
-      .bind(id, Number(l.product_id), Number(l.quantity))
+    env.DB.prepare('INSERT INTO order_lines (order_id, product_id, quantity, uom, uom_qty) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, Number(l.product_id), Number(l.quantity), (l.uom || null), (Number(l.uom_qty) || null))
   ));
   const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
   return json({ order }, 201);
