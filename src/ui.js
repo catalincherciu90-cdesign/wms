@@ -1452,6 +1452,7 @@ window.loadProducts = function(){
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
         + '<td class="right">'+codeBtns
         + (hasBc && can("operator")?' <button class="ghost sm" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button> <button class="ghost sm" onclick="prodLabelPdf('+p.id+')" title="Descarcă eticheta PDF">PDF</button>':'')
+        + (!p.client_id && can("operator")?' <button class="sm" onclick="consumeProduct('+p.id+',\\''+esc(String(p.name).replace(/\\'/g,""))+'\\')" title="Scade din stoc (consumat)">➖ Consumat</button>':'')
         + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
@@ -1560,6 +1561,18 @@ function packBreakdown(total, pcsInner, innerMaster){
   if(rem>0||!parts.length) parts.push(rem+" buc");
   return parts.join(" + ");
 }
+window.consumeProduct = function(id, name){
+  modal("Consum: "+esc(name||""),
+    '<p class="muted" style="font-size:13px">Scade din stoc cantitatea consumată/schimbată. Se ia din locațiile care au stoc.</p>'
+    + field("Cantitate consumată","cons_qty","1","","number","Câte bucăți s-au consumat (implicit 1)."),
+    function(){
+      var q=Number(el("cons_qty").value)||0;
+      if(!(q>0)){ toast("Cantitate invalidă","bad"); return; }
+      api("POST","/api/inventory/consume",{product_id:id, quantity:q}).then(function(){ closeModal(); toast("Consumat: "+q+" × "+(name||"")); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv){ sv.textContent="Confirmă consum"; }
+  setTimeout(function(){ if(el("cons_qty")){ el("cons_qty").focus(); el("cons_qty").select(); } },30);
+};
 window.productForm = function(id){
   var p = id ? cache.products.find(function(x){return x.id===id;}) : {unit:"buc",reorder_point:0,active:1};
   modal((id?"Editează":"Adaugă")+" produs",

@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v126';
+const APP_VERSION = 'v127';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -67,6 +67,7 @@ const routes = [
   ['GET', '/api/inventory/export', inventory.exportStockCsv, 'viewer'],
   ['POST', '/api/inventory/receive', inventory.receive, 'operator'],
   ['POST', '/api/inventory/ship', inventory.ship, 'operator'],
+  ['POST', '/api/inventory/consume', inventory.consume, 'operator'],
   ['POST', '/api/inventory/adjust', inventory.adjust, 'operator'],
   ['POST', '/api/inventory/transfer', inventory.transfer, 'operator'],
   ['POST', '/api/inventory/transfer-location', inventory.transferLocation, 'operator'],

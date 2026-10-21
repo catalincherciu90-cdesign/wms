@@ -109,6 +109,31 @@ export async function ship(request, env, ctx, user) {
   } catch (e) { return error(String(e.message || e), 400); }
 }
 
+// Consum rapid (consumabile): scade o cantitate din stoc, din locațiile care au
+// stoc (în ordine, cea mai plină prima). Pentru butonul „s-a schimbat/consumat".
+export async function consume(request, env, ctx, user) {
+  const b = await readJson(request);
+  const pid = Number(b?.product_id);
+  const qty = Math.floor(Number(b?.quantity) || 0);
+  if (!pid || qty <= 0) return error('product_id și cantitate > 0 obligatorii', 400);
+  const { results: rows } = await env.DB.prepare(
+    'SELECT location_id, quantity FROM inventory WHERE product_id = ? AND quantity > 0 ORDER BY quantity DESC'
+  ).bind(pid).all();
+  const total = rows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  if (total < qty) return error('Stoc insuficient (disponibil: ' + total + ')', 400);
+  let rem = qty;
+  const stmts = [];
+  for (const r of rows) {
+    if (rem <= 0) break;
+    const take = Math.min(Number(r.quantity) || 0, rem);
+    stmts.push(env.DB.prepare("UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now') WHERE product_id = ? AND location_id = ?").bind(take, pid, r.location_id));
+    stmts.push(env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id) VALUES (?, ?, 'outbound', ?, 'CONSUM', 'consum consumabil', ?)").bind(pid, r.location_id, -take, user.sub));
+    rem -= take;
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true, consumed: qty });
+}
+
 export async function adjust(request, env, ctx, user) {
   const b = await readJson(request);
   const delta = Number(b?.delta);

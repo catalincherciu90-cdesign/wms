@@ -244,6 +244,7 @@ function renderHome(){
     +tile("printlabel","🖨️","Imprimă<br>etichetă")
     +tile("transfer","🔄","Transfer")
     +tile("stock","✏️","Actualizare<br>stoc")
+    +tile("consum","♻️","Consumabile")
     +tile("inventory","🧮","Inventar")
     +'</div>'
     +'<button class="big ghost" style="margin-top:22px" onclick="logout()">Ieșire</button>'
@@ -251,7 +252,7 @@ function renderHome(){
 }
 function tile(op,ic,label){ return '<div class="tile" onclick="startOp(\''+op+'\')"><span class="ic">'+ic+'</span>'+label+'</div>'; }
 
-window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="boxrecv") screenBoxReceive(); else if(op==="boxship") screenBoxShip(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
+window.startOp=function(op){ if(op==="lookup") screenLookup(); else if(op==="receive") screenMove("receive"); else if(op==="ship") screenMove("ship"); else if(op==="transfer") screenTransfer(); else if(op==="orders") screenOrders(); else if(op==="depart") screenDepartList(); else if(op==="stock") screenStockSet(); else if(op==="pallet") screenPallet(); else if(op==="boxrecv") screenBoxReceive(); else if(op==="boxship") screenBoxShip(); else if(op==="consum") screenConsum(); else if(op==="palletship") screenPalletShip(); else if(op==="spargere") screenSplit(); else if(op==="printlabel") screenPrintLabel(); else if(op==="inventory") screenInventory(); };
 
 /* ---- Scanare & caută ---- */
 function screenLookup(){
@@ -394,6 +395,48 @@ function mvSubmit(){
     screenMove(mv.kind); // reset pentru următorul scan
   }).catch(function(e){ feedback(false); toast(e.message,true); });
 }
+
+/* ---- Consumabile (buton rapid de consum) ---- */
+function screenConsum(){
+  window._cons={product:null};
+  scanTarget=function(code){ consScan(code); };
+  shell("Consumabile",
+    '<div class="scanbox"><input id="cons_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează consumabilul"></div>'
+    +'<button class="cam" onclick="openCam(function(c){el(\'cons_scan\').value=c;consScan(c)})">📷 Scanează cu camera</button>'
+    +'<div id="cons_prod"></div>'
+    +'<div id="cons_form" style="display:none"><label>Cantitate consumată</label><input id="cons_q" type="number" inputmode="numeric" min="1" value="1"><button class="big" onclick="consSubmit()">➖ Consumat</button></div>'
+    +'<div style="font-size:13px;color:#889;margin:12px 0 4px">Consumabile cu stoc:</div><div id="cons_list" class="muted">Se încarcă…</div>', {back:"renderHome()"});
+  wireScan("cons_scan", consScan);
+  consLoadList();
+}
+function consLoadList(){
+  api("GET","/api/products?owner=internal").then(function(d){
+    var list=(d.products||[]).filter(function(p){return Number(p.stock||0)>0;});
+    if(!list.length){ el("cons_list").innerHTML='<div class="card center muted">Niciun consumabil cu stoc.</div>'; return; }
+    el("cons_list").innerHTML=list.map(function(p){
+      return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;margin-bottom:6px"><div><b>'+esc(p.name)+'</b><div class="muted" style="font-size:12px">'+esc(p.stock)+' '+esc(p.unit||"buc")+'</div></div>'
+        +'<button class="sm" onclick="consQuick('+p.id+',\''+esc(String(p.name).replace(/'/g,""))+'\')">➖ 1</button></div>';
+    }).join("");
+  }).catch(function(){ el("cons_list").innerHTML=""; });
+}
+window.consQuick=function(id,name){
+  api("POST","/api/inventory/consume",{product_id:id, quantity:1}).then(function(){ feedback(true); toast("Consumat 1 × "+name); consLoadList(); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
+function consScan(code){
+  code=(code||"").trim(); if(!code) return;
+  resolveProduct(code).then(function(p){
+    if(!p){ feedback(false); el("cons_prod").innerHTML='<div class="card center muted">Produs negăsit: '+esc(code)+'</div>'; el("cons_form").style.display="none"; return; }
+    feedback(true); window._cons.product=p;
+    el("cons_prod").innerHTML='<div class="card"><div style="font-size:17px;font-weight:800">'+esc(p.name)+'</div><div class="muted" style="font-size:12px">stoc: '+esc(p.stock||0)+' '+esc(p.unit||"buc")+'</div></div>';
+    el("cons_form").style.display="block";
+    if(el("cons_q")){ el("cons_q").focus(); el("cons_q").select(); }
+  }).catch(function(e){ toast(e.message,true); });
+}
+window.consSubmit=function(){
+  var p=window._cons&&window._cons.product; if(!p){ toast("Scanează un consumabil",true); return; }
+  var q=Number(el("cons_q").value)||0; if(!(q>0)){ toast("Cantitate invalidă",true); return; }
+  api("POST","/api/inventory/consume",{product_id:p.id, quantity:q}).then(function(){ feedback(true); toast("Consumat "+q+" × "+p.name); screenConsum(); }).catch(function(e){ feedback(false); toast(e.message,true); });
+};
 
 /* ---- Expediere cutie (scanezi cutia mare/mică → pleacă) ---- */
 function screenBoxShip(){
