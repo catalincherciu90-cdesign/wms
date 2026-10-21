@@ -16,6 +16,10 @@ import tutComenzi from '../vendor/tut-comenzi.jpg';
 import tutCutii from '../vendor/tut-cutii.jpg';
 import tutCmrForm from '../vendor/tut-cmr-form.jpg';
 import tutMiscari from '../vendor/tut-miscari.jpg';
+import tutZebraHome from '../vendor/tut-zebra-home.jpg';
+import tutZebraReceptie from '../vendor/tut-zebra-receptie.jpg';
+import tutZebraCutii from '../vendor/tut-zebra-cutii.jpg';
+import tutZebraComenzi from '../vendor/tut-zebra-comenzi.jpg';
 import { corsHeaders } from '../lib/http.js';
 
 const IMAGES = { 'login-bg': loginBg, 'site-hero': siteHero, 'site-1': site1, 'site-2': site2, 'logo': logo };
@@ -23,6 +27,8 @@ const JPEGS = {
   'tut-dashboard': tutDashboard, 'tut-produse': tutProduse, 'tut-stoc': tutStoc,
   'tut-receptie': tutReceptie, 'tut-comenzi': tutComenzi, 'tut-cutii': tutCutii,
   'tut-cmr-form': tutCmrForm, 'tut-miscari': tutMiscari,
+  'tut-zebra-home': tutZebraHome, 'tut-zebra-receptie': tutZebraReceptie,
+  'tut-zebra-cutii': tutZebraCutii, 'tut-zebra-comenzi': tutZebraComenzi,
 };
 
 function js(src) {

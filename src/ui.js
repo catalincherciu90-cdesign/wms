@@ -1741,10 +1741,17 @@ VIEWS.tutorial = function(){
     + tutSec("clienti","👥","Clienți & portal",
         '<p>Clienții pentru care depozitezi marfă (3PL). Fiecare poate avea cont de <b>portal</b>.</p>'
         + tutSteps(['<b>+ Client</b> → date firmă. <b>Conturi</b> → login-uri de portal.','Clientul își vede în portal stocul, recepțiile și poate anunța aprovizionări.','„Deschide dosarul" îți arată tot despre un client (produse, comenzi, paleți, conturi).']))
-    + tutSec("zebra","📱","Aplicația Zebra (terminal)",
-        '<p>Aplicația de pe terminalul Zebra, cu scanare laser/cameră. Tot ce faci acolo se vede instant în admin.</p>'
-        + tutSteps(['Recepție / Expediere / Transfer, Recepție palet/colet, <b>Recepție pe cutii</b>, <b>Expediere cutie</b>.','<b>Scanează & caută</b>: recunoaște orice cod (produs / palet / colet / cutie).','Picking comenzi cu cantitate dintr-o dată; <b>Marfa a plecat</b>; <b>Consumabile</b>.','Imprimă etichete direct la imprimanta de pe PC.'])
-        + tutShot("Ecranul principal al aplicației Zebra"))
+    + tutSec("zebra","📱","Aplicația Zebra (terminal) — ghid complet",
+        '<p>Aplicația de pe terminalul Zebra (scanare laser sau cameră). Tot ce faci acolo apare <b>instant în admin</b>. Te conectezi cu <b>email + parolă</b> sau prin <b>badge QR</b>. Pe ecranul principal ai toate operațiunile:</p>'
+        + tutImg("zebra-home","Ecranul principal al aplicației Zebra")
+        + '<div style="font-weight:700;margin:10px 0 4px">Operațiunile:</div>'
+        + tutSteps(['🔎 <b>Scanează & caută</b> — scanezi orice cod (produs / palet / colet / cutie) și vezi ce e și unde.','📥 <b>Recepție</b> — scanezi produsul (sau codul de bax), alegi locația, pui cantitatea, lotul și data.','📤 <b>Expediere</b> / 🔄 <b>Transfer</b> — scoți din stoc sau muți marfa între locații.','📦 <b>Recepție palet/colet</b> — creezi un palet cu produsele lui și poți atașa poză la aviz.','🧃 <b>Recepție pe cutii</b> — alegi nr. de cutii mari / mici / bucăți; se creează cutiile și etichetele.','📤 <b>Expediere cutie</b> — scanezi o cutie (CM-/CT-) și o expediezi.','✂️ <b>Spargere palet</b> — muți produse dintr-un palet în altul sau în locații.','📋 <b>Comenzi de pregătit</b> — culegi comanda (cu cantitate dintr-o dată), apoi „Pregătită".','🚚 <b>Marfa a plecat</b> — confirmi plecarea; stocul scade efectiv.','♻️ <b>Consumabile</b> — scazi rapid un consumabil (buton „➖ 1").','🖨️ <b>Imprimă etichetă</b> — trimiți eticheta la imprimanta de pe PC (+ test print).','✏️ <b>Actualizare stoc</b> / 🧮 <b>Inventar</b> — corectezi stocul sau faci inventar pe locație.'])
+        + '<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">'
+        + tutImg("zebra-receptie","Recepție: produs/bax, locație, cantitate, lot, dată")
+        + tutImg("zebra-cutii","Recepție pe cutii: mari / mici / bucăți")
+        + '</div>'
+        + tutImg("zebra-comenzi","Comenzi de pregătit (picking)")
+        + tutTip('„Recepție pe cutii", „Expediere cutie" și „Consumabile" fac același lucru ca în admin, dar direct de pe terminal, cu scanare.'))
     + tutSec("miscari","🔁","Mișcări & loturi",
         '<p>Jurnalul complet al tuturor mișcărilor de stoc: cine, ce, când, cât, din ce <b>lot</b> și cu ce <b>dată</b>. Doar pentru consultare/audit.</p>'
         + tutImg("miscari","Jurnalul de mișcări — cu lot și dată"))
