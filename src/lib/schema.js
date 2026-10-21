@@ -56,6 +56,10 @@ export async function ensureSchema(env) {
   // Cod de bare separat pentru bax (cartonul) + câte bucăți are un bax.
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN bax_barcode TEXT').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN bax_qty INTEGER').run(); } catch (e) {}
+  // Niveluri de ambalare declarate (bifate): are bax (cutie mare) / are cutie (cutie mică).
+  // Sistemul generează cod de bare propriu DOAR pentru bax; cutia poartă codul produsului.
+  try { await env.DB.prepare('ALTER TABLE products ADD COLUMN has_bax INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
+  try { await env.DB.prepare('ALTER TABLE products ADD COLUMN has_inner INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
   // Comandă în unități (paleți/baxuri/cutii): unitatea aleasă + câte, pentru afișare.
   try { await env.DB.prepare('ALTER TABLE order_lines ADD COLUMN uom TEXT').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE order_lines ADD COLUMN uom_qty INTEGER').run(); } catch (e) {}

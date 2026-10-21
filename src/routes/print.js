@@ -165,8 +165,12 @@ async function labelValues(env, job) {
       meta: (job.lot ? ('Lot: ' + job.lot + '   ') : '') + DT };
   }
   if (job.type === 'box') {
-    const b = await env.DB.prepare('SELECT bx.code, bx.quantity, bx.lot, pr.name AS product_name, COALESCE(pr.barcode, pr.sku) AS product_barcode FROM boxes bx JOIN products pr ON pr.id = bx.product_id WHERE bx.id = ?').bind(job.ref_id).first() || {};
-    return { box_code: b.code || job.code || '', product_barcode: b.product_barcode || '', product_name: b.product_name || job.title || '',
+    const b = await env.DB.prepare('SELECT bx.code, bx.kind, bx.quantity, bx.lot, pr.name AS product_name, COALESCE(pr.barcode, pr.sku) AS product_barcode FROM boxes bx JOIN products pr ON pr.id = bx.product_id WHERE bx.id = ?').bind(job.ref_id).first() || {};
+    // Doar baxul (cutia mare) are cod de bare propriu generat; cutia (cutia mică)
+    // poartă codul de bare al PRODUSULUI. Deci pe eticheta de cutie codul principal = EAN produs.
+    const isInner = b.kind === 'inner';
+    const mainCode = isInner ? (b.product_barcode || b.code || job.code || '') : (b.code || job.code || '');
+    return { box_code: mainCode, product_barcode: isInner ? '' : (b.product_barcode || ''), product_name: b.product_name || job.title || '',
       lot: b.lot || '', qty: b.quantity != null ? String(b.quantity) : '', date: DT,
       meta: (b.lot ? ('Lot: ' + b.lot + '   ') : '') + (b.quantity ? ('Buc/cutie: ' + b.quantity + '   ') : '') + DT };
   }
