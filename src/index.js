@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v132';
+const APP_VERSION = 'v133';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -266,6 +266,7 @@ export default {
     if (path === '/vendor/pdf.js') return vendor.pdf();
     if (path === '/vendor/pdf.worker.js') return vendor.pdfworker();
     if (path.startsWith('/assets/') && path.endsWith('.png')) return vendor.image(path.slice(8, -4));
+    if (path.startsWith('/assets/') && path.endsWith('.jpg')) return vendor.imageJpeg(path.slice(8, -4));
 
     // PWA (instalabil pe Android / bază pentru APK)
     if (path === '/manifest.webmanifest') return pwa.manifest();
