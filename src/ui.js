@@ -1641,8 +1641,11 @@ window.delProdPack = function(id, packId){
 function tutShot(label){
   return '<div style="border:2px dashed var(--border);border-radius:10px;background:var(--panel-2);padding:16px;text-align:center;color:var(--muted);font-size:12.5px;margin:8px 0">📷 '+esc(label||"Captură de ecran")+' <span style="opacity:.7">— se adaugă în curând</span></div>';
 }
-function tutImg(name, cap){
-  return '<figure style="margin:10px 0"><img src="/assets/tut-'+name+'.jpg" alt="'+esc(cap||"")+'" loading="lazy" style="width:100%;border:1px solid var(--border);border-radius:10px;display:block;box-shadow:var(--shadow)"/>'
+function tutImg(name, cap, phone){
+  var imgStyle = phone
+    ? 'width:100%;max-width:260px;margin:0 auto;border:1px solid var(--border);border-radius:10px;display:block;box-shadow:var(--shadow)'
+    : 'width:100%;border:1px solid var(--border);border-radius:10px;display:block;box-shadow:var(--shadow)';
+  return '<figure style="margin:10px 0;text-align:center"><img src="/assets/tut-'+name+'.jpg" alt="'+esc(cap||"")+'" loading="lazy" style="'+imgStyle+'"/>'
     +(cap?'<figcaption class="muted" style="font-size:12px;margin-top:5px;text-align:center">'+esc(cap)+'</figcaption>':'')+'</figure>';
 }
 function tutSec(id, icon, title, body){
@@ -1743,14 +1746,14 @@ VIEWS.tutorial = function(){
         + tutSteps(['<b>+ Client</b> → date firmă. <b>Conturi</b> → login-uri de portal.','Clientul își vede în portal stocul, recepțiile și poate anunța aprovizionări.','„Deschide dosarul" îți arată tot despre un client (produse, comenzi, paleți, conturi).']))
     + tutSec("zebra","📱","Aplicația Zebra (terminal) — ghid complet",
         '<p>Aplicația de pe terminalul Zebra (scanare laser sau cameră). Tot ce faci acolo apare <b>instant în admin</b>. Te conectezi cu <b>email + parolă</b> sau prin <b>badge QR</b>. Pe ecranul principal ai toate operațiunile:</p>'
-        + tutImg("zebra-home","Ecranul principal al aplicației Zebra")
+        + tutImg("zebra-home","Ecranul principal al aplicației Zebra",true)
         + '<div style="font-weight:700;margin:10px 0 4px">Operațiunile:</div>'
         + tutSteps(['🔎 <b>Scanează & caută</b> — scanezi orice cod (produs / palet / colet / cutie) și vezi ce e și unde.','📥 <b>Recepție</b> — scanezi produsul (sau codul de bax), alegi locația, pui cantitatea, lotul și data.','📤 <b>Expediere</b> / 🔄 <b>Transfer</b> — scoți din stoc sau muți marfa între locații.','📦 <b>Recepție palet/colet</b> — creezi un palet cu produsele lui și poți atașa poză la aviz.','🧃 <b>Recepție pe cutii</b> — alegi nr. de cutii mari / mici / bucăți; se creează cutiile și etichetele.','📤 <b>Expediere cutie</b> — scanezi o cutie (CM-/CT-) și o expediezi.','✂️ <b>Spargere palet</b> — muți produse dintr-un palet în altul sau în locații.','📋 <b>Comenzi de pregătit</b> — culegi comanda (cu cantitate dintr-o dată), apoi „Pregătită".','🚚 <b>Marfa a plecat</b> — confirmi plecarea; stocul scade efectiv.','♻️ <b>Consumabile</b> — scazi rapid un consumabil (buton „➖ 1").','🖨️ <b>Imprimă etichetă</b> — trimiți eticheta la imprimanta de pe PC (+ test print).','✏️ <b>Actualizare stoc</b> / 🧮 <b>Inventar</b> — corectezi stocul sau faci inventar pe locație.'])
         + '<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">'
-        + tutImg("zebra-receptie","Recepție: produs/bax, locație, cantitate, lot, dată")
-        + tutImg("zebra-cutii","Recepție pe cutii: mari / mici / bucăți")
+        + tutImg("zebra-receptie","Recepție: produs/bax, locație, cantitate, lot, dată",true)
+        + tutImg("zebra-cutii","Recepție pe cutii: mari / mici / bucăți",true)
         + '</div>'
-        + tutImg("zebra-comenzi","Comenzi de pregătit (picking)")
+        + tutImg("zebra-comenzi","Comenzi de pregătit (picking)",true)
         + tutTip('„Recepție pe cutii", „Expediere cutie" și „Consumabile" fac același lucru ca în admin, dar direct de pe terminal, cu scanare.'))
     + tutSec("miscari","🔁","Mișcări & loturi",
         '<p>Jurnalul complet al tuturor mișcărilor de stoc: cine, ce, când, cât, din ce <b>lot</b> și cu ce <b>dată</b>. Doar pentru consultare/audit.</p>'
