@@ -50,6 +50,9 @@ export async function ensureSchema(env) {
   // Ambalare pe niveluri: câte bucăți are o cutie mică și câte cutii mici are o cutie mare.
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN pcs_per_inner INTEGER').run(); } catch (e) {} // buc / cutie mică
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN inner_per_master INTEGER').run(); } catch (e) {} // cutii mici / cutie mare
+  // Lot + data efectivă (ex: data de pe aviz) pe fiecare mișcare de stoc — trasabilitate.
+  try { await env.DB.prepare('ALTER TABLE stock_movements ADD COLUMN lot TEXT').run(); } catch (e) {}
+  try { await env.DB.prepare('ALTER TABLE stock_movements ADD COLUMN eff_date TEXT').run(); } catch (e) {}
   // Cutii fizice pe niveluri: cutie mare (master) / cutie mică (inner), ierarhie + plasare pe locație.
   try { await env.DB.prepare("ALTER TABLE boxes ADD COLUMN kind TEXT NOT NULL DEFAULT 'inner'").run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE boxes ADD COLUMN parent_id INTEGER').run(); } catch (e) {}

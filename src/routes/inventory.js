@@ -63,7 +63,7 @@ export async function movements(request, env) {
 }
 
 // Helper intern: aplică o mișcare (delta poate fi + sau −), cu verificare de stoc
-async function applyMovement(env, { product_id, location_id, delta, type, reference, note, user_id }) {
+async function applyMovement(env, { product_id, location_id, delta, type, reference, note, user_id, lot, eff_date }) {
   const cur = await env.DB.prepare('SELECT quantity FROM inventory WHERE product_id = ? AND location_id = ?')
     .bind(product_id, location_id).first();
   const current = cur?.quantity || 0;
@@ -77,9 +77,9 @@ async function applyMovement(env, { product_id, location_id, delta, type, refere
       DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')`)
       .bind(product_id, location_id, delta),
     env.DB.prepare(`
-      INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .bind(product_id, location_id, type, delta, reference || null, note || null, user_id || null),
+      INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id, lot, eff_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(product_id, location_id, type, delta, reference || null, note || null, user_id || null, lot || null, eff_date || null),
   ]);
 }
 
@@ -91,6 +91,7 @@ export async function receive(request, env, ctx, user) {
     await applyMovement(env, {
       product_id: Number(b.product_id), location_id: Number(b.location_id),
       delta: qty, type: 'inbound', reference: b.reference, note: b.note, user_id: user.sub,
+      lot: b.lot, eff_date: b.eff_date,
     });
     return json({ ok: true });
   } catch (e) { return error(String(e.message || e), 400); }

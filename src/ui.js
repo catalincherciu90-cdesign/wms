@@ -1831,6 +1831,7 @@ function opForm(title, type){
         : '<div class="field"><label>Locație</label><select id="op_loc"></select>'+fhint(type==="receive"?"Locația în care așezi marfa primită.":"Din ce locație scoți marfa.")+'</div>')
     + '<div class="row"><div style="flex:1"><label>Cantitate</label><input id="op_qty" type="number" min="1" value="1">'+fhint("Numărul de bucăți "+(type==="receive"?"primite.":type==="ship"?"expediate.":"mutate."))+'</div><div style="flex:1"><label>Referință (opțional)</label><input id="op_ref">'+fhint("Ex: nr. aviz sau factură.")+'</div></div>'
     + '<div class="field"><label>Notă</label><input id="op_note">'+fhint("Observație opțională despre operațiune.")+'</div>'
+    + (type==="receive" ? '<div class="row"><div style="flex:1"><label>Lot (opțional)</label><input id="op_lot">'+fhint("Nr. de lot al mărfii primite.")+'</div><div style="flex:1"><label>Data recepției</label><input id="op_date" type="date">'+fhint("Data de pe aviz (implicit azi).")+'</div></div>' : '')
     + '<button onclick="submitOp(\\''+type+'\\')">'+esc(title)+'</button>'
     + '</div>');
   Promise.all([api("GET","/api/products"),api("GET","/api/locations")]).then(function(r){
@@ -1843,6 +1844,7 @@ function opForm(title, type){
       el("op_loc").innerHTML=locOpts;
       if(window._opPresetLoc){ var pl=locs.find(function(l){return l.code===window._opPresetLoc;}); if(pl) el("op_loc").value=pl.id; window._opPresetLoc=null; }
     }
+    if(el("op_date")) el("op_date").value=new Date().toISOString().slice(0,10);
   });
 }
 window.opFrom = function(type, locCode){
@@ -1864,6 +1866,7 @@ VIEWS.ship = function(){ opForm("Expediere","ship"); };
 VIEWS.transfer = function(){ opForm("Transfer între locații","transfer"); };
 window.submitOp = function(type){
   var body={ product_id:Number(el("op_prod").value), quantity:Number(el("op_qty").value), reference:el("op_ref").value, note:el("op_note").value };
+  if(type==="receive"){ if(el("op_lot")) body.lot=el("op_lot").value||null; if(el("op_date")) body.eff_date=el("op_date").value||null; }
   var path;
   if(type==="transfer"){ path="/api/inventory/transfer"; body.from_location_id=Number(el("op_from").value); body.to_location_id=Number(el("op_to").value); }
   else { path="/api/inventory/"+(type==="receive"?"receive":"ship"); body.location_id=Number(el("op_loc").value); }
@@ -2119,9 +2122,10 @@ VIEWS.movements = function(){
       var q=m.quantity, pill = q>0?'<span class="pill good">+'+q+'</span>':'<span class="pill bad">'+q+'</span>';
       return '<tr><td class="muted">'+esc(m.created_at)+'</td><td><span class="pill mut">'+esc(m.type)+'</span></td>'
         +'<td><b>'+esc(m.sku)+'</b> '+esc(m.product_name)+'</td><td>'+esc(m.location_code)+'</td><td class="right">'+pill+'</td>'
+        +'<td>'+esc(m.lot||"—")+'</td><td class="muted">'+esc(m.eff_date||"—")+'</td>'
         +'<td>'+esc(m.reference||"—")+'</td><td class="muted">'+esc(m.user_name||"—")+'</td></tr>';
     }).join("");
-    el("mtbl").innerHTML='<table><thead><tr><th>Data</th><th>Tip</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th><th>Ref.</th><th>User</th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 class="muted center">Nicio mișcare</td></tr>')+'</tbody></table>';
+    el("mtbl").innerHTML='<table><thead><tr><th>Data</th><th>Tip</th><th>Produs</th><th>Locație</th><th class="right">Cant.</th><th>Lot</th><th>Dată lot</th><th>Ref.</th><th>User</th></tr></thead><tbody>'+(rows||'<tr><td colspan=9 class="muted center">Nicio mișcare</td></tr>')+'</tbody></table>';
   });
 };
 
