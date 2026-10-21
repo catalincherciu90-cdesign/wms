@@ -1599,9 +1599,16 @@ window.productForm = function(id){
     + '<div class="field" style="margin-bottom:4px"><label style="font-size:12.5px;color:var(--muted)">📦 Ambalare implicită (opțional) — pentru stoc pe cutii</label></div>'
     + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","p_pcs_inner",p.pcs_per_inner||"","","number","Câte bucăți încap într-o cutie mică (ex: 10).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","p_inner_master",p.inner_per_master||"","","number","Câte cutii mici încap într-o cutie mare (ex: 6).")+'</div></div>'
     + '<div class="row"><div style="flex:1">'+field("Cod bax (carton)","p_bax_bc",p.bax_barcode||"","","text","Codul de bare de pe bax/carton — diferit de EAN-ul bucății. Scanat la recepție, completează automat cantitatea.")+'</div><div style="flex:1">'+field("Bucăți / bax","p_bax_qty",p.bax_qty||"","","number","Câte bucăți are un bax.")+'</div></div>'
+    + '<div class="row" style="align-items:center;gap:16px;margin:6px 0 2px;font-size:13px">'
+      + '<label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" id="p_has_bax"'+(p.has_bax?' checked':'')+'> 📦 Are bax (cutie mare)'
+        + (id?' <button type="button" class="ghost sm" style="margin-left:4px" onclick="printBaxSample('+id+')">🖨️ etichetă bax</button>':'')+'</label>'
+      + '<label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" id="p_has_inner"'+(p.has_inner?' checked':'')+'> 🔲 Are cutie (cutie mică)'
+        + (id?' <button type="button" class="ghost sm" style="margin-left:4px" onclick="printCutieLabel('+id+')">🖨️ etichetă cutie</button>':'')+'</label>'
+    + '</div>'
+    + '<div class="fhint" style="margin:0 0 6px">Sistemul generează cod de bare propriu <b>doar pentru bax</b> (la recepție). <b>Cutia</b> poartă codul de bare al produsului. Eticheta de cutie = EAN-ul produsului.</div>'
     + (id?'<div id="p_packs" style="margin-top:6px"></div>':'<div class="fhint">Mai multe configurații (loturi diferite) le adaugi după ce salvezi produsul.</div>'),
     function(){
-      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null, bax_barcode:(el("p_bax_bc")&&el("p_bax_bc").value)||null, bax_qty:Number(el("p_bax_qty")&&el("p_bax_qty").value)||null };
+      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null, bax_barcode:(el("p_bax_bc")&&el("p_bax_bc").value)||null, bax_qty:Number(el("p_bax_qty")&&el("p_bax_qty").value)||null, has_bax:(el("p_has_bax")&&el("p_has_bax").checked)?1:0, has_inner:(el("p_has_inner")&&el("p_has_inner").checked)?1:0 };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
@@ -1611,6 +1618,19 @@ window.productForm = function(id){
     var sel=el("p_client"); if(!sel) return;
     sel.innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'"'+(String(p.client_id||"")===String(c.id)?' selected':'')+'>'+esc(c.name)+'</option>';}).join("");
   }).catch(function(){});
+};
+// Eticheta de cutie = codul de bare al PRODUSULUI (sistemul nu generează cod separat pentru cutie).
+window.printCutieLabel = function(id){
+  var p=(cache.products||[]).find(function(x){return x.id===id;}); if(!p){ toast("Salvează întâi produsul","bad"); return; }
+  var code=p.barcode||p.sku; if(!code){ toast("Produsul nu are cod de bare","bad"); return; }
+  api("POST","/api/print/jobs",{type:"product", ref_id:id, code:code, title:p.name}).then(function(){ toast("Etichetă cutie trimisă (cod produs)"); }).catch(function(e){ toast(e.message,"bad"); });
+};
+// Eticheta de bax: dacă produsul are cod de carton (bax) îl printăm; altfel codul de bax
+// se generează unic la recepție (fiecare bax primește codul lui atunci).
+window.printBaxSample = function(id){
+  var p=(cache.products||[]).find(function(x){return x.id===id;}); if(!p){ toast("Salvează întâi produsul","bad"); return; }
+  if(p.bax_barcode){ api("POST","/api/print/jobs",{type:"product", ref_id:id, code:p.bax_barcode, title:p.name+" (bax)"}).then(function(){ toast("Etichetă bax trimisă (cod carton)"); }).catch(function(e){ toast(e.message,"bad"); }); }
+  else { toast("Codul de bax se generează automat la recepție — fiecare bax primește cod unic."); }
 };
 window.loadProdPacks = function(id){
   var host=el("p_packs"); if(!host) return;
@@ -3649,6 +3669,11 @@ window.boxReceiveForm = function(){
     '<div class="field"><label>Produs</label><select id="bxr_prod" onchange="boxPackLoad()">'+prodOpts+'</select></div>'
     + '<div class="field"><label>Locație</label><select id="bxr_loc">'+locOpts+'</select></div>'
     + '<div class="field"><label>Configurație ambalare (lot)</label><select id="bxr_cfg" onchange="boxCfgApply()"></select><div id="bxr_pack" class="muted" style="font-size:12px;margin-top:4px"></div></div>'
+    + '<div class="row" style="align-items:center;gap:16px;margin:4px 0;font-size:13px">'
+      + '<label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" id="bxr_hasbax" checked onchange="boxCalc()"> 📦 Am bax</label>'
+      + '<label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" id="bxr_hasinner" checked onchange="boxCalc()"> 🔲 Am cutie</label>'
+      + '<span class="muted" style="font-size:11.5px">bifează nivelurile pe care le ai — se printează etichetele potrivite</span>'
+    + '</div>'
     + '<div class="fhint" style="margin:2px 0 4px;font-weight:600">Ambalarea (1 bax = câte cutii × câte produse):</div>'
     + '<div class="row"><div style="flex:1">'+field("Cutii în bax","bxr_im","","","number","Câte cutii sunt într-un bax (cutie mare).")+'</div><div style="flex:1">'+field("Produse în cutie","bxr_pi","","","number","Câte produse (bucăți) sunt într-o cutie.")+'</div></div>'
     + '<div class="row"><div style="flex:1">'+field("Nr. baxuri recepționate","bxr_masters","","","number","Câte baxuri (cutii mari) pline primești.")+'</div></div>'
@@ -3661,9 +3686,10 @@ window.boxReceiveForm = function(){
         pcs_per_inner:Number(el("bxr_pi").value)||0, inner_per_master:Number(el("bxr_im").value)||0,
         masters:Number(el("bxr_masters").value)||0, inners:Number(el("bxr_inners").value)||0, pieces:Number(el("bxr_pieces").value)||0,
         master_code:(el("bxr_code")&&el("bxr_code").value.trim())||null, lot:el("bxr_lot").value||null };
+      var wantBax=!el("bxr_hasbax")||el("bxr_hasbax").checked, wantInner=!el("bxr_hasinner")||el("bxr_hasinner").checked;
       api("POST","/api/boxes/receive",body).then(function(r){
         closeModal(); toast("Recepționat ✓ ("+(r.total_pieces||0)+" buc)");
-        if(can("operator") && r.boxes && r.boxes.length) boxOfferPrint(r.boxes);
+        if(can("operator") && r.boxes && r.boxes.length) boxOfferPrint(r.boxes,{master:wantBax,inner:wantInner});
         if(view==="boxes") loadBoxTree();
       }).catch(function(e){ toast(e.message,"bad"); });
     });
@@ -3678,6 +3704,9 @@ window.boxPackLoad = function(){
   if(el("bxr_cfg")) el("bxr_cfg").innerHTML=defOpt+'<option value="custom">Personalizat…</option>';
   if(el("bxr_pi")) el("bxr_pi").value=p.pcs_per_inner||"";
   if(el("bxr_im")) el("bxr_im").value=p.inner_per_master||"";
+  // bifele „Am bax/Am cutie": din flagurile produsului, cu fallback pe ambalarea setată
+  if(el("bxr_hasbax")) el("bxr_hasbax").checked = !!(p.has_bax || Number(p.inner_per_master)>0);
+  if(el("bxr_hasinner")) el("bxr_hasinner").checked = (p.has_inner!=null && !p.has_inner && !(Number(p.pcs_per_inner)>0)) ? false : true;
   api("GET","/api/products/"+pid+"/packs").then(function(d){
     var cfgOpts=(d.packs||[]).map(function(c){ return '<option value="cfg:'+c.id+'" data-pi="'+c.pcs_per_inner+'" data-im="'+(c.inner_per_master||0)+'">'+esc(c.name)+' ('+c.pcs_per_inner+(c.inner_per_master?("×"+c.inner_per_master):"")+')</option>'; }).join("");
     if(el("bxr_cfg")) el("bxr_cfg").innerHTML=defOpt+cfgOpts+'<option value="custom">Personalizat…</option>';
@@ -3701,12 +3730,17 @@ window.boxCalc = function(){
   var calc=(m>0&&im>0&&pi>0)?(m+' baxuri × '+im+' cutii × '+pi+' produse'):'';
   var t=el("bxr_total"); if(t) t.innerHTML=(calc?(calc+' = '):'Total: ')+'<b>'+tot+'</b> buc'+(inn>0?(' · '+inn+' cutii în plus'):'')+(pcs>0?(' · '+pcs+' buc în plus'):'');
 };
-function boxOfferPrint(boxes){
-  modal("Etichete cutii",
-    '<p>S-au creat <b>'+boxes.length+'</b> cutii. Trimit etichetele la imprimantă?</p>'
-    +'<p class="muted" style="font-size:12.5px">'+boxes.filter(function(b){return b.kind==="master";}).length+' etichete cutii mari + '+boxes.filter(function(b){return b.kind==="inner";}).length+' etichete cutii mici.</p>',
+function boxOfferPrint(boxes, opts){
+  opts=opts||{master:true,inner:true};
+  // Baxurile (master) au cod generat propriu; cutiile (inner) poartă codul produsului.
+  var sel=boxes.filter(function(b){ return (b.kind==="master"&&opts.master!==false) || (b.kind==="inner"&&opts.inner!==false); });
+  var nm=sel.filter(function(b){return b.kind==="master";}).length, ni=sel.filter(function(b){return b.kind==="inner";}).length;
+  if(!sel.length){ return; }
+  modal("Etichete",
+    '<p>Trimit etichetele la imprimantă?</p>'
+    +'<p class="muted" style="font-size:12.5px">'+nm+' etichete bax (cod propriu) + '+ni+' etichete cutie (cod produs).</p>',
     function(){
-      var n=0; boxes.forEach(function(b){ api("POST","/api/print/jobs",{type:"box", ref_id:b.id, code:b.code, title:b.code}).catch(function(){}); n++; });
+      var n=0; sel.forEach(function(b){ api("POST","/api/print/jobs",{type:"box", ref_id:b.id, code:b.code, title:b.code}).catch(function(){}); n++; });
       closeModal(); toast(n+" etichete trimise la imprimantă");
     });
   var sv=el("modalSave"); if(sv) sv.textContent="Printează etichetele";
