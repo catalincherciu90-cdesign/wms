@@ -211,6 +211,60 @@ export async function complete(request, env, ctx, user, params) {
   return json({ ok: true, status: 'completed' });
 }
 
+// Picking pe palet: scade o cantitate dintr-un palet anume (produsul din linia comenzii),
+// din locația paletului, și o înregistrează la linie (qty_done). Scade stocul imediat.
+// Body: { line_id, pallet_id, quantity }
+export async function pickPallet(request, env, ctx, user, params) {
+  const id = Number(params.id);
+  const b = await readJson(request);
+  const lineId = Number(b?.line_id);
+  const palletId = Number(b?.pallet_id);
+  let qty = Math.floor(Number(b?.quantity) || 0);
+  if (!lineId || !palletId || qty <= 0) return error('line_id, pallet_id și cantitate > 0 obligatorii', 400);
+
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  if (!order) return error('Comandă inexistentă', 404);
+  if (order.type !== 'outbound') return error('Doar comenzile de ieșire', 400);
+  if (order.status === 'completed' || order.status === 'cancelled') return error('Comanda e finalizată/anulată', 400);
+
+  const line = await env.DB.prepare('SELECT * FROM order_lines WHERE id = ? AND order_id = ?').bind(lineId, id).first();
+  if (!line) return error('Linie inexistentă', 404);
+  const pallet = await env.DB.prepare("SELECT * FROM pallets WHERE id = ? AND status <> 'shipped'").bind(palletId).first();
+  if (!pallet) return error('Palet inexistent sau expediat', 404);
+  if (!pallet.location_id) return error('Paletul nu are locație', 400);
+  const item = await env.DB.prepare('SELECT * FROM pallet_items WHERE pallet_id = ? AND product_id = ?').bind(palletId, line.product_id).first();
+  if (!item || item.quantity <= 0) return error('Paletul nu are acest produs', 400);
+
+  const remainingLine = Number(line.quantity) - Number(line.qty_done || 0);
+  if (remainingLine <= 0) return error('Linia e deja completă', 400);
+  qty = Math.min(qty, Number(item.quantity), remainingLine);
+
+  const inv = await env.DB.prepare('SELECT quantity FROM inventory WHERE product_id = ? AND location_id = ?').bind(line.product_id, pallet.location_id).first();
+  const avail = inv?.quantity || 0;
+  if (avail < qty) return error('Stoc insuficient în locația paletului (disponibil: ' + avail + ')', 400);
+
+  const stmts = [
+    env.DB.prepare('UPDATE pallet_items SET quantity = quantity - ? WHERE id = ?').bind(qty, item.id),
+    env.DB.prepare("UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now') WHERE product_id = ? AND location_id = ?").bind(qty, line.product_id, pallet.location_id),
+    env.DB.prepare("INSERT INTO stock_movements (product_id, location_id, type, quantity, reference, note, user_id, lot) VALUES (?, ?, 'outbound', ?, ?, ?, ?, ?)").bind(line.product_id, pallet.location_id, -qty, order.code, 'pick palet ' + pallet.code, user.sub, pallet.lot || null),
+    env.DB.prepare('UPDATE order_lines SET qty_done = qty_done + ? WHERE id = ?').bind(qty, lineId),
+  ];
+  await env.DB.batch(stmts);
+
+  // dacă paletul a rămas gol complet, îl marcăm expediat
+  const left = await env.DB.prepare('SELECT COALESCE(SUM(quantity),0) AS n FROM pallet_items WHERE pallet_id = ?').bind(palletId).first();
+  if ((left?.n || 0) <= 0) await env.DB.prepare("UPDATE pallets SET status = 'shipped' WHERE id = ?").bind(palletId).run();
+
+  // dacă toate liniile sunt complete → comanda finalizată
+  const lines = await env.DB.prepare('SELECT quantity, qty_done FROM order_lines WHERE order_id = ?').bind(id).all();
+  const allDone = (lines.results || []).every((l) => Number(l.qty_done) >= Number(l.quantity));
+  if (allDone) {
+    await env.DB.prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now'), processed_by = ?, processed_by_name = ?, processed_at = datetime('now'), locked_by = NULL, locked_name = NULL, locked_at = NULL WHERE id = ?")
+      .bind(user.sub, user.name || ('#' + user.sub), id).run();
+  }
+  return json({ ok: true, picked: qty, order_completed: allDone });
+}
+
 // „Marfa a plecat": scade efectiv stocul unei comenzi de ieșire pregătite.
 // Folosește locația unde a fost pregătită; re-verifică disponibilul înainte de scădere.
 export async function depart(request, env, ctx, user, params) {

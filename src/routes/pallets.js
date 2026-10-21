@@ -6,6 +6,18 @@ export async function list(request, env) {
   const url = new URL(request.url);
   const clientId = url.searchParams.get('client_id');
   const locationId = url.searchParams.get('location_id');
+  const productId = url.searchParams.get('product_id');
+  // Paleți care conțin un anumit produs (pentru picking pe palet) — cu cantitatea și lotul.
+  if (productId) {
+    const { results } = await env.DB.prepare(`
+      SELECT pa.id, pa.code, pa.lot, pa.received_at, pa.location_id, l.code AS location_code, pi.quantity AS product_qty
+      FROM pallet_items pi
+      JOIN pallets pa ON pa.id = pi.pallet_id
+      LEFT JOIN locations l ON l.id = pa.location_id
+      WHERE pi.product_id = ? AND pa.status <> 'shipped' AND pi.quantity > 0
+      ORDER BY pa.code`).bind(Number(productId)).all();
+    return json({ pallets: results });
+  }
   let sql = `
     SELECT pa.*, c.name AS client_name, l.code AS location_code,
       (SELECT COUNT(*) FROM pallet_items pi WHERE pi.pallet_id = pa.id) AS item_count,

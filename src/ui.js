@@ -3766,11 +3766,33 @@ window.loadOrders = function(){
     el("ord").innerHTML='<table><thead><tr><th>Cod</th><th>Tip</th><th>Partener</th><th class="right">Cant.</th><th>Status</th><th>Procesează</th><th>Data</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan=8 class="muted center">Nicio comandă</td></tr>')+'</tbody></table>';
   });
 };
+window.orderPickPalletUI = function(orderId, lineId, productId, name){
+  api("GET","/api/pallets?product_id="+productId).then(function(d){
+    var pals=d.pallets||[];
+    if(!pals.length){ toast("Niciun palet cu acest produs","bad"); return; }
+    var rows=pals.map(function(p){
+      return '<div class="row" style="justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding:7px 0"><div><b>'+esc(p.code)+'</b> <span class="muted">📍 '+esc(p.location_code||"—")+(p.lot?(" · lot "+esc(p.lot)):"")+'</span><div class="muted" style="font-size:12px">disponibil: '+esc(p.product_qty)+' buc</div></div>'
+        +'<div class="row" style="gap:6px"><input id="pk_q_'+p.id+'" type="number" min="1" value="'+esc(p.product_qty)+'" style="width:84px"><button class="sm" onclick="orderPickPallet('+orderId+','+lineId+','+p.id+')">Pick</button></div></div>';
+    }).join("");
+    modal("Pick din palet — "+esc(name||""),
+      '<div class="muted" style="font-size:13px;margin-bottom:4px">Alege paletul și cantitatea. Scade din paletul ales și din stoc, și o trece la comandă.</div>'+rows, null);
+    var sv=el("modalSave"); if(sv) sv.style.display="none";
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
+window.orderPickPallet = function(orderId, lineId, palletId){
+  var q=Number((el("pk_q_"+palletId)||{}).value)||0; if(!(q>0)){ toast("Cantitate invalidă","bad"); return; }
+  api("POST","/api/orders/"+orderId+"/pick-pallet",{line_id:lineId, pallet_id:palletId, quantity:q}).then(function(r){
+    closeModal(); toast("Pick ✓ "+(r.picked||0)+" buc"+(r.order_completed?" · comandă finalizată":"")); orderDetail(orderId);
+  }).catch(function(e){ toast(e.message,"bad"); });
+};
 window.orderDetail = function(id){
   api("GET","/api/orders/"+id).then(function(d){
     var o=d.order;
-    var lines='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th><th class="right">Făcut</th></tr></thead><tbody>'
-      + d.lines.map(function(l){ return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+uomNote(l)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td></tr>'; }).join("")
+    var canPick = can("operator") && o.type==="outbound" && o.status!=="completed" && o.status!=="cancelled";
+    var lines='<table><thead><tr><th>SKU</th><th>Produs</th><th class="right">Cant.</th><th class="right">Făcut</th>'+(canPick?'<th></th>':'')+'</tr></thead><tbody>'
+      + d.lines.map(function(l){
+          var pickBtn = canPick ? ('<td class="right"><button class="ghost sm" onclick="orderPickPalletUI('+o.id+','+l.id+','+l.product_id+',\\''+esc(String(l.product_name||"").replace(/\\'/g,""))+'\\')">📦 Din palet</button></td>') : '';
+          return '<tr><td><b>'+esc(l.sku)+'</b></td><td>'+esc(l.product_name)+uomNote(l)+'</td><td class="right">'+esc(l.quantity)+'</td><td class="right">'+esc(l.qty_done)+'</td>'+pickBtn+'</tr>'; }).join("")
       + '</tbody></table>';
     // produse noi anunțate (de definit la recepție)
     var newItems='';
