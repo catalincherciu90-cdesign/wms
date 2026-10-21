@@ -1715,7 +1715,7 @@ VIEWS.tutorial = function(){
         + tutImg("stoc","Stocul pe produs — și pe cutii, în paralel"))
     + tutSec("receptie","📥","Recepție marfă",
         '<p>Bagi marfă în stoc. Mai multe moduri:</p>'
-        + tutSteps(['<b>Recepție simplă</b>: scanezi produsul, alegi locația, pui cantitatea, <b>Lot</b> și <b>Data</b> (de pe aviz).','<b>Recepție palet/colet</b>: creezi un palet (cod auto) cu produsele lui; intră automat în stoc.','<b>Recepție pe cutii (baxuri)</b>: produs + locație, apoi <b>nr. baxuri</b> × <b>cutii în bax</b> × <b>produse în cutie</b> → se calculează totalul, se creează cutiile (CM-/CT-) și intră în stoc.','Scanezi <b>codul de bax</b> → produsul e recunoscut și cantitatea se completează cu buc/bax.'])
+        + tutSteps(['<b>Recepție simplă</b>: scanezi produsul, alegi locația, pui cantitatea, <b>Lot</b> și <b>Data</b> (de pe aviz).','<b>Recepție palet/colet</b>: creezi un palet (cod auto) cu produsele lui; intră automat în stoc.','<b>Recepție pe cutii (baxuri)</b>: produs + locație, apoi <b>nr. baxuri</b> × <b>cutii în bax</b> × <b>produse în cutie</b> → se calculează totalul, se creează cutiile (CM-/CT-) și intră în stoc.','<b>Cod bax propriu</b>: dacă baxul vine cu cod de bare propriu, îl scanezi la recepție și devine codul acelui bax; dacă nu, sistemul generează automat un cod CM-…','Scanezi <b>codul de bax</b> → produsul e recunoscut și cantitatea se completează cu buc/bax.'])
         + tutImg("receptie","Formularul de recepție (cu lot și dată)"))
     + tutSec("comenzi","📋","Comenzi & expediere",
         '<p>Comenzi de la furnizori (intrare) și către clienți (ieșire). Ieșirile folosesc <b>stoc tampon</b>:</p>'
@@ -3652,13 +3652,15 @@ window.boxReceiveForm = function(){
     + '<div class="fhint" style="margin:2px 0 4px;font-weight:600">Ambalarea (1 bax = câte cutii × câte produse):</div>'
     + '<div class="row"><div style="flex:1">'+field("Cutii în bax","bxr_im","","","number","Câte cutii sunt într-un bax (cutie mare).")+'</div><div style="flex:1">'+field("Produse în cutie","bxr_pi","","","number","Câte produse (bucăți) sunt într-o cutie.")+'</div></div>'
     + '<div class="row"><div style="flex:1">'+field("Nr. baxuri recepționate","bxr_masters","","","number","Câte baxuri (cutii mari) pline primești.")+'</div></div>'
+    + '<div class="field"><label>Cod bax propriu (opțional)</label><div class="row"><input id="bxr_code" style="flex:1" placeholder="Scanează codul de pe bax, sau lasă gol"><button type="button" class="ghost" onclick="scanCamera(function(t){el(\\'bxr_code\\').value=t;})">📷</button></div>'+fhint("Dacă baxul are cod de bare propriu, scanează-l — devine codul baxului (pentru UN bax). Gol = sistemul generează automat un cod CM-…")+'</div>'
     + '<details style="margin:2px 0 8px"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">+ Cutii / bucăți în plus (în afara baxurilor)</summary><div class="row" style="margin-top:6px"><div style="flex:1">'+field("Cutii în plus","bxr_inners","","","number","Cutii separate, care nu sunt într-un bax.")+'</div><div style="flex:1">'+field("Bucăți în plus","bxr_pieces","","","number","Bucăți răzlețe, în afara cutiilor.")+'</div></div></details>'
     + field("Lot (opțional)","bxr_lot","","","text","Nr. lot, dacă există.")
     + '<div id="bxr_total" class="card" style="padding:8px 10px;background:var(--panel-2);font-size:13px"></div>',
     function(){
       var body={ product_id:Number(el("bxr_prod").value), location_id:Number(el("bxr_loc").value),
         pcs_per_inner:Number(el("bxr_pi").value)||0, inner_per_master:Number(el("bxr_im").value)||0,
-        masters:Number(el("bxr_masters").value)||0, inners:Number(el("bxr_inners").value)||0, pieces:Number(el("bxr_pieces").value)||0, lot:el("bxr_lot").value||null };
+        masters:Number(el("bxr_masters").value)||0, inners:Number(el("bxr_inners").value)||0, pieces:Number(el("bxr_pieces").value)||0,
+        master_code:(el("bxr_code")&&el("bxr_code").value.trim())||null, lot:el("bxr_lot").value||null };
       api("POST","/api/boxes/receive",body).then(function(r){
         closeModal(); toast("Recepționat ✓ ("+(r.total_pieces||0)+" buc)");
         if(can("operator") && r.boxes && r.boxes.length) boxOfferPrint(r.boxes);
@@ -3666,7 +3668,7 @@ window.boxReceiveForm = function(){
       }).catch(function(e){ toast(e.message,"bad"); });
     });
   var sv=el("modalSave"); if(sv) sv.textContent="Recepționează";
-  ["bxr_masters","bxr_inners","bxr_pieces","bxr_pi","bxr_im"].forEach(function(idf){ var e=el(idf); if(e) e.oninput=boxCalc; });
+  ["bxr_masters","bxr_inners","bxr_pieces","bxr_pi","bxr_im","bxr_code"].forEach(function(idf){ var e=el(idf); if(e) e.oninput=boxCalc; });
   boxPackLoad();
 };
 window.boxPackLoad = function(){
@@ -3693,6 +3695,8 @@ window.boxCalc = function(){
   var pi=Number((el("bxr_pi")||{}).value)||0, im=Number((el("bxr_im")||{}).value)||0;
   var packEl=el("bxr_pack"); if(packEl) packEl.textContent = pi>0 ? ("1 bax = "+(im>0?(im+" cutii × "+pi+" produse = "+(pi*im)+" buc"):(pi+" buc/cutie, fără bax"))) : "⚠ Setează produse în cutie.";
   var m=Number((el("bxr_masters")||{}).value)||0, inn=Number((el("bxr_inners")||{}).value)||0, pcs=Number((el("bxr_pieces")||{}).value)||0;
+  var hasCode=!!(el("bxr_code")&&el("bxr_code").value.trim());
+  if(hasCode && m<1) m=1; // cod propriu scanat = un bax
   var tot=m*pi*im+inn*pi+pcs;
   var calc=(m>0&&im>0&&pi>0)?(m+' baxuri × '+im+' cutii × '+pi+' produse'):'';
   var t=el("bxr_total"); if(t) t.innerHTML=(calc?(calc+' = '):'Total: ')+'<b>'+tot+'</b> buc'+(inn>0?(' · '+inn+' cutii în plus'):'')+(pcs>0?(' · '+pcs+' buc în plus'):'');

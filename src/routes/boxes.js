@@ -89,12 +89,20 @@ export async function receive(request, env, ctx, user) {
   const b = await readJson(request);
   const productId = Number(b?.product_id);
   const locationId = Number(b?.location_id);
-  const masters = Math.max(0, Math.floor(Number(b?.masters) || 0));
+  let masters = Math.max(0, Math.floor(Number(b?.masters) || 0));
   const looseInners = Math.max(0, Math.floor(Number(b?.inners) || 0));
   const loosePieces = Math.max(0, Math.floor(Number(b?.pieces) || 0));
   const lot = (b?.lot || '').toString().trim() || null;
+  // Cod propriu al baxului (de pe eticheta furnizorului). Dacă e scanat, acel bax
+  // primește codul lui în loc de CM-… auto-generat; se aplică unui SINGUR bax.
+  const masterCode = (b?.master_code || '').toString().trim() || null;
+  if (masterCode && masters !== 1) masters = 1;
   if (!productId || !locationId) return error('product_id și location_id obligatorii', 400);
   if (masters <= 0 && looseInners <= 0 && loosePieces <= 0) return error('Pune cel puțin o cutie sau bucăți', 400);
+  if (masterCode) {
+    const dup = await env.DB.prepare("SELECT id FROM boxes WHERE code = ?").bind(masterCode).first();
+    if (dup) return error('Codul de bax „' + masterCode + '" există deja în sistem', 400);
+  }
 
   const product = await env.DB.prepare('SELECT id, sku, name, barcode, unit, pcs_per_inner, inner_per_master FROM products WHERE id = ?').bind(productId).first();
   if (!product) return error('Produs inexistent', 404);
@@ -115,9 +123,10 @@ export async function receive(request, env, ctx, user) {
   if (masters > 0) {
     const ms = [];
     for (let i = 0; i < masters; i++) {
+      const code = (masterCode && i === 0) ? masterCode : null; // baxul cu cod propriu îl păstrează; restul → CM-… auto
       ms.push(env.DB.prepare(
-        "INSERT INTO boxes (code, kind, parent_id, location_id, product_id, quantity, lot, status, created_by) VALUES (NULL, 'master', NULL, ?, ?, ?, ?, 'stored', ?)"
-      ).bind(locationId, productId, pi * im, lot, user.sub));
+        "INSERT INTO boxes (code, kind, parent_id, location_id, product_id, quantity, lot, status, created_by) VALUES (?, 'master', NULL, ?, ?, ?, ?, 'stored', ?)"
+      ).bind(code, locationId, productId, pi * im, lot, user.sub));
     }
     await env.DB.batch(ms);
     await env.DB.prepare("UPDATE boxes SET code = 'CM-' || printf('%05d', id) WHERE id > ? AND kind='master' AND code IS NULL").bind(beforeAll).run();
