@@ -449,8 +449,9 @@ function screenBoxShip(){
   window._bxs={box:null};
   scanTarget=function(code){ bxsScan(code); };
   shell("Expediere cutie",
-    '<div class="scanbox"><input id="bxs_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează cutia (CM- / CT-)"></div>'
+    '<div class="scanbox"><input id="bxs_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează cutia (cod propriu / CM- / CT-)"></div>'
     +'<button class="cam" onclick="openCam(function(c){el(\'bxs_scan\').value=c;bxsScan(c)})">📷 Scanează cu camera</button>'
+    +'<div class="muted" style="font-size:12px;text-align:center">Scanează codul propriu al baxului sau eticheta CM-/CT- generată.</div>'
     +'<div id="bxs_box"></div>', {back:"renderHome()"});
   wireScan("bxs_scan", bxsScan);
 }
