@@ -178,8 +178,9 @@ export function renderUI() {
   main{padding:22px 26px;overflow:auto}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
   h1{font-size:20px;margin:0} h2{font-size:15px;margin:0 0 12px}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
-  .kpi{padding:16px 18px} .kpi .n{font-size:28px;font-weight:800;letter-spacing:-.02em} .kpi .l{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px}
+  .kpi{padding:16px 18px;min-width:0} .kpi .n{font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.05;overflow-wrap:anywhere;font-variant-numeric:tabular-nums} .kpi .l{color:var(--muted);font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
   .dtile{background:var(--panel-2,var(--panel));border:1px solid var(--border);border-radius:12px;padding:16px 10px;text-align:center;font-weight:600;font-size:13.5px;color:var(--text);cursor:pointer;transition:transform .06s,border-color .12s}
   .dtile:hover{border-color:var(--brand);transform:translateY(-1px)}
@@ -220,14 +221,17 @@ export function renderUI() {
     #app.menu-open aside{transform:translateX(0)}
     .drawer-bg{display:block;position:fixed;inset:0;background:rgba(10,15,25,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .25s}
     #app.menu-open .drawer-bg{opacity:1;pointer-events:auto}
-    .kpis{grid-template-columns:repeat(2,1fr)}
+    .g2{grid-template-columns:1fr}
     main .card{overflow-x:auto}
     .topbar{flex-wrap:wrap;gap:10px}
     .toolbar input{max-width:none !important}
     .modal{max-width:100%}
   }
+  @media(max-width:560px){
+    .kpis{grid-template-columns:1fr 1fr;gap:10px}
+    .kpi{padding:13px 12px} .kpi .n{font-size:23px} .kpi .l{font-size:11.5px}
+  }
   @media(max-width:420px){
-    .kpis{grid-template-columns:1fr}
     main{padding:68px 11px 24px}
   }
 </style>
@@ -641,7 +645,7 @@ function portalPallets(){
     // sumar pe tip
     var cnt={palet:0,colet:0,ambalaje:0};
     list.forEach(function(p){ var k=(p.kind||"palet"); if(cnt[k]==null) cnt[k]=0; cnt[k]++; });
-    var sumar='<div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">'
+    var sumar='<div class="kpis" style="margin-bottom:14px">'
       + kpi(cnt.palet||0,"Paleți") + kpi(cnt.colet||0,"Colete") + kpi(cnt.ambalaje||0,"Paleți cu ambalaje")+'</div>';
     el("ppal").innerHTML = sumar + list.map(function(p){
       var ki=pPalKind(p.kind||"palet");
@@ -672,7 +676,7 @@ function portalStock(){
   setMain(topbar("Stocul meu", exp) + '<div id="pkpi"></div><div id="plowbanner"></div><div class="card" id="pstock" style="margin-top:14px">…</div>');
   api("GET","/api/portal/summary").then(function(d){
     var s=d.summary, low=Number(s.low_stock||0);
-    el("pkpi").innerHTML='<div class="kpis" style="grid-template-columns:repeat(4,1fr)">'
+    el("pkpi").innerHTML='<div class="kpis">'
       + kpi(s.products,"Produse") + kpi(s.units,"Unități în stoc") + kpi(s.locations,"Locații ocupate")
       + kpi(low,"Sub prag", low>0?"bad":null)
       + '</div>';
@@ -1106,7 +1110,7 @@ VIEWS.dashboard = function(){
   setMain(topbar("Dashboard") + '<div id="dash">Se încarcă…</div>');
   api("GET","/api/dashboard"+(dashClient?("?client_id="+encodeURIComponent(dashClient)):"")).then(function(d){
     var k=d.kpis;
-    var kpis = '<div class="kpis" style="grid-template-columns:repeat(6,1fr)">'
+    var kpis = '<div class="kpis">'
       + kpi(k.products,"Produse active")
       + kpi(k.locations,"Locații")
       + kpi(k.total_units,"Unități în stoc")
@@ -1143,7 +1147,7 @@ VIEWS.dashboard = function(){
       + '<div class="row" style="gap:18px;margin-top:10px;font-size:12.5px">'
       + '<span><span class="pill good">■</span> Intrări</span><span><span class="pill bad">■</span> Ieșiri</span></div></div>';
     var cat = '<div class="card" style="padding:18px"><h2>Stoc pe categorie</h2>'+catBars(d.by_category||[])+'</div>';
-    var top = '<div class="grid" style="grid-template-columns:1fr 1fr">'+chart+cat+'</div>';
+    var top = '<div class="g2">'+chart+cat+'</div>';
 
     var orders = '<div class="card" style="padding:18px"><h2>Comenzi recente</h2>'
       + ((d.recent_orders&&d.recent_orders.length)
@@ -1158,7 +1162,7 @@ VIEWS.dashboard = function(){
             return '<tr><td><b>'+esc(p.sku)+'</b> '+esc(p.name)+'</td><td class="right"><span class="pill bad">'+esc(p.total)+' / '+esc(p.reorder_point)+'</span></td></tr>';
           }).join("")+'</tbody></table>'
         : '<div class="muted">Totul peste prag ✔</div>')+'</div>';
-    var bottom = '<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+orders+low+'</div>';
+    var bottom = '<div class="g2" style="margin-top:16px">'+orders+low+'</div>';
 
     // Statistici suplimentare
     var statusMap={draft:["ciornă","#8a94a6"],confirmed:["confirmată","#d99a2b"],prepared:["pregătită","#d99a2b"],completed:["finalizată","#12a150"],cancelled:["anulată","#d64545"]};
@@ -1168,7 +1172,7 @@ VIEWS.dashboard = function(){
     var topHead='<div class="row" style="gap:16px;font-size:12.5px;margin-bottom:8px"><span><span class="pill good">▲</span> Intrări 30z: <b>'+esc(m30.inbound||0)+'</b></span><span><span class="pill bad">▼</span> Ieșiri 30z: <b>'+esc(m30.outbound||0)+'</b></span></div>';
     var topItems=(d.top_products||[]).map(function(r){ return {label:(r.sku?r.sku+" · ":"")+r.name,value:r.moved}; });
     var topPanel='<div class="card" style="padding:18px"><h2>Top produse — rulaj 30 zile</h2>'+topHead+miniBars(topItems)+'</div>';
-    var mid='<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">'+statusPanel+topPanel+'</div>';
+    var mid='<div class="g2" style="margin-top:16px">'+statusPanel+topPanel+'</div>';
     var clientItems=(d.stock_by_client||[]).map(function(r){ return {label:r.name,value:r.units}; });
     var clientStock = (!dashClient && clientItems.length) ? '<div class="card" style="padding:18px;margin-top:16px"><h2>Stoc pe client</h2>'+miniBars(clientItems)+'</div>' : '';
 
@@ -1769,7 +1773,7 @@ VIEWS.tutorial = function(){
         + tutImg("zebra-home","Ecranul principal al aplicației Zebra",true)
         + '<div style="font-weight:700;margin:10px 0 4px">Operațiunile:</div>'
         + tutSteps(['🔎 <b>Scanează & caută</b> — scanezi orice cod (produs / palet / colet / cutie) și vezi ce e și unde.','📥 <b>Recepție</b> — scanezi produsul (sau codul de bax), alegi locația, pui cantitatea, lotul și data.','📤 <b>Expediere</b> / 🔄 <b>Transfer</b> — scoți din stoc sau muți marfa între locații.','📦 <b>Recepție palet/colet</b> — creezi un palet cu produsele lui și poți atașa poză la aviz.','🧃 <b>Recepție pe cutii (baxuri)</b> — pui nr. baxuri × cutii în bax × produse în cutie; se calculează totalul și se creează cutiile + etichetele.','📤 <b>Expediere cutie</b> — scanezi codul propriu al baxului sau eticheta CM-/CT- și o expediezi.','✂️ <b>Spargere palet</b> — muți produse dintr-un palet în altul sau în locații.','📋 <b>Comenzi de pregătit</b> — culegi comanda (cu cantitate dintr-o dată), apoi „Pregătită".','🚚 <b>Marfa a plecat</b> — confirmi plecarea; stocul scade efectiv.','♻️ <b>Consumabile</b> — scazi rapid un consumabil (buton „➖ 1").','🖨️ <b>Imprimă etichetă</b> — trimiți eticheta la imprimanta de pe PC (+ test print).','✏️ <b>Actualizare stoc</b> / 🧮 <b>Inventar</b> — corectezi stocul sau faci inventar pe locație.'])
-        + '<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">'
+        + '<div class="g2" style="gap:10px">'
         + tutImg("zebra-receptie","Recepție: produs/bax, locație, cantitate, lot, dată",true)
         + tutImg("zebra-cutii","Recepție pe cutii: mari / mici / bucăți",true)
         + '</div>'
@@ -3466,7 +3470,7 @@ function renderClientDetail(){
   var info='<div class="muted" style="font-size:13px;margin:2px 0 10px">'
     + (c.cui?('CUI '+esc(c.cui)+' · '):'') + (c.reg_com?(esc(c.reg_com)+' · '):'')
     + (c.email?(esc(c.email)+' · '):'') + (c.phone?esc(c.phone):'') + (c.address?('<div>'+esc(c.address)+'</div>'):'') + '</div>';
-  var kpis='<div class="kpis" style="grid-template-columns:repeat(6,1fr)">'
+  var kpis='<div class="kpis">'
     + kpi(s.products,"Produse") + kpi(s.units,"Unități") + kpi(s.low,"Sub prag", s.low>0?"bad":null)
     + kpi(s.open_orders,"Comenzi deschise") + kpi(s.users,"Conturi") + kpi(s.pallets,"Paleți") + '</div>';
   var tabs='<div class="toolbar" id="cdtabs" style="margin-top:12px">'
@@ -4280,7 +4284,7 @@ window.ofSubmit = function(){
 /* ---------------- Rapoarte ---------------- */
 VIEWS.reports = function(){
   setMain(topbar("Rapoarte")
-    + '<div class="grid" style="grid-template-columns:1fr 1fr">'
+    + '<div class="g2">'
     + '<div class="card" style="padding:18px"><h2>Stoc pe categorie</h2><div id="r_cat">…</div></div>'
     + '<div class="card" style="padding:18px"><h2>Top produse (rulaj 30 zile)</h2><div id="r_top">…</div></div>'
     + '</div>'
@@ -4481,7 +4485,7 @@ window.productView = function(query){
       +'<div><div style="font-size:18px;font-weight:700">'+esc(p.name)+'</div><div class="muted">SKU '+esc(p.sku)+(p.category?(" · "+esc(p.category)):"")+'</div></div>'
       +'<div class="row"><button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.sku)+'\\')">⌗ Bare</button>'
       +'<button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.sku)+'\\')">▦ QR</button></div></div></div>';
-    el("pv").innerHTML=head+'<div class="grid" style="grid-template-columns:1fr 1fr"><div class="card" style="padding:18px"><h2>Stoc pe locație</h2><div id="pv_stock">…</div></div><div class="card" style="padding:18px"><h2>Ultimele mișcări</h2><div id="pv_mov">…</div></div></div>';
+    el("pv").innerHTML=head+'<div class="g2"><div class="card" style="padding:18px"><h2>Stoc pe locație</h2><div id="pv_stock">…</div></div><div class="card" style="padding:18px"><h2>Ultimele mișcări</h2><div id="pv_mov">…</div></div></div>';
     api("GET","/api/inventory/stock?product_id="+p.id).then(function(s){
       el("pv_stock").innerHTML = s.stock.length ? '<table><tbody>'+s.stock.map(function(x){return '<tr><td><b>'+esc(x.location_code)+'</b></td><td class="right">'+esc(x.quantity)+'</td></tr>';}).join("")+'</tbody></table>' : '<div class="muted">Fără stoc</div>';
     });
