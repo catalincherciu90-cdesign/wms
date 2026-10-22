@@ -1024,7 +1024,6 @@ window.supplyCancel = function(id, code){
 /* ---------------- App shell ---------------- */
 var NAV = [
   ["dashboard","Dashboard","viewer"],
-  ["tutorial","Tutorial / Ghid","viewer"],
   ["stock","Stoc","viewer"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"], ["boxes","Cutii (fizice)","viewer"] ] },
@@ -1038,7 +1037,8 @@ var NAV = [
   ["services","Servicii","admin"],
   ["users","Utilizatori","admin"],
   ["settings","Setări site","admin"],
-  ["backup","Backup","admin"]
+  ["backup","Backup","admin"],
+  ["tutorial","Tutorial / Ghid","viewer"]
 ];
 
 function navLink(item){
@@ -1124,7 +1124,6 @@ VIEWS.dashboard = function(){
       + dashTile("departures","🚚","Marfa a plecat","operator")
       + dashTile("transfer","🔄","Transfer","operator")
       + dashTile("orders","📋","Comenzi","viewer")
-      + dashTile("tutorial","📖","Tutorial","viewer")
       + dashTile("cmr","📄","CMR","operator")
       + dashTile("products","📦","Produse","viewer")
       + dashTile("stock","🧮","Stoc","viewer")
@@ -1137,6 +1136,7 @@ VIEWS.dashboard = function(){
       + dashTile("commercial","💼","Comercial","operator")
       + dashTile("users","👤","Utilizatori","admin")
       + dashTile("backup","💾","Backup","admin")
+      + dashTile("tutorial","📖","Tutorial","viewer")
       + '</div></div>';
 
     // Panou „Marfă pregătită de plecare" — apare doar operatorilor și doar când există comenzi pregătite.
