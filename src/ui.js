@@ -291,7 +291,7 @@ function api(method, path, body){
 function can(min){ var o={viewer:1,operator:2,admin:3}; return me && o[me.role] >= o[min]; }
 
 /* ---------------- Auth ---------------- */
-function logout(){ token=null; me=null; localStorage.removeItem("wms_token"); renderLanding(); }
+function logout(){ token=null; me=null; localStorage.removeItem("wms_token"); var bp=document.getElementById("botpanel"); if(bp) bp.remove(); var bf=document.querySelector(".botfab"); if(bf) bf.remove(); renderLanding(); }
 
 // După autentificare: portal pentru clienți, aplicația de operare pentru staff
 function enterApp(){
@@ -1079,17 +1079,22 @@ function renderApp(){
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
     + '</aside><main id="main"></main>'
-    + botWidget()
     + '</div>';
+  ensureBot();
 }
-function botWidget(){
-  return '<button class="botfab" onclick="botToggle()" title="Asistent WSD" aria-label="Asistent">🤖</button>'
+// Widgetul asistent trăiește pe <body>, în afara #root — ca să NU se piardă conversația
+// când navighezi (go() rescrie #root). Îl creăm o singură dată.
+function ensureBot(){
+  if(document.getElementById("botpanel")) return;
+  var w=document.createElement("div");
+  w.innerHTML='<button class="botfab" onclick="botToggle()" title="Asistent WSD" aria-label="Asistent">🤖</button>'
     + '<div class="botpanel" id="botpanel">'
     + '<div class="bothead"><span>🤖 Asistent WSD</span><button onclick="botToggle()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer" aria-label="Închide">✕</button></div>'
     + '<div class="botbody" id="botbody"></div>'
     + '<div class="botchips" id="botchips"></div>'
     + '<div class="botfoot"><input id="bot_in" placeholder="Întreabă ceva…" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();botSend();}"><button onclick="botSend()">Trimite</button></div>'
     + '</div>';
+  while(w.firstChild) document.body.appendChild(w.firstChild);
 }
 window.botToggle = function(){
   var p=el("botpanel"); if(!p) return;
@@ -1103,13 +1108,22 @@ window.botToggle = function(){
   }
 };
 function botAdd(who,text){ var b=el("botbody"); if(!b) return; var d=document.createElement("div"); d.className="botmsg "+who; d.textContent=text; b.appendChild(d); b.scrollTop=b.scrollHeight; return d; }
+// link-uri către pagina din platformă: butoane care navighează (go) și închid panoul
+function botNav(list){
+  if(!list||!list.length) return;
+  var b=el("botbody"); if(!b) return;
+  var d=document.createElement("div"); d.className="botchips"; d.style.padding="0"; d.style.alignSelf="flex-start"; d.style.maxWidth="95%";
+  d.innerHTML=list.map(function(n){ return '<button class="botchip" style="background:var(--brand);color:#fff;border-color:var(--brand)" onclick="botGo(\\''+esc(n.view)+'\\')">'+esc(n.label)+'</button>'; }).join("");
+  b.appendChild(d); b.scrollTop=b.scrollHeight;
+}
+window.botGo = function(v){ go(v); };
 function botChips(list){ var c=el("botchips"); if(!c) return; c.innerHTML=(list||[]).map(function(s){return '<button class="botchip" onclick="botAsk(this.textContent)">'+esc(s)+'</button>';}).join(""); }
-window.botAsk = function(q){ var i=el("bot_in"); if(i) i.value=q; botSend(); };
+window.botAsk = function(q){ var i=el("bot_in"); if(i) i.value=q; if(String(q).indexOf("<")>=0){ if(i) i.focus(); return; } botSend(); };
 window.botSend = function(){
   var i=el("bot_in"); if(!i) return; var q=(i.value||"").trim(); if(!q) return;
   botAdd("u",q); i.value=""; botChips([]);
   var pending=botAdd("a","…");
-  api("POST","/api/assistant",{question:q}).then(function(d){ if(pending) pending.remove(); botAdd("a",d.answer||"—"); botChips(d.suggestions||[]); })
+  api("POST","/api/assistant",{question:q}).then(function(d){ if(pending) pending.remove(); botAdd("a",d.answer||"—"); botNav(d.nav); botChips(d.suggestions||[]); })
     .catch(function(e){ if(pending) pending.remove(); botAdd("a","Eroare: "+(e.message||e)); });
 };
 
