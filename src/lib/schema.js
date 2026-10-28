@@ -60,6 +60,9 @@ export async function ensureSchema(env) {
   // Sistemul generează cod de bare propriu DOAR pentru bax; cutia poartă codul produsului.
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN has_bax INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE products ADD COLUMN has_inner INTEGER NOT NULL DEFAULT 0').run(); } catch (e) {}
+  // Aprovizionare (replenishment): furnizorul produsului + costul unitar (pentru valoarea de comandat).
+  try { await env.DB.prepare('ALTER TABLE products ADD COLUMN supplier_id INTEGER').run(); } catch (e) {}
+  try { await env.DB.prepare('ALTER TABLE products ADD COLUMN cost REAL').run(); } catch (e) {}
   // Comandă în unități (paleți/baxuri/cutii): unitatea aleasă + câte, pentru afișare.
   try { await env.DB.prepare('ALTER TABLE order_lines ADD COLUMN uom TEXT').run(); } catch (e) {}
   try { await env.DB.prepare('ALTER TABLE order_lines ADD COLUMN uom_qty INTEGER').run(); } catch (e) {}

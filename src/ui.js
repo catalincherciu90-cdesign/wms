@@ -1032,6 +1032,7 @@ var NAV = [
   ["cmr","CMR (transport)","operator"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
+  ["replenishment","Necesar aprovizionare","viewer"],
   ["reports","Rapoarte","viewer"],
   ["commercial","Comercial","operator"],
   ["services","Servicii","admin"],
@@ -1132,6 +1133,7 @@ VIEWS.dashboard = function(){
       + dashTile("labels","🏷️","Etichete","operator")
       + dashTile("clients","👥","Clienți","operator")
       + dashTile("movements","🔁","Mișcări","viewer")
+      + dashTile("replenishment","📈","Aprovizionare","viewer")
       + dashTile("reports","📊","Rapoarte","viewer")
       + dashTile("commercial","💼","Comercial","operator")
       + dashTile("users","👤","Utilizatori","admin")
@@ -1599,6 +1601,8 @@ window.productForm = function(id){
     + field("Nume","p_name",p.name||"","","text","Denumirea clară a produsului (ex: Detergent lichid 2L).")
     + field("Categorie","p_category",p.category||"","","text","Categoria produsului (ex: Alimente, Cosmetice).")
     + '<div class="field"><label>Client (proprietar marfă)</label><select id="p_client"><option value="">— intern (al companiei) —</option></select>'+fhint("Cui aparține marfa: un client sau intern al firmei.")+'</div>'
+    + '<div class="row"><div style="flex:1"><label>Furnizor (aprovizionare)</label><select id="p_supplier"><option value="">— fără —</option></select>'+fhint("De la cine comanzi produsul — pentru necesarul de aprovizionare pe furnizor.")+'</div>'
+      + '<div style="flex:1">'+field("Cost unitar (lei)","p_cost",(p.cost!=null?p.cost:""),"","number","Costul unei bucăți — pentru valoarea de comandat. Opțional.")+'</div></div>'
     + '<div class="row"><div style="flex:1">'+field("UM","p_unit",p.unit||"buc","","text","Unitatea de măsură (ex: buc, kg, cutie).")+'</div><div style="flex:1">'+field("Prag reorder","p_reorder",p.reorder_point||0,"","number","Sub acest stoc primești alertă de reaprovizionare.")+'</div></div>'
     + '<div class="field" style="margin-bottom:4px"><label style="font-size:12.5px;color:var(--muted)">📦 Ambalare implicită (opțional) — pentru stoc pe cutii</label></div>'
     + '<div class="row"><div style="flex:1">'+field("Bucăți / cutie mică","p_pcs_inner",p.pcs_per_inner||"","","number","Câte bucăți încap într-o cutie mică (ex: 10).")+'</div><div style="flex:1">'+field("Cutii mici / cutie mare","p_inner_master",p.inner_per_master||"","","number","Câte cutii mici încap într-o cutie mare (ex: 6).")+'</div></div>'
@@ -1612,7 +1616,7 @@ window.productForm = function(id){
     + '<div class="fhint" style="margin:0 0 6px">Sistemul generează cod de bare propriu <b>doar pentru bax</b> (la recepție). <b>Cutia</b> poartă codul de bare al produsului. Eticheta de cutie = EAN-ul produsului.</div>'
     + (id?'<div id="p_packs" style="margin-top:6px"></div>':'<div class="fhint">Mai multe configurații (loturi diferite) le adaugi după ce salvezi produsul.</div>'),
     function(){
-      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null, bax_barcode:(el("p_bax_bc")&&el("p_bax_bc").value)||null, bax_qty:Number(el("p_bax_qty")&&el("p_bax_qty").value)||null, has_bax:(el("p_has_bax")&&el("p_has_bax").checked)?1:0, has_inner:(el("p_has_inner")&&el("p_has_inner").checked)?1:0 };
+      var body={ sku:el("p_sku").value, barcode:el("p_barcode").value, name:el("p_name").value, category:el("p_category").value, unit:el("p_unit").value, reorder_point:Number(el("p_reorder").value), client_id: el("p_client").value?Number(el("p_client").value):null, supplier_id: (el("p_supplier")&&el("p_supplier").value)?Number(el("p_supplier").value):null, cost: Number(el("p_cost")&&el("p_cost").value)||null, pcs_per_inner:Number(el("p_pcs_inner").value)||null, inner_per_master:Number(el("p_inner_master").value)||null, bax_barcode:(el("p_bax_bc")&&el("p_bax_bc").value)||null, bax_qty:Number(el("p_bax_qty")&&el("p_bax_qty").value)||null, has_bax:(el("p_has_bax")&&el("p_has_bax").checked)?1:0, has_inner:(el("p_has_inner")&&el("p_has_inner").checked)?1:0 };
       var pr = id ? api("PUT","/api/products/"+id,body) : api("POST","/api/products",body);
       pr.then(function(){ closeModal(); toast("Salvat"); loadProducts(); }).catch(function(e){ toast(e.message,"bad"); });
     });
@@ -1621,6 +1625,10 @@ window.productForm = function(id){
   api("GET","/api/clients").then(function(d){
     var sel=el("p_client"); if(!sel) return;
     sel.innerHTML='<option value="">— intern (al companiei) —</option>'+d.clients.map(function(c){return '<option value="'+c.id+'"'+(String(p.client_id||"")===String(c.id)?' selected':'')+'>'+esc(c.name)+'</option>';}).join("");
+  }).catch(function(){});
+  api("GET","/api/partners?type=supplier").then(function(d){
+    var sel=el("p_supplier"); if(!sel) return;
+    sel.innerHTML='<option value="">— fără —</option>'+(d.partners||[]).map(function(s){return '<option value="'+s.id+'"'+(String(p.supplier_id||"")===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>';}).join("");
   }).catch(function(){});
 };
 // Eticheta de cutie = codul de bare al PRODUSULUI (sistemul nu generează cod separat pentru cutie).
@@ -4327,6 +4335,117 @@ window.ofSubmit = function(){
   api("POST","/api/orders",body).then(function(){ toast(kind==="normal"?"Comandă creată":"Retur creat"); go(dest); }).catch(function(e){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
 };
 
+/* ---------------- Necesar de aprovizionare (replenishment) ---------------- */
+var _replData=null, _replFilter={urg:"",abc:"",only:false,q:""};
+VIEWS.replenishment = function(){
+  setMain(topbar("Necesar de aprovizionare", can("operator")?'<button onclick="replLoad(true)">🔄 Recalculează</button>':'')
+    + '<div class="card" style="padding:10px 14px;margin-bottom:12px"><div class="muted" style="font-size:12.5px">Analiză automată a istoricului de ieșiri (ultimele 90 de zile) + stocul curent → ce și cât de comandat, pe urgență și clasă ABC. Setează <b>Furnizor</b> și <b>Cost</b> la produse ca să vezi necesarul pe furnizor și valoarea.</div></div>'
+    + '<div id="repl">Se calculează…</div>');
+  replLoad();
+};
+window.replLoad = function(recompute){
+  var host=el("repl"); if(host) host.innerHTML='Se calculează…';
+  api("GET","/api/replenishment").then(function(d){ _replData=d; replRender(); if(recompute) toast("Recalculat ✓"); })
+    .catch(function(e){ if(el("repl")) el("repl").innerHTML='<div class="pill bad">'+esc(e.message)+'</div>'; });
+};
+function replMoney(v){ v=Number(v)||0; return v.toLocaleString("ro-RO",{minimumFractionDigits:0,maximumFractionDigits:2})+" lei"; }
+function replUrgPill(u){ var m={urgent:["bad","Urgent"],soon:["warn","Soon"],ok:["good","OK"]}; var x=m[u]||["mut",u]; return '<span class="pill '+x[0]+'">'+x[1]+'</span>'; }
+window.replSetUrg=function(v){ _replFilter.urg=(_replFilter.urg===v?"":v); replRender(); };
+window.replSetAbc=function(v){ _replFilter.abc=(_replFilter.abc===v?"":v); replRender(); };
+window.replToggleOnly=function(){ _replFilter.only=!_replFilter.only; replRender(); };
+window.replSearch=function(v){ _replFilter.q=(v||"").toLowerCase(); replRenderTable(); };
+function replFiltered(){
+  var f=_replFilter; return (_replData.items||[]).filter(function(it){
+    if(f.urg && it.urgency!==f.urg) return false;
+    if(f.abc && it.abc!==f.abc) return false;
+    if(f.only && !(it.to_order>0)) return false;
+    if(f.q){ var s=((it.sku||"")+" "+(it.name||"")).toLowerCase(); if(s.indexOf(f.q)<0) return false; }
+    return true;
+  });
+}
+function replRender(){
+  var d=_replData; if(!d) return;
+  var k=d.kpis||{};
+  var kpis='<div class="kpis">'
+    + kpi(k.to_order_now||0,"De comandat acum")
+    + kpi(k.urgent||0,"Urgent", (k.urgent>0?"bad":null))
+    + kpi(k.value_to_order!=null?replMoney(k.value_to_order):"—","Valoare de comandat")
+    + kpi(k.median_coverage!=null?(k.median_coverage+" zile"):"—","Acoperire mediană")
+    + kpi(k.products_analysed||0,"Produse analizate")
+    + kpi(d.computed_at?String(d.computed_at).slice(11,16):"—","Calculat la")
+    + '</div>';
+  // chips
+  function chip(active,onclick,label){ return '<button class="sm'+(active?'':' ghost')+'" onclick="'+onclick+'">'+label+'</button>'; }
+  var chips='<div class="toolbar">'
+    + '<input id="repl_q" placeholder="Caută produs…" oninput="replSearch(this.value)" style="max-width:240px">'
+    + '<span style="width:8px"></span>'
+    + chip(_replFilter.urg==="urgent","replSetUrg(\\'urgent\\')","Urgent")
+    + chip(_replFilter.urg==="soon","replSetUrg(\\'soon\\')","Soon")
+    + chip(_replFilter.urg==="ok","replSetUrg(\\'ok\\')","OK")
+    + '<span style="width:8px"></span>'
+    + chip(_replFilter.abc==="A","replSetAbc(\\'A\\')","A")
+    + chip(_replFilter.abc==="B","replSetAbc(\\'B\\')","B")
+    + chip(_replFilter.abc==="C","replSetAbc(\\'C\\')","C")
+    + '<span style="width:8px"></span>'
+    + chip(_replFilter.only,"replToggleOnly()","Doar de comandat")
+    + '</div>';
+  // necesar pe furnizor
+  var supItems=(d.by_supplier||[]).map(function(s){ return {label:esc(s.supplier_name)+' <span class="muted">('+s.qty+' buc'+(s.value?(' · '+replMoney(s.value)):"")+')</span>', value:s.products}; });
+  var supCard='<div class="card" style="padding:18px"><h2>Necesar pe furnizor · produse</h2>'
+    + (supItems.length?miniBars(supItems):'<div class="muted center" style="padding:16px">Nimic de comandat acum</div>')
+    + (can("operator")&&(d.by_supplier||[]).some(function(s){return s.supplier_id;})?('<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">'+(d.by_supplier||[]).filter(function(s){return s.supplier_id;}).map(function(s){return '<button class="ghost sm" onclick="replOrderSupplier('+s.supplier_id+')">📋 Comandă '+esc(s.supplier_name)+' ('+s.qty+' buc)</button>';}).join("")+'</div>'):'')
+    + '</div>';
+  // urgență pe clasă de valoare
+  var uc=d.urgency_by_class||{urgent:{A:0,BC:0},soon:{A:0,BC:0},ok:{A:0,BC:0}};
+  var ucItems=[
+    {label:'Urgent · A', value:uc.urgent.A, color:'#d64545'},
+    {label:'Urgent · B/C', value:uc.urgent.BC, color:'#e78b8b'},
+    {label:'Soon · A', value:uc.soon.A, color:'#d99a2b'},
+    {label:'Soon · B/C', value:uc.soon.BC, color:'#e6c37a'},
+    {label:'OK · A', value:uc.ok.A, color:'#12a150'},
+    {label:'OK · B/C', value:uc.ok.BC, color:'#8fcfa6'},
+  ];
+  var ucCard='<div class="card" style="padding:18px"><h2>Urgență pe clasă de valoare</h2>'+miniBars(ucItems)+'</div>';
+  el("repl").innerHTML = kpis + chips + '<div class="g2">'+supCard+ucCard+'</div>' + '<div class="card" style="margin-top:16px;padding:18px"><h2>Necesar de aprovizionare</h2><div id="repl_tbl"></div></div>';
+  replRenderTable();
+}
+function replRenderTable(){
+  var host=el("repl_tbl"); if(!host) return;
+  var rows=replFiltered();
+  if(!rows.length){ host.innerHTML='<div class="muted center" style="padding:16px">Nimic de afișat cu filtrele curente.</div>'; return; }
+  // de comandat primele, apoi după urgență
+  var ord={urgent:0,soon:1,ok:2};
+  rows.sort(function(a,b){ if((b.to_order>0)-(a.to_order>0)) return (b.to_order>0)-(a.to_order>0); return (ord[a.urgency]||9)-(ord[b.urgency]||9); });
+  host.innerHTML='<table><thead><tr><th>Produs</th><th>Furnizor</th><th class="right">Stoc</th><th class="right">Acoperire</th><th>Urgență</th><th>ABC</th><th class="right">De comandat</th><th class="right">Valoare</th></tr></thead><tbody>'
+    + rows.map(function(it){
+        return '<tr><td><b>'+esc(it.sku)+'</b> '+esc(it.name)+'</td>'
+          +'<td class="muted">'+esc(it.supplier_name||"—")+'</td>'
+          +'<td class="right">'+esc(it.stock)+'</td>'
+          +'<td class="right">'+(it.coverage_days!=null?(it.coverage_days+" z"):"—")+'</td>'
+          +'<td>'+replUrgPill(it.urgency)+'</td>'
+          +'<td><span class="pill '+(it.abc==="A"?"warn":"mut")+'">'+esc(it.abc)+'</span></td>'
+          +'<td class="right">'+(it.to_order>0?('<b>'+it.to_order+'</b> '+esc(it.unit)):"—")+'</td>'
+          +'<td class="right">'+(it.value?replMoney(it.value):"—")+'</td></tr>';
+      }).join("")
+    + '</tbody></table>';
+}
+// Creează o comandă de intrare (către furnizor) cu produsele de comandat ale acelui furnizor.
+window.replOrderSupplier = function(supplierId){
+  if(!_replData) return;
+  var lines=(_replData.items||[]).filter(function(it){ return it.supplier_id===supplierId && it.to_order>0; })
+    .map(function(it){ return {product_id:it.id, quantity:it.to_order}; });
+  if(!lines.length){ toast("Nimic de comandat pentru acest furnizor","bad"); return; }
+  var sup=(_replData.by_supplier||[]).find(function(s){return s.supplier_id===supplierId;});
+  modal("Comandă furnizor",
+    '<p>Creez o comandă de intrare către <b>'+esc(sup?sup.supplier_name:"furnizor")+'</b> cu <b>'+lines.length+'</b> produse ('+(sup?sup.qty:0)+' buc)?</p>'
+    +'<p class="muted" style="font-size:12.5px">Comanda se creează în ciornă; o confirmi și o recepționezi normal.</p>',
+    function(){
+      api("POST","/api/orders",{type:"inbound",kind:"normal",partner_id:supplierId,note:"Aprovizionare din necesar",lines:lines})
+        .then(function(){ closeModal(); toast("Comandă furnizor creată ✓"); go("orders_supplier"); })
+        .catch(function(e){ toast(e.message,"bad"); });
+    });
+  var sv=el("modalSave"); if(sv) sv.textContent="Creează comanda";
+};
 /* ---------------- Rapoarte ---------------- */
 VIEWS.reports = function(){
   setMain(topbar("Rapoarte")
