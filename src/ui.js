@@ -1028,7 +1028,7 @@ var NAV = [
   { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
   { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"], ["boxes","Cutii (fizice)","viewer"] ] },
   { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Imprimare","operator"], ["labeleditor","Editor etichetă","admin"] ] },
-  ["orders","Comenzi","viewer"],
+  { label:"Comenzi", items:[ ["orders_supplier","Comenzi furnizor","viewer"], ["orders_client","Comenzi client","viewer"], ["orders_drafts","Ciorne","viewer"], ["returns_supplier","Retur furnizor","operator"], ["returns_client","Retur client","operator"], ["orders","Toate comenzile","viewer"] ] },
   ["cmr","CMR (transport)","operator"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
   ["movements","Mișcări","viewer"],
@@ -3916,27 +3916,49 @@ window.cmrPrint = function(id){ api("GET","/api/cmr/"+id).then(function(r){ cmrO
 window.cmrPreview = function(id){ api("GET","/api/cmr/"+id).then(function(r){ cmrOpenWin(r.cmr||{}, true); }).catch(function(e){ toast(e.message,"bad"); }); };
 // Previzualizare din formular, cu datele completate acum (chiar nesalvat)
 window.cmrPreviewForm = function(){ cmrOpenWin(cmrCollect(), true); };
-VIEWS.orders = function(){
-  var addBtn = can("operator") ? '<button onclick="orderForm()">+ Comandă</button>' : '';
-  var tabs = '<div class="toolbar">'+filterTab("orderFilter","","Toate","loadOrders")
-    + filterTab("orderFilter","inbound","Intrări","loadOrders")
-    + filterTab("orderFilter","outbound","Ieșiri","loadOrders")+'</div>';
-  setMain(topbar("Comenzi", addBtn) + tabs + '<div class="card" id="ord">…</div>');
+// Vedere generică de comenzi, parametrizată (tip/status/kind) — reutilizată de toate
+// sub-meniurile: comenzi furnizor/client, ciorne, retururi, toate comenzile.
+function ordersView(opts){
+  window._ordQuery = opts.filter || {};
+  var addBtn='';
+  if(can("operator")){
+    if(opts.add==='ret_supplier') addBtn='<button onclick="returnForm(\\'supplier_return\\')">+ Retur furnizor</button>';
+    else if(opts.add==='ret_client') addBtn='<button onclick="returnForm(\\'client_return\\')">+ Retur client</button>';
+    else if(opts.add!==false) addBtn='<button onclick="orderForm()">+ Comandă</button>';
+  }
+  var tabs='';
+  if(opts.showTabs){
+    tabs='<div class="toolbar">'+filterTab("orderFilter","","Toate","loadOrders")
+      + filterTab("orderFilter","inbound","Intrări","loadOrders")
+      + filterTab("orderFilter","outbound","Ieșiri","loadOrders")+'</div>';
+  }
+  setMain(topbar(opts.title, addBtn) + tabs + (opts.hint?('<div class="card" style="padding:10px 14px;margin-bottom:12px"><div class="muted" style="font-size:12.5px">'+opts.hint+'</div></div>'):'') + '<div class="card" id="ord">…</div>');
   loadOrders();
-};
+}
+VIEWS.orders = function(){ window._ordQuery={type:orderFilter||""}; ordersView({title:"Toate comenzile", filter:{type:orderFilter||""}, showTabs:true}); };
+VIEWS.orders_supplier = function(){ ordersView({title:"Comenzi furnizor (intrare)", filter:{type:"inbound",kind:"normal"}, hint:"Comenzi de marfă de la furnizori — la finalizare, stocul crește."}); };
+VIEWS.orders_client = function(){ ordersView({title:"Comenzi client (ieșire)", filter:{type:"outbound",kind:"normal"}, hint:"Comenzi către clienți — se pregătesc (picking), apoi «Marfa a plecat» scade stocul."}); };
+VIEWS.orders_drafts = function(){ ordersView({title:"Ciorne", filter:{status:"draft"}, hint:"Comenzi în ciornă, neconfirmate încă."}); };
+VIEWS.returns_supplier = function(){ ordersView({title:"Retur furnizor", filter:{kind:"supplier_return"}, add:"ret_supplier", hint:"Marfă returnată către furnizor — iese din stoc (ca o ieșire)."}); };
+VIEWS.returns_client = function(){ ordersView({title:"Retur client", filter:{kind:"client_return"}, add:"ret_client", hint:"Marfă returnată de client — intră înapoi în stoc (ca o intrare)."}); };
 window.loadOrders = function(){
-  api("GET","/api/orders"+(orderFilter?("?type="+orderFilter):"")).then(function(d){
+  var q=window._ordQuery||{}; var parts=[];
+  if(q.type) parts.push("type="+encodeURIComponent(q.type));
+  if(q.status) parts.push("status="+encodeURIComponent(q.status));
+  if(q.kind) parts.push("kind="+encodeURIComponent(q.kind));
+  api("GET","/api/orders"+(parts.length?("?"+parts.join("&")):"")).then(function(d){
     var rows=d.orders.map(function(o){
       var who = o.source==="portal"
         ? esc(o.client_name||"client")+(o.recipient_name?(' <span class="muted">→ '+esc(o.recipient_name)+'</span>'):'')+' <span class="pill warn" style="font-size:10px">portal</span>'
         : esc(o.partner_name||"—");
+      var typeLabel = o.kind==="supplier_return" ? "retur furnizor" : o.kind==="client_return" ? "retur client" : (o.type==="inbound"?"intrare":"ieșire");
       var canProc = can("operator") && o.status!=="completed" && o.status!=="cancelled";
       var procBtn = canProc ? ('<button class="sm" onclick="orderProcess('+o.id+')">'+(o.status==="prepared"?"🚚 Procesează":"▶ Procesează")+'</button> ') : '';
       var unlockBtn = (o.lock_active && can("operator")) ? ('<button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează</button> ') : '';
       var proc = o.lock_active
         ? ('<span class="pill warn" style="font-size:10.5px">🔒 '+esc(o.locked_name||"în lucru")+'</span>')
         : (o.processed_by_name ? ('<span class="muted">✓ '+esc(o.processed_by_name)+'</span>') : '<span class="muted">—</span>');
-      return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+(o.type==="inbound"?"intrare":"ieșire")+'</span></td>'
+      return '<tr><td><b>'+esc(o.code)+'</b></td><td><span class="pill mut">'+typeLabel+'</span></td>'
         +'<td>'+who+'</td><td class="right">'+esc(o.total_qty)+'</td><td>'+orderStatusPill(o.status)+'</td>'
         +'<td>'+proc+'</td>'
         +'<td class="muted">'+esc(String(o.created_at).slice(0,10))+'</td>'
@@ -4036,8 +4058,12 @@ window.orderDetail = function(id){
         +(addr?'<div class="muted" style="font-size:13px">📍 '+addr+'</div>':'')
         +(o.note?'<div style="font-size:13px;margin-top:6px">📝 '+esc(o.note)+'</div>':'')+'</div>';
     }
-    modal("Comanda "+esc(o.code)+" — "+orderStatusPill(o.status),
-      '<div class="muted" style="margin-bottom:10px">'+(o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client")+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
+    var isRet = o.kind==="supplier_return" || o.kind==="client_return";
+    var headLbl = o.kind==="supplier_return" ? "Retur către furnizor" : o.kind==="client_return" ? "Retur de la client" : (o.type==="inbound"?"Intrare de la furnizor":"Ieșire către client");
+    var reasonBanner = (isRet && o.reason) ? ('<div class="card" style="padding:10px 12px;margin-bottom:10px;background:var(--panel-2)"><b>↩️ Motiv retur:</b> '+esc(o.reason)+'</div>') : '';
+    modal((isRet?"Retur ":"Comanda ")+esc(o.code)+" — "+orderStatusPill(o.status),
+      '<div class="muted" style="margin-bottom:10px">'+headLbl+(o.partner_name?(" · "+esc(o.partner_name)):"")+'</div>'
+      + reasonBanner
       + (o.lock_active?('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>.'+(can("operator")?' <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button>':'')+'</div>'):'')
       + (!o.lock_active && o.processed_by_name?('<div class="muted" style="font-size:12.5px;margin-bottom:10px">✓ Procesată de <b>'+esc(o.processed_by_name)+'</b>'+(o.processed_at?(' · '+esc(String(o.processed_at).slice(0,16))):'')+'</div>'):'')
       + recip + lines + newItems
@@ -4219,21 +4245,39 @@ window.deleteOrder = function(id, code, wasCompleted){
   var sv=el("modalSave"); if(sv){ sv.textContent="Da, șterge"; sv.className="danger"; sv.style.display=""; }
 };
 var orderLines=[];
-window.orderForm = function(){
+window.returnForm = function(kind){ orderForm({kind:kind}); };
+window.orderForm = function(preset){
+  preset = preset||{};
+  var kind = preset.kind||"normal";
+  window._ofKind = kind;
+  var isRet = kind!=="normal";
   orderLines=[{product_id:"",uom:"buc",count:1,quantity:1}];
-  setMain(topbar("Comandă nouă")
+  var title = kind==="supplier_return"?"Retur furnizor nou":kind==="client_return"?"Retur client nou":"Comandă nouă";
+  var partnerLbl = kind==="supplier_return"?"Furnizor (retur către)":kind==="client_return"?"Client (retur de la)":"Partener";
+  var partnerHint = kind==="supplier_return"?"Furnizorul la care trimiți marfa înapoi.":kind==="client_return"?"Clientul care a returnat marfa.":"Furnizorul (la intrare) sau clientul (la ieșire).";
+  var typeRow = isRet
+    ? '<div style="flex:1"><label>Partener</label><select id="of_partner"></select>'+fhint(partnerHint)+'</div>'
+    : '<div style="flex:1"><label>Tip</label><select id="of_type" onchange="ofLoadPartners()"><option value="inbound">Intrare (de la furnizor)</option><option value="outbound">Ieșire (către client)</option></select>'+fhint("Intrare = primești marfă. Ieșire = trimiți marfă.")+'</div>'
+      + '<div style="flex:1"><label>'+esc(partnerLbl)+'</label><select id="of_partner"></select>'+fhint(partnerHint)+'</div>';
+  var retBanner = isRet ? '<div class="card" style="padding:10px 12px;margin-bottom:12px;background:var(--panel-2)"><div class="muted" style="font-size:12.5px">'+(kind==="client_return"?"Retur de la client — la finalizare marfa <b>intră înapoi în stoc</b>.":"Retur către furnizor — se pregătește apoi «Marfa a plecat» <b>scade stocul</b>.")+'</div></div>' : '';
+  var reasonField = isRet ? '<div class="field" style="margin-top:12px"><label>Motiv retur</label><input id="of_reason" placeholder="ex: produs deteriorat, livrare greșită, expirat">'+fhint("De ce se face returul (opțional, dar util pentru evidență).")+'</div>' : '';
+  setMain(topbar(title)
     + '<div class="card" style="padding:20px;max-width:640px"><div id="ofmsg"></div>'
-    + '<div class="row"><div style="flex:1"><label>Tip</label><select id="of_type" onchange="ofLoadPartners()"><option value="inbound">Intrare (de la furnizor)</option><option value="outbound">Ieșire (către client)</option></select>'+fhint("Intrare = primești marfă. Ieșire = trimiți marfă.")+'</div>'
-    + '<div style="flex:1"><label>Partener</label><select id="of_partner"></select>'+fhint("Furnizorul (la intrare) sau clientul (la ieșire).")+'</div></div>'
-    + '<div class="field" style="margin-top:12px"><label>Notă</label><input id="of_note">'+fhint("Observație internă despre comandă (opțional).")+'</div>'
-    + '<h2 style="margin-top:8px">Linii comandă</h2>'+fhint("Adaugă produsele și cantitățile din comandă.")+'<div id="of_lines"></div>'
+    + retBanner
+    + '<div class="row">'+typeRow+'</div>'
+    + reasonField
+    + '<div class="field" style="margin-top:12px"><label>Notă</label><input id="of_note">'+fhint("Observație internă (opțional).")+'</div>'
+    + '<h2 style="margin-top:8px">Linii</h2>'+fhint("Adaugă produsele și cantitățile.")+'<div id="of_lines"></div>'
     + '<button class="ghost sm" onclick="ofAddLine()" style="margin-top:8px">+ Adaugă linie</button>'
-    + '<div style="margin-top:16px"><button onclick="ofSubmit()">Creează comanda</button></div></div>');
+    + '<div style="margin-top:16px"><button onclick="ofSubmit()">'+(isRet?"Creează returul":"Creează comanda")+'</button></div></div>');
   Promise.all([api("GET","/api/products"),ofLoadPartners()]).then(function(r){ cache.ofProducts=r[0].products.filter(function(p){return p.active;}); ofRenderLines(); });
 };
 window.ofLoadPartners = function(){
-  var type=el("of_type")?el("of_type").value:"inbound";
-  var want = type==="inbound"?"supplier":"customer";
+  var kind=window._ofKind||"normal";
+  var want;
+  if(kind==="supplier_return") want="supplier";
+  else if(kind==="client_return") want="customer";
+  else { var type=el("of_type")?el("of_type").value:"inbound"; want = type==="inbound"?"supplier":"customer"; }
   return api("GET","/api/partners?type="+want).then(function(d){
     if(el("of_partner")) el("of_partner").innerHTML='<option value="">— fără —</option>'+d.partners.map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join("");
   });
@@ -4274,11 +4318,13 @@ function ofRenderLines(){
   }).join("");
 }
 window.ofSubmit = function(){
-  var type=el("of_type").value;
+  var kind=window._ofKind||"normal";
+  var type = kind==="client_return" ? "inbound" : kind==="supplier_return" ? "outbound" : (el("of_type")?el("of_type").value:"inbound");
   var lines=orderLines.filter(function(l){return l.product_id && Number(l.quantity)>0;}).map(function(l){return {product_id:Number(l.product_id),quantity:Number(l.quantity),uom:(l.uom&&l.uom!=="buc")?l.uom:null,uom_qty:(l.uom&&l.uom!=="buc")?(Number(l.count)||null):null};});
   if(!lines.length){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">Adaugă cel puțin o linie validă</div>'; return; }
-  var body={ type:type, partner_id:el("of_partner").value?Number(el("of_partner").value):null, note:el("of_note").value, lines:lines };
-  api("POST","/api/orders",body).then(function(){ toast("Comandă creată"); go("orders"); }).catch(function(e){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
+  var body={ type:type, kind:kind, reason:(el("of_reason")&&el("of_reason").value)||null, partner_id:el("of_partner").value?Number(el("of_partner").value):null, note:el("of_note").value, lines:lines };
+  var dest = kind==="supplier_return"?"returns_supplier":kind==="client_return"?"returns_client":"orders";
+  api("POST","/api/orders",body).then(function(){ toast(kind==="normal"?"Comandă creată":"Retur creat"); go(dest); }).catch(function(e){ el("ofmsg").innerHTML='<div class="pill bad" style="margin-bottom:12px">'+esc(e.message)+'</div>'; });
 };
 
 /* ---------------- Rapoarte ---------------- */

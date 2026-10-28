@@ -104,6 +104,9 @@ export async function ensureSchema(env) {
     'processed_by INTEGER',     // cine a procesat (pregătit/recepționat) comanda
     'processed_by_name TEXT',   // numele procesatorului (pentru afișare)
     'processed_at TEXT',        // când a fost procesată
+    "kind TEXT NOT NULL DEFAULT 'normal'", // normal | supplier_return | client_return
+    'reason TEXT',              // motivul returului (pentru retururi)
+    'ref_order_id INTEGER',     // comanda originală la care se referă returul (opțional)
   ];
   for (const col of orderCols) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}

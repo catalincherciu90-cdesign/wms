@@ -11,6 +11,7 @@ export async function list(request, env) {
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
   const status = url.searchParams.get('status');
+  const kind = url.searchParams.get('kind');
   let sql = `
     SELECT o.*, p.name AS partner_name, c.name AS client_name, ${LOCK_ACTIVE},
            (SELECT COUNT(*) FROM order_lines WHERE order_id = o.id) AS line_count,
@@ -19,6 +20,7 @@ export async function list(request, env) {
   const binds = [];
   if (type === 'inbound' || type === 'outbound') { sql += ' AND o.type = ?'; binds.push(type); }
   if (status) { sql += ' AND o.status = ?'; binds.push(status); }
+  if (kind === 'normal' || kind === 'supplier_return' || kind === 'client_return') { sql += " AND COALESCE(o.kind,'normal') = ?"; binds.push(kind); }
   sql += ' ORDER BY o.created_at DESC, o.id DESC';
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return json({ orders: results });
@@ -77,16 +79,22 @@ export async function materializeNewItem(request, env, ctx, user, params) {
 
 export async function create(request, env, ctx, user) {
   const b = await readJson(request);
-  if (!['inbound', 'outbound'].includes(b?.type)) return error('type (inbound/outbound) obligatoriu', 400);
+  // Retururile reutilizează motorul de comenzi: retur client = intrare (marfa revine
+  // în stoc), retur furnizor = ieșire (marfa pleacă înapoi la furnizor).
+  const kind = ['supplier_return', 'client_return'].includes(b?.kind) ? b.kind : 'normal';
+  let type = b?.type;
+  if (kind === 'client_return') type = 'inbound';
+  else if (kind === 'supplier_return') type = 'outbound';
+  if (!['inbound', 'outbound'].includes(type)) return error('type (inbound/outbound) obligatoriu', 400);
   if (!Array.isArray(b.lines) || b.lines.length === 0) return error('Cel puțin o linie de comandă', 400);
   for (const l of b.lines) {
     if (!l.product_id || !(Number(l.quantity) > 0)) return error('Fiecare linie are product_id și cantitate > 0', 400);
   }
 
-  const prefix = b.type === 'inbound' ? 'IN' : 'OUT';
+  const prefix = kind === 'client_return' ? 'RET-C' : kind === 'supplier_return' ? 'RET-S' : (type === 'inbound' ? 'IN' : 'OUT');
   const res = await env.DB.prepare(
-    'INSERT INTO orders (code, type, partner_id, status, note, user_id) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind('TMP', b.type, b.partner_id || null, 'draft', b.note || null, user.sub).run();
+    'INSERT INTO orders (code, type, kind, partner_id, status, note, reason, ref_order_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind('TMP', type, kind, b.partner_id || null, 'draft', b.note || null, (b.reason || null), (Number(b.ref_order_id) || null), user.sub).run();
   const id = res.meta.last_row_id;
   const code = prefix + '-' + String(id).padStart(5, '0');
   await env.DB.prepare('UPDATE orders SET code = ? WHERE id = ?').bind(code, id).run();
