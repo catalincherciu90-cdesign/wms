@@ -198,6 +198,19 @@ export function renderUI() {
   .modal-bg{position:fixed;inset:0;background:rgba(10,15,25,.5);display:grid;place-items:center;padding:20px;z-index:50}
   .modal{width:100%;max-width:440px;padding:22px}
   .toast{position:fixed;bottom:20px;right:20px;padding:12px 16px;border-radius:10px;color:#fff;box-shadow:var(--shadow);z-index:99;font-weight:600}
+  /* Asistent (roboțel) */
+  .botfab{position:fixed;right:18px;bottom:18px;z-index:70;width:56px;height:56px;border-radius:50%;background:var(--brand);color:#fff;border:none;box-shadow:0 10px 28px -8px rgba(47,75,255,.6);font-size:24px;cursor:pointer}
+  .botpanel{position:fixed;right:18px;bottom:84px;z-index:71;width:360px;max-width:calc(100vw - 32px);height:520px;max-height:calc(100vh - 120px);background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 50px -12px rgba(10,15,25,.4);display:none;flex-direction:column;overflow:hidden}
+  .botpanel.open{display:flex}
+  .bothead{padding:12px 14px;background:var(--brand);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+  .botbody{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+  .botmsg{max-width:85%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+  .botmsg.u{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:3px}
+  .botmsg.a{align-self:flex-start;background:var(--panel-2);color:var(--text);border-bottom-left-radius:3px}
+  .botchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 6px}
+  .botchip{font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--panel-2);cursor:pointer;color:var(--text)}
+  .botfoot{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border)}
+  .botfoot input{flex:1}
   details.help{background:var(--panel);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
   details.help summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:13px;color:var(--brand);list-style:none;user-select:none}
   details.help summary::-webkit-details-marker{display:none}
@@ -1065,8 +1078,40 @@ function renderApp(){
     + '<div style="flex:1"></div>'
     + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
-    + '</aside><main id="main"></main></div>';
+    + '</aside><main id="main"></main>'
+    + botWidget()
+    + '</div>';
 }
+function botWidget(){
+  return '<button class="botfab" onclick="botToggle()" title="Asistent WSD" aria-label="Asistent">🤖</button>'
+    + '<div class="botpanel" id="botpanel">'
+    + '<div class="bothead"><span>🤖 Asistent WSD</span><button onclick="botToggle()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer" aria-label="Închide">✕</button></div>'
+    + '<div class="botbody" id="botbody"></div>'
+    + '<div class="botchips" id="botchips"></div>'
+    + '<div class="botfoot"><input id="bot_in" placeholder="Întreabă ceva…" onkeydown="if(event.key===\\'Enter\\'){event.preventDefault();botSend();}"><button onclick="botSend()">Trimite</button></div>'
+    + '</div>';
+}
+window.botToggle = function(){
+  var p=el("botpanel"); if(!p) return;
+  p.classList.toggle("open");
+  if(p.classList.contains("open")){
+    if(!p.dataset.init){ p.dataset.init="1";
+      botAdd("a","Salut! Sunt asistentul WSD. Întreabă-mă despre comenzi, produse, stoc sau bani — răspund doar din datele platformei.");
+      botChips(["Cum merge?","Câte comenzi sunt?","Câte produse în stoc?","Ce trebuie comandat?"]);
+    }
+    var i=el("bot_in"); if(i) i.focus();
+  }
+};
+function botAdd(who,text){ var b=el("botbody"); if(!b) return; var d=document.createElement("div"); d.className="botmsg "+who; d.textContent=text; b.appendChild(d); b.scrollTop=b.scrollHeight; return d; }
+function botChips(list){ var c=el("botchips"); if(!c) return; c.innerHTML=(list||[]).map(function(s){return '<button class="botchip" onclick="botAsk(this.textContent)">'+esc(s)+'</button>';}).join(""); }
+window.botAsk = function(q){ var i=el("bot_in"); if(i) i.value=q; botSend(); };
+window.botSend = function(){
+  var i=el("bot_in"); if(!i) return; var q=(i.value||"").trim(); if(!q) return;
+  botAdd("u",q); i.value=""; botChips([]);
+  var pending=botAdd("a","…");
+  api("POST","/api/assistant",{question:q}).then(function(d){ if(pending) pending.remove(); botAdd("a",d.answer||"—"); botChips(d.suggestions||[]); })
+    .catch(function(e){ if(pending) pending.remove(); botAdd("a","Eroare: "+(e.message||e)); });
+};
 
 var HELP = {
   dashboard: ["Ce vezi aici", "<p>Panoul general al depozitului.</p><ul><li><b>Cardurile de sus</b>: produse active, locații, unități în stoc, comenzi deschise și câte produse sunt sub prag.</li><li><b>Graficul</b>: intrările (verde) și ieșirile (roșu) din ultimele 7 zile.</li><li><b>Jos</b>: comenzi recente și produsele care trebuie reaprovizionate.</li></ul>"],
