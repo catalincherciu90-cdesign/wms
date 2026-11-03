@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v145';
+const APP_VERSION = 'v146';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -41,17 +41,17 @@ const routes = [
 
   ['GET', '/api/products', products.list, 'viewer'],
   ['GET', '/api/products/export', products.exportCsv, 'viewer'],
-  ['POST', '/api/products', products.create, 'operator'],
-  ['POST', '/api/products/import', products.importProducts, 'operator'],
+  ['POST', '/api/products', products.create, 'gestionar_sef'],
+  ['POST', '/api/products/import', products.importProducts, 'gestionar_sef'],
   ['POST', '/api/products/gen-barcodes', products.genBarcodesBulk, 'operator'],
   ['POST', '/api/products/:id/gen-barcode', products.genBarcode, 'operator'],
   ['GET', '/api/products/:id/packs', products.packsList, 'viewer'],
-  ['POST', '/api/products/:id/packs', products.packAdd, 'operator'],
-  ['DELETE', '/api/products/:id/packs/:packId', products.packRemove, 'operator'],
+  ['POST', '/api/products/:id/packs', products.packAdd, 'gestionar_sef'],
+  ['DELETE', '/api/products/:id/packs/:packId', products.packRemove, 'gestionar_sef'],
   ['POST', '/api/products/reassign', products.reassign, 'operator'],
   ['POST', '/api/products/bulk-delete', products.bulkDelete, 'admin'],
-  ['PUT', '/api/products/:id', products.update, 'operator'],
-  ['DELETE', '/api/products/:id', products.remove, 'admin'],
+  ['PUT', '/api/products/:id', products.update, 'gestionar_sef'],
+  ['DELETE', '/api/products/:id', products.remove, 'gestionar_sef'],
 
   ['GET', '/api/locations', locations.list, 'viewer'],
   ['POST', '/api/locations', locations.create, 'operator'],
@@ -93,39 +93,39 @@ const routes = [
   ['PUT', '/api/admin/site-content', admin.siteContentSet, 'admin'],
 
   ['GET', '/api/partners', partners.list, 'viewer'],
-  ['POST', '/api/partners', partners.create, 'operator'],
-  ['PUT', '/api/partners/:id', partners.update, 'operator'],
-  ['DELETE', '/api/partners/:id', partners.remove, 'admin'],
+  ['POST', '/api/partners', partners.create, 'gestionar_sef'],
+  ['PUT', '/api/partners/:id', partners.update, 'gestionar_sef'],
+  ['DELETE', '/api/partners/:id', partners.remove, 'gestionar_sef'],
 
   ['GET', '/api/orders', orders.list, 'viewer'],
   ['GET', '/api/orders/:id', orders.get, 'viewer'],
-  ['POST', '/api/orders', orders.create, 'operator'],
+  ['POST', '/api/orders', orders.create, 'gestionar_sef'],
   ['PUT', '/api/orders/:id/status', orders.setStatus, 'operator'],
   ['POST', '/api/orders/:id/complete', orders.complete, 'operator'],
   ['POST', '/api/orders/:id/depart', orders.depart, 'operator'],
   ['POST', '/api/orders/:id/new-items/:itemId', orders.materializeNewItem, 'operator'],
-  ['POST', '/api/orders/:id/convert', orders.convertType, 'operator'],
+  ['POST', '/api/orders/:id/convert', orders.convertType, 'gestionar_sef'],
   ['POST', '/api/orders/:id/lock', orders.lock, 'operator'],
   ['POST', '/api/orders/:id/pick-pallet', orders.pickPallet, 'operator'],
   ['POST', '/api/orders/:id/unlock', orders.unlock, 'operator'],
-  ['DELETE', '/api/orders/:id', orders.remove, 'operator'],
+  ['DELETE', '/api/orders/:id', orders.remove, 'gestionar_sef'],
 
-  ['GET', '/api/replenishment', replenishment.needs, 'viewer'],
+  ['GET', '/api/replenishment', replenishment.needs, 'gestionar_sef'],
   ['POST', '/api/assistant', assistant.ask, 'viewer'],
 
-  ['GET', '/api/cmr/defaults', cmr.defaults, 'operator'],
+  ['GET', '/api/cmr/defaults', cmr.defaults, 'gestionar_sef'],
   ['POST', '/api/cmr/config', cmr.saveConfig, 'admin'],
-  ['GET', '/api/cmr', cmr.list, 'operator'],
-  ['POST', '/api/cmr', cmr.create, 'operator'],
-  ['GET', '/api/cmr/:id', cmr.get, 'operator'],
-  ['PUT', '/api/cmr/:id', cmr.update, 'operator'],
-  ['DELETE', '/api/cmr/:id', cmr.remove, 'admin'],
+  ['GET', '/api/cmr', cmr.list, 'gestionar_sef'],
+  ['POST', '/api/cmr', cmr.create, 'gestionar_sef'],
+  ['GET', '/api/cmr/:id', cmr.get, 'gestionar_sef'],
+  ['PUT', '/api/cmr/:id', cmr.update, 'gestionar_sef'],
+  ['DELETE', '/api/cmr/:id', cmr.remove, 'gestionar_sef'],
 
-  ['GET', '/api/reports/stock-by-category', reports.stockByCategory, 'viewer'],
-  ['GET', '/api/reports/low-stock', reports.lowStock, 'viewer'],
-  ['GET', '/api/reports/low-stock/export', reports.exportLowStockCsv, 'viewer'],
-  ['GET', '/api/reports/movements-by-period', reports.movementsByPeriod, 'viewer'],
-  ['GET', '/api/reports/top-products', reports.topProducts, 'viewer'],
+  ['GET', '/api/reports/stock-by-category', reports.stockByCategory, 'gestionar_sef'],
+  ['GET', '/api/reports/low-stock', reports.lowStock, 'gestionar_sef'],
+  ['GET', '/api/reports/low-stock/export', reports.exportLowStockCsv, 'gestionar_sef'],
+  ['GET', '/api/reports/movements-by-period', reports.movementsByPeriod, 'gestionar_sef'],
+  ['GET', '/api/reports/top-products', reports.topProducts, 'gestionar_sef'],
 
   // Servicii (catalog) + servicii atașate la comenzi
   ['GET', '/api/services', services.list, 'operator'],
@@ -137,11 +137,11 @@ const routes = [
   ['DELETE', '/api/orders/:id/services/:lineId', services.removeFromOrder, 'operator'],
 
   // Modul comercial: oferte
-  ['GET', '/api/offers', offers.list, 'operator'],
-  ['GET', '/api/offers/:id', offers.get, 'operator'],
-  ['POST', '/api/offers', offers.create, 'operator'],
-  ['PUT', '/api/offers/:id/status', offers.setStatus, 'operator'],
-  ['DELETE', '/api/offers/:id', offers.remove, 'operator'],
+  ['GET', '/api/offers', offers.list, 'gestionar_sef'],
+  ['GET', '/api/offers/:id', offers.get, 'gestionar_sef'],
+  ['POST', '/api/offers', offers.create, 'gestionar_sef'],
+  ['PUT', '/api/offers/:id/status', offers.setStatus, 'gestionar_sef'],
+  ['DELETE', '/api/offers/:id', offers.remove, 'gestionar_sef'],
 
   ['GET', '/api/qr', qr.svg, 'viewer'],
 
@@ -150,12 +150,12 @@ const routes = [
   // Clienți de depozitare + conturile lor (staff)
   ['GET', '/api/clients', clients.list, 'operator'],
   ['GET', '/api/clients/:id/overview', clients.overview, 'operator'],
-  ['POST', '/api/clients', clients.create, 'admin'],
-  ['PUT', '/api/clients/:id', clients.update, 'admin'],
-  ['DELETE', '/api/clients/:id', clients.remove, 'admin'],
-  ['GET', '/api/clients/:id/users', clients.listUsers, 'admin'],
-  ['POST', '/api/clients/:id/users', clients.createUser, 'admin'],
-  ['DELETE', '/api/clients/:id/users/:userId', clients.removeUser, 'admin'],
+  ['POST', '/api/clients', clients.create, 'gestionar_sef'],
+  ['PUT', '/api/clients/:id', clients.update, 'gestionar_sef'],
+  ['DELETE', '/api/clients/:id', clients.remove, 'gestionar_sef'],
+  ['GET', '/api/clients/:id/users', clients.listUsers, 'gestionar_sef'],
+  ['POST', '/api/clients/:id/users', clients.createUser, 'gestionar_sef'],
+  ['DELETE', '/api/clients/:id/users/:userId', clients.removeUser, 'gestionar_sef'],
 
   // Paleți (staff)
   ['GET', '/api/pallets', pallets.list, 'viewer'],

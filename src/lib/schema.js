@@ -115,6 +115,11 @@ export async function ensureSchema(env) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
   }
 
+  // Migrare roluri: trecem la user_zebra (execuție) / gestionar_sef (management) / admin (sistem).
+  // operator → gestionar_sef, viewer → user_zebra; adminii rămân admin. Idempotent.
+  try { await env.DB.prepare("UPDATE users SET role='gestionar_sef' WHERE role='operator'").run(); } catch (e) {}
+  try { await env.DB.prepare("UPDATE users SET role='user_zebra' WHERE role='viewer'").run(); } catch (e) {}
+
   // date de firmă pentru clienți (CUI, Nr. Reg. Com., adresă)
   const clientCols = ['cui TEXT', 'reg_com TEXT', 'address TEXT'];
   for (const col of clientCols) {
