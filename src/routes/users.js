@@ -13,7 +13,7 @@ export async function list(request, env) {
 export async function create(request, env) {
   const b = await readJson(request);
   if (!b?.email || !b?.name || !b?.password) return error('email, name și password obligatorii', 400);
-  const role = ['admin', 'operator', 'viewer'].includes(b.role) ? b.role : 'operator';
+  const role = ['admin', 'gestionar_sef', 'user_zebra'].includes(b.role) ? b.role : 'user_zebra';
   try {
     const hash = await hashPassword(b.password);
     const res = await env.DB.prepare(
@@ -33,7 +33,7 @@ export async function update(request, env, ctx, user, params) {
   const id = Number(params.id);
   const existing = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first();
   if (!existing) return error('Utilizator inexistent', 404);
-  const role = ['admin', 'operator', 'viewer'].includes(b.role) ? b.role : existing.role;
+  const role = ['admin', 'gestionar_sef', 'user_zebra'].includes(b.role) ? b.role : existing.role;
   const name = b.name?.trim() || existing.name;
   const active = b.active === undefined ? existing.active : (b.active ? 1 : 0);
   await env.DB.prepare('UPDATE users SET name=?, role=?, active=? WHERE id=?').bind(name, role, active, id).run();

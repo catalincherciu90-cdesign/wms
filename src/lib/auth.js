@@ -88,8 +88,10 @@ export async function authenticate(request, env) {
   }
 }
 
-// true dacă rolul userului e suficient (admin > operator > viewer)
+// true dacă rolul userului e suficient.
+// Roluri noi: user_zebra (execuție) < gestionar_sef (management) < admin (sistem).
+// Vechile viewer/operator rămân ca alias pentru compatibilitate.
 export function hasRole(user, minRole) {
-  const order = { viewer: 1, operator: 2, admin: 3 };
+  const order = { viewer: 1, user_zebra: 2, operator: 2, gestionar_sef: 3, admin: 4 };
   return user && order[user.role] >= order[minRole];
 }

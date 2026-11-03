@@ -288,7 +288,9 @@ function api(method, path, body){
   });
 }
 
-function can(min){ var o={viewer:1,operator:2,admin:3}; return me && o[me.role] >= o[min]; }
+function can(min){ var o={viewer:1,user_zebra:2,operator:2,gestionar_sef:3,admin:4}; return me && o[me.role] >= o[min]; }
+// etichetă prietenoasă pentru rol
+function roleLabel(r){ var m={admin:"Admin",gestionar_sef:"Gestionar șef",user_zebra:"User Zebra",operator:"Operator",viewer:"Viewer",client:"Client"}; return m[r]||r; }
 
 /* ---------------- Auth ---------------- */
 function logout(){ token=null; me=null; localStorage.removeItem("wms_token"); var bp=document.getElementById("botpanel"); if(bp) bp.remove(); var bf=document.querySelector(".botfab"); if(bf) bf.remove(); renderLanding(); }
@@ -1036,23 +1038,23 @@ window.supplyCancel = function(id, code){
 
 /* ---------------- App shell ---------------- */
 var NAV = [
-  ["dashboard","Dashboard","viewer"],
-  ["stock","Stoc","viewer"],
-  { label:"Gestiuni", items:[ ["products","Toate produsele","viewer"], ["products_clients","Produse clienți","viewer"], ["products_consumabile","Consumabile depozit","viewer"] ] },
-  { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","viewer"], ["locations","Locații","viewer"], ["pallets","Paleți","viewer"], ["boxes","Cutii (fizice)","viewer"] ] },
-  { label:"Operațiuni", items:[ ["receive","Recepție","operator"], ["ship","Expediere","operator"], ["transfer","Transfer","operator"], ["labels","Etichete","operator"], ["printstation","Imprimare","operator"], ["labeleditor","Editor etichetă","admin"] ] },
-  { label:"Comenzi", items:[ ["orders_supplier","Comenzi furnizor","viewer"], ["orders_client","Comenzi client","viewer"], ["orders_drafts","Ciorne","viewer"], ["returns_supplier","Retur furnizor","operator"], ["returns_client","Retur client","operator"], ["orders","Toate comenzile","viewer"] ] },
-  ["cmr","CMR (transport)","operator"],
-  { label:"Clienți & parteneri", items:[ ["clients","Clienți","operator"], ["partners","Parteneri","viewer"] ] },
-  ["movements","Mișcări","viewer"],
-  ["replenishment","Necesar aprovizionare","viewer"],
-  ["reports","Rapoarte","viewer"],
-  ["commercial","Comercial","operator"],
+  ["dashboard","Dashboard","user_zebra"],
+  ["stock","Stoc","user_zebra"],
+  { label:"Gestiuni", items:[ ["products","Toate produsele","user_zebra"], ["products_clients","Produse clienți","gestionar_sef"], ["products_consumabile","Consumabile depozit","user_zebra"] ] },
+  { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","gestionar_sef"], ["locations","Locații","user_zebra"], ["pallets","Paleți","user_zebra"], ["boxes","Cutii (fizice)","user_zebra"] ] },
+  { label:"Operațiuni", items:[ ["receive","Recepție","user_zebra"], ["ship","Expediere","user_zebra"], ["transfer","Transfer","user_zebra"], ["labels","Etichete","user_zebra"], ["printstation","Imprimare","user_zebra"], ["labeleditor","Editor etichetă","admin"] ] },
+  { label:"Comenzi", items:[ ["orders_supplier","Comenzi furnizor","gestionar_sef"], ["orders_client","Comenzi client","gestionar_sef"], ["orders_drafts","Ciorne","gestionar_sef"], ["returns_supplier","Retur furnizor","gestionar_sef"], ["returns_client","Retur client","gestionar_sef"], ["orders","Toate comenzile","user_zebra"] ] },
+  ["cmr","CMR (transport)","gestionar_sef"],
+  { label:"Clienți & parteneri", items:[ ["clients","Clienți","gestionar_sef"], ["partners","Parteneri","gestionar_sef"] ] },
+  ["movements","Mișcări","gestionar_sef"],
+  ["replenishment","Necesar aprovizionare","gestionar_sef"],
+  ["reports","Rapoarte","gestionar_sef"],
+  ["commercial","Comercial","gestionar_sef"],
   ["services","Servicii","admin"],
   ["users","Utilizatori","admin"],
   ["settings","Setări site","admin"],
   ["backup","Backup","admin"],
-  ["tutorial","Tutorial / Ghid","viewer"]
+  ["tutorial","Tutorial / Ghid","user_zebra"]
 ];
 
 function navLink(item){
@@ -1076,7 +1078,7 @@ function renderApp(){
     + '<button class="ghost sm" style="margin:8px 6px 2px" onclick="scanCamera(handleScanResult)">📷 Scanează</button>'
     + '<a class="ghost sm" href="/instalare" target="_blank" style="margin:2px 6px;text-align:center;text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:var(--text);font-weight:600;font-size:12.5px;display:block">📲 Instalare Zebra (QR)</a>'
     + '<div style="flex:1"></div>'
-    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(me.role)+'</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
+    + '<div class="muted" style="padding:8px 12px;font-size:12px">'+esc(me.name)+'<br><span class="pill mut">'+esc(roleLabel(me.role))+'</span> <span class="muted" style="font-size:10px">'+APP_VERSION+'</span></div>'
     + '<button class="ghost sm" onclick="logout()">Ieșire</button>'
     + '</aside><main id="main"></main>'
     + '</div>';
@@ -1143,7 +1145,7 @@ var HELP = {
   movements: ["Istoricul mișcărilor", "<p>Jurnalul complet al tuturor mișcărilor de stoc: <b>cine</b>, <b>ce</b>, <b>când</b> și <b>cât</b> (intrare, ieșire, transfer, ajustare).</p><p>Este doar pentru <b>consultare și audit</b> — nu se modifică nimic de aici.</p>"],
   reports: ["Rapoarte disponibile", "<ul><li><b>Stoc pe categorie</b> — cât ai pe fiecare categorie.</li><li><b>Top produse</b> — cele cu cel mai mare rulaj (30 zile).</li><li><b>Sub prag</b> — ce trebuie reaprovizionat (cu <b>Export CSV</b>).</li><li><b>Mișcări pe zi</b> — activitatea zilnică.</li></ul>"],
   clients: ["Clienți de depozitare + conturi portal", "<p>Aici gestionezi clienții pentru care depozitezi marfă (model 3PL).</p><ol><li><b>+ Client</b> — adaugi firma client.</li><li><b>Conturi</b> — creezi login-uri de portal pentru client (nume, email, parolă). Clientul se loghează cu ele și își vede <b>doar marfa lui</b>.</li></ol><p>Ca marfa să apară la un client, la <b>Produse</b> setezi câmpul «Client (proprietar marfă)». Recepția/expedierea funcționează la fel ca pentru marfa internă.</p>"],
-  users: ["Utilizatori și roluri (doar admin)", "<ol><li><b>+ Utilizator</b> → nume, email, rol, parolă.</li></ol><p>Roluri: <b>viewer</b> (doar citește), <b>operator</b> (operează stocul și comenzile), <b>admin</b> (tot + gestionează utilizatori).</p><p>💡 Schimbă-ți parola implicită de admin de aici, la prima folosire.</p>"]
+  users: ["Utilizatori și roluri (doar admin)", "<ol><li><b>+ Utilizator</b> → nume, email, rol, parolă.</li></ol><p>Roluri: <b>User Zebra</b> (doar execuție — recepție, expediere, transfer, picking, cutii, paleți, inventar; vede stocul și produsele), <b>Gestionar șef</b> (tot operațional + management: produse, clienți, comenzi, retururi, aprovizionare, rapoarte, CMR, bani — fără administrare de sistem), <b>Admin</b> (tot, inclusiv utilizatori, setări site și backup).</p><p>💡 Schimbă-ți parola implicită de admin de aici, la prima folosire.</p>"]
 };
 function viewHelp(v){
   var h=HELP[v]; if(!h) return "";
@@ -1179,25 +1181,25 @@ VIEWS.dashboard = function(){
       + kpi(k.low_stock,"Sub prag stoc", k.low_stock>0?"bad":"good")
       + '</div>';
     var quick = '<div class="card" style="padding:16px;margin-bottom:16px"><h2 style="margin:0 0 12px">Acces rapid</h2><div class="dgrid">'
-      + dashTile("receive","📥","Recepție","operator")
-      + dashTile("ship","📤","Expediere","operator")
-      + dashTile("departures","🚚","Marfa a plecat","operator")
-      + dashTile("transfer","🔄","Transfer","operator")
-      + dashTile("orders","📋","Comenzi","viewer")
-      + dashTile("cmr","📄","CMR","operator")
-      + dashTile("products","📦","Produse","viewer")
-      + dashTile("stock","🧮","Stoc","viewer")
-      + dashTile("locations","🗺️","Locații","viewer")
-      + dashTile("warehouses","🏭","Gestiuni","viewer")
-      + dashTile("labels","🏷️","Etichete","operator")
-      + dashTile("clients","👥","Clienți","operator")
-      + dashTile("movements","🔁","Mișcări","viewer")
-      + dashTile("replenishment","📈","Aprovizionare","viewer")
-      + dashTile("reports","📊","Rapoarte","viewer")
-      + dashTile("commercial","💼","Comercial","operator")
+      + dashTile("receive","📥","Recepție","user_zebra")
+      + dashTile("ship","📤","Expediere","user_zebra")
+      + dashTile("departures","🚚","Marfa a plecat","user_zebra")
+      + dashTile("transfer","🔄","Transfer","user_zebra")
+      + dashTile("orders","📋","Comenzi","user_zebra")
+      + dashTile("cmr","📄","CMR","gestionar_sef")
+      + dashTile("products","📦","Produse","user_zebra")
+      + dashTile("stock","🧮","Stoc","user_zebra")
+      + dashTile("locations","🗺️","Locații","user_zebra")
+      + dashTile("warehouses","🏭","Gestiuni","gestionar_sef")
+      + dashTile("labels","🏷️","Etichete","user_zebra")
+      + dashTile("clients","👥","Clienți","gestionar_sef")
+      + dashTile("movements","🔁","Mișcări","gestionar_sef")
+      + dashTile("replenishment","📈","Aprovizionare","gestionar_sef")
+      + dashTile("reports","📊","Rapoarte","gestionar_sef")
+      + dashTile("commercial","💼","Comercial","gestionar_sef")
       + dashTile("users","👤","Utilizatori","admin")
       + dashTile("backup","💾","Backup","admin")
-      + dashTile("tutorial","📖","Tutorial","viewer")
+      + dashTile("tutorial","📖","Tutorial","user_zebra")
       + '</div></div>';
 
     // Panou „Marfă pregătită de plecare" — apare doar operatorilor și doar când există comenzi pregătite.
@@ -1381,11 +1383,11 @@ function drawChart(data){
 var prodScope = "all";
 function productsView(scope, title){
   prodScope = scope;
-  var addBtn = can("operator") ? '<button onclick="productForm()">+ Produs</button>' : '';
-  var impBtn = can("operator") ? '<button class="ghost" onclick="importUI()">⬆ Import Excel</button>' : '';
+  var addBtn = can("gestionar_sef") ? '<button onclick="productForm()">+ Produs</button>' : '';
+  var impBtn = can("gestionar_sef") ? '<button class="ghost" onclick="importUI()">⬆ Import Excel</button>' : '';
   var exp = '<button class="ghost" onclick="downloadCsv(\\'/api/products/export\\',\\'produse.csv\\')">Export CSV</button>';
-  var genBtn = can("operator") ? '<button class="ghost" onclick="genMissingBarcodes()">⌗ Coduri interne (lipsă)</button>' : '';
-  var bulk = can("operator")
+  var genBtn = can("gestionar_sef") ? '<button class="ghost" onclick="genMissingBarcodes()">⌗ Coduri interne (lipsă)</button>' : '';
+  var bulk = can("gestionar_sef")
     ? '<div class="card" id="pbulk" style="display:none;padding:10px 14px;margin-bottom:12px">'
       + '<div class="row" style="align-items:center;gap:10px">'
       + '<b><span id="pselcount">0</span> produse selectate</b><div class="spacer" style="flex:1"></div>'
@@ -1532,7 +1534,7 @@ window.loadProducts = function(){
         + '<td class="right">'+codeBtns
         + (hasBc && can("operator")?' <button class="ghost sm" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button> <button class="ghost sm" onclick="prodLabelPdf('+p.id+')" title="Descarcă eticheta PDF">PDF</button>':'')
         + (!p.client_id && can("operator")?' <button class="sm" onclick="consumeProduct('+p.id+',\\''+esc(String(p.name).replace(/\\'/g,""))+'\\')" title="Scade din stoc (consumat)">➖ Consumat</button>':'')
-        + (can("operator")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
+        + (can("gestionar_sef")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
         + '</td></tr>';
     }).join("");
@@ -1903,7 +1905,7 @@ window.deleteWarehouse = function(id, name){
 };
 
 VIEWS.locations = function(){
-  var addBtn = can("operator") ? '<button onclick="locationForm()">+ Locație</button>' : '';
+  var addBtn = can("gestionar_sef") ? '<button onclick="locationForm()">+ Locație</button>' : '';
   setMain(topbar("Locații", addBtn) + '<div class="card" id="ltbl">…</div>');
   api("GET","/api/locations").then(function(d){
     cache.locations = d.locations;
@@ -1916,7 +1918,7 @@ VIEWS.locations = function(){
         + '<td class="right"><button class="ghost sm" onclick="showQR(appOrigin()+\\'/#loc=\\'+encodeURIComponent(\\''+esc(l.code)+'\\'),\\''+esc(l.code)+'\\')">▦ QR</button>'
         + ' <button class="ghost sm" onclick="locationView(\\''+esc(l.code)+'\\')">Vezi</button>'
         + (can("operator")?' <button class="ghost sm" onclick="moveLocationStock('+l.id+',\\''+esc(l.code)+'\\')">↦ Mută stocul</button>':'')
-        + (can("operator")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')
+        + (can("gestionar_sef")?' <button class="ghost sm" onclick="locationForm('+l.id+')">Edit</button>':'')
         + (can("admin")?' <button class="danger sm" onclick="deleteLocation('+l.id+',\\''+esc(l.code)+'\\')">Șterge</button>':'')
         + '</td></tr>';
     }).join("");
@@ -2645,7 +2647,7 @@ VIEWS.users = function(){
   api("GET","/api/users").then(function(d){
     cache.users=d.users;
     var rows=d.users.map(function(u){
-      return '<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td><span class="pill mut">'+esc(u.role)+'</span></td>'
+      return '<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td><span class="pill mut">'+esc(roleLabel(u.role))+'</span></td>'
         +'<td>'+(u.active?'<span class="pill good">activ</span>':'<span class="pill bad">inactiv</span>')+'</td>'
         +'<td class="right"><button class="ghost sm" onclick="userLoginQR('+u.id+')">▦ QR conectare</button> <button class="ghost sm" onclick="userForm('+u.id+')">Edit</button></td></tr>';
     }).join("");
@@ -2660,9 +2662,9 @@ window.userLoginQR = function(id){
   }).catch(function(e){ toast(e.message,"bad"); });
 };
 window.userForm = function(id){
-  var u = id ? cache.users.find(function(x){return x.id===id;}) : {role:"operator",active:1};
+  var u = id ? cache.users.find(function(x){return x.id===id;}) : {role:"user_zebra",active:1};
   var roleSel='<div class="field"><label>Rol</label><select id="u_role">'
-    + ["admin","operator","viewer"].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+r+'</option>';}).join("")
+    + ["admin","gestionar_sef","user_zebra"].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+roleLabel(r)+'</option>';}).join("")
     + '</select></div>';
   modal((id?"Editează":"Adaugă")+" utilizator",
     field("Nume","u_name",u.name||"","","text","Numele angajatului care folosește aplicația.") + field("Email","u_email",u.email||"",id?"disabled":"","email","Emailul cu care angajatul se conectează.") + roleSel + fhint("viewer = doar citește · operator = operează stocul · admin = tot.")
@@ -3988,7 +3990,7 @@ window.cmrPreviewForm = function(){ cmrOpenWin(cmrCollect(), true); };
 function ordersView(opts){
   window._ordQuery = opts.filter || {};
   var addBtn='';
-  if(can("operator")){
+  if(can("gestionar_sef")){
     if(opts.add==='ret_supplier') addBtn='<button onclick="returnForm(\\'supplier_return\\')">+ Retur furnizor</button>';
     else if(opts.add==='ret_client') addBtn='<button onclick="returnForm(\\'client_return\\')">+ Retur client</button>';
     else if(opts.add!==false) addBtn='<button onclick="orderForm()">+ Comandă</button>';

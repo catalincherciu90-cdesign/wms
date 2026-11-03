@@ -38,10 +38,18 @@ function nav(...keys) { return keys.map((k) => NAV[k]).filter(Boolean); }
 
 const STOP = new Set(['stoc', 'stocul', 'produs', 'produsul', 'produse', 'cat', 'cate', 'cata', 'cati', 'am', 'are', 'din', 'la', 'de', 'mai', 'ai', 'avem', 'este', 'sunt', 'cu', 'pe', 'in', 'un', 'una', 'o', 'al', 'ale', 'si', 'pentru', 'azi', 'astazi', 'acum', 'disponibil', 'ramas', 'cel', 'cea', 'ce', 'care', 'imi', 'spune', 'vreau', 'sa', 'stiu', 'cum', 'merge', 'client', 'clientul', 'comanda', 'comenzi', 'vandut', 'vinde', 'face', 'bani', 'valoare']);
 
-export async function ask(request, env) {
+// gestionar șef / admin pot vedea bani, aprovizionare, rapoarte, clienți.
+function canMgr(user) {
+  const order = { viewer: 1, user_zebra: 2, operator: 2, gestionar_sef: 3, admin: 4 };
+  return user && (order[user.role] || 0) >= 3;
+}
+const DENY_MGR = 'Informația asta (bani / aprovizionare / clienți) e disponibilă doar pentru gestionar șef și admin.';
+
+export async function ask(request, env, ctx, user) {
   const b = await request.json().catch(() => ({}));
   const raw = (b && b.question) || '';
   const q = norm(raw);
+  const mgr = canMgr(user);
   if (!q) return json({ answer: 'Întreabă-mă ceva despre datele din platformă (comenzi, produse, stoc, bani). Scrie „ajutor" ca să vezi ce pot.', suggestions: defaultSuggestions() });
 
   // ── AJUTOR ──
@@ -56,21 +64,22 @@ export async function ask(request, env) {
     const p = await one(env, 'SELECT COUNT(*) AS n FROM products WHERE active = 1');
     const u = await one(env, 'SELECT COALESCE(SUM(quantity),0) AS n FROM inventory');
     const low = await lowCount(env);
-    const val = await one(env, 'SELECT COALESCE(SUM(i.quantity * p.cost),0) AS v FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.cost IS NOT NULL');
+    const val = mgr ? await one(env, 'SELECT COALESCE(SUM(i.quantity * p.cost),0) AS v FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.cost IS NOT NULL') : null;
     return json({
       answer: 'Pe scurt:\n' +
         '• Comenzi deschise: ' + (o.n || 0) + ' (azi: ' + (todayO.n || 0) + ')\n' +
         '• Produse active: ' + (p.n || 0) + '\n' +
         '• Unități în stoc: ' + (u.n || 0) + '\n' +
-        '• Produse sub prag: ' + low + '\n' +
-        '• Valoarea stocului: ' + money(val.v),
-      nav: nav('dashboard', 'orders', 'replenishment'),
-      suggestions: ['Ce comenzi sunt azi?', 'Ce trebuie comandat?', 'Care e cel mai vândut produs?'],
+        '• Produse sub prag: ' + low +
+        (mgr ? ('\n• Valoarea stocului: ' + money(val.v)) : ''),
+      nav: mgr ? nav('dashboard', 'orders', 'replenishment') : nav('dashboard', 'orders', 'stock'),
+      suggestions: mgr ? ['Ce comenzi sunt azi?', 'Ce trebuie comandat?', 'Care e cel mai vândut produs?'] : ['Ce comenzi sunt azi?', 'Câte produse în stoc?', 'Stocul la <produs>'],
     });
   }
 
   // ── CEL MAI VÂNDUT / TOP ──
   if (has(q, 'cel mai vandut', 'cele mai vandute', 'top produs', 'top produse', 'bestseller', 'cel mai vindut', 'cel mai cerut', 'top rulaj', 'cele mai cerute')) {
+    if (!mgr) return json({ answer: DENY_MGR, suggestions: ['Câte produse în stoc?', 'Ce comenzi sunt azi?'] });
     const rows = await all(env, "SELECT p.sku, p.name, COALESCE(SUM(-sm.quantity),0) AS sold FROM stock_movements sm JOIN products p ON p.id=sm.product_id WHERE sm.type='outbound' AND sm.created_at >= datetime('now','-30 day') GROUP BY p.id ORDER BY sold DESC LIMIT 5");
     if (!rows.length) return json({ answer: 'Nu există ieșiri în ultimele 30 de zile, deci nu pot calcula topul.', nav: nav('reports', 'movements'), suggestions: defaultSuggestions() });
     const list = rows.map((r, i) => '  ' + (i + 1) + '. ' + r.sku + ' — ' + r.name + ': ' + r.sold + ' buc').join('\n');
@@ -79,6 +88,7 @@ export async function ask(request, env) {
 
   // ── BANI / VALOARE ──
   if (has(q, 'bani', 'valoare', 'valoarea', 'cost', 'lei', 'cat face', 'suma', 'venit', 'vanzari', 'vandut lei', 'cifra')) {
+    if (!mgr) return json({ answer: DENY_MGR, suggestions: ['Câte produse în stoc?', 'Ce comenzi sunt azi?'] });
     const stockVal = await one(env, 'SELECT COALESCE(SUM(i.quantity * p.cost),0) AS v FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.cost IS NOT NULL');
     const sold30 = await one(env, "SELECT COALESCE(SUM(-sm.quantity * p.cost),0) AS v FROM stock_movements sm JOIN products p ON p.id=sm.product_id WHERE sm.type='outbound' AND p.cost IS NOT NULL AND sm.created_at >= datetime('now','-30 day')");
     const missingCost = await one(env, 'SELECT COUNT(*) AS n FROM products WHERE active=1 AND (cost IS NULL OR cost=0)');
@@ -91,6 +101,7 @@ export async function ask(request, env) {
 
   // ── APROVIZIONARE ──
   if (has(q, 'de comandat', 'aprovizion', 'necesar', 'reorder', 'sub prag', 'trebuie comandat', 'replenish', 'urgent', 'ce comand', 'ce sa comand')) {
+    if (!mgr) return json({ answer: DENY_MGR, suggestions: ['Câte produse în stoc?', 'Stocul la <produs>'] });
     const low = await lowCount(env);
     const out0 = await one(env, 'SELECT COUNT(*) AS n FROM products p WHERE p.active=1 AND (SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE product_id=p.id) <= 0');
     return json({
@@ -166,10 +177,13 @@ export async function ask(request, env) {
     return json({ answer: 'Produse active: ' + (p.n || 0) + '\n• Ale clienților: ' + (withClient.n || 0) + '\n• Fără cod de bare: ' + (noBc.n || 0), nav: nav('products', 'stock'), suggestions: ['Stocul la <produs>', 'Care e cel mai vândut produs?', 'Ce trebuie comandat?'] });
   }
 
-  // ── CLIENT ANUME / CLIENTI ──
-  const clientHit = await tryClientLookup(env, raw, q);
-  if (clientHit) return json(clientHit);
+  // ── CLIENT ANUME / CLIENTI ── (doar management)
+  if (mgr) {
+    const clientHit = await tryClientLookup(env, raw, q);
+    if (clientHit) return json(clientHit);
+  }
   if (has(q, 'clienti', 'client', 'furnizori', 'parteneri', 'partener')) {
+    if (!mgr) return json({ answer: DENY_MGR, suggestions: ['Câte produse în stoc?', 'Ce comenzi sunt azi?'] });
     const c = await one(env, 'SELECT COUNT(*) AS n FROM clients WHERE active=1');
     const sup = await one(env, "SELECT COUNT(*) AS n FROM partners WHERE type='supplier'");
     const cust = await one(env, "SELECT COUNT(*) AS n FROM partners WHERE type='customer'");
