@@ -38,6 +38,9 @@ export function renderUI() {
   button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
   button.ghost:hover{background:var(--panel-2);border-color:#cfd7e6;transform:translateY(-1px);box-shadow:none}
   button.sm{padding:5px 11px;font-size:12.5px;border-radius:8px}
+  button.ico{padding:5px 0;min-width:30px;font-size:13px;text-align:center}
+  .rowacts{display:inline-flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;max-width:230px}
+  .tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
   button.danger{background:linear-gradient(135deg,#e25c5c,#d64545);box-shadow:0 2px 8px -2px rgba(214,69,69,.5)}
   button:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;transform:none}
   input,select,textarea{font:inherit;width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);color:var(--text);transition:border-color .15s,box-shadow .15s,background .15s}
@@ -1535,9 +1538,9 @@ window.loadProducts = function(){
       var chk = can("operator") ? '<td><input type="checkbox" class="psel" value="'+p.id+'" onclick="pselUpd()" style="width:auto"></td>' : '';
       var hasBc = p.barcode && String(p.barcode).trim();
       var codeBtns = hasBc
-        ? '<button class="ghost sm" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗ Bare</button>'
-          + ' <button class="ghost sm" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦ QR</button>'
-        : (can("operator") ? '<button class="ghost sm" onclick="genProductBarcode('+p.id+')">⌗ Generează cod</button>' : '<span class="muted">fără cod</span>');
+        ? '<button class="ghost sm ico" title="Cod de bare" onclick="showBarcode(\\''+esc(p.barcode||p.sku)+'\\',\\''+esc(p.barcode||p.sku)+'\\')">⌗</button>'
+          + '<button class="ghost sm ico" title="Cod QR" onclick="showQR(appOrigin()+\\'/#sku=\\'+encodeURIComponent(\\''+esc(p.sku)+'\\'),\\''+esc(p.barcode||p.sku)+'\\')">▦</button>'
+        : (can("operator") ? '<button class="ghost sm ico" title="Generează cod de bare" onclick="genProductBarcode('+p.id+')">⌗+</button>' : '<span class="muted">fără cod</span>');
       var stk=Number(p.stock||0), prag=Number(p.reorder_point||0);
       var stkCell=(prag>0&&stk<=prag)?('<span class="pill bad">'+esc(stk)+'</span>'):('<b>'+esc(stk)+'</b>');
       var pbd=packBreakdown(stk, p.pcs_per_inner, p.inner_per_master);
@@ -1546,16 +1549,16 @@ window.loadProducts = function(){
         + '<td class="right">'+stkCell+'</td>'
         + '<td class="right">'+esc(p.reorder_point)+'</td><td>'+esc(p.unit)+'</td>'
         + '<td>'+(p.active?'<span class="pill good">activ</span>':'<span class="pill mut">inactiv</span>')+'</td>'
-        + '<td class="right">'+codeBtns
-        + (hasBc && can("operator")?' <button class="ghost sm" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button> <button class="ghost sm" onclick="prodLabelPdf('+p.id+')" title="Descarcă eticheta PDF">PDF</button>':'')
-        + (!p.client_id && can("operator")?' <button class="sm" onclick="consumeProduct('+p.id+',\\''+esc(String(p.name).replace(/\\'/g,""))+'\\')" title="Scade din stoc (consumat)">➖ Consumat</button>':'')
-        + (can("gestionar_sef")?' <button class="ghost sm" onclick="productForm('+p.id+')">Edit</button>':'')
-        + (can("admin")?' <button class="danger sm" onclick="deleteProduct('+p.id+')">Șterge</button>':'')
-        + '</td></tr>';
+        + '<td class="right"><div class="rowacts">'+codeBtns
+        + (hasBc && can("operator")?'<button class="ghost sm ico" onclick="prodPrintLabel('+p.id+')" title="Trimite eticheta la imprimantă">🖨️</button><button class="ghost sm ico" onclick="prodLabelPdf('+p.id+')" title="Descarcă eticheta PDF">📄</button>':'')
+        + (!p.client_id && can("operator")?'<button class="sm ico" onclick="consumeProduct('+p.id+',\\''+esc(String(p.name).replace(/\\'/g,""))+'\\')" title="Consumat — scade 1 din stoc">➖</button>':'')
+        + (can("gestionar_sef")?'<button class="ghost sm ico" onclick="productForm('+p.id+')" title="Editează">✏️</button>':'')
+        + (can("admin")?'<button class="danger sm ico" onclick="deleteProduct('+p.id+')" title="Șterge">🗑️</button>':'')
+        + '</div></td></tr>';
     }).join("");
     var selTh = can("operator") ? '<th style="width:34px"><input type="checkbox" onclick="pselAll(this)" style="width:auto"></th>' : '';
     var colspan = can("operator") ? 10 : 9;
-    el("ptbl").innerHTML = '<table><thead><tr>'+selTh+'<th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Stoc</th><th class="right">Prag</th><th>UM</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan='+colspan+' class="muted center">Niciun produs</td></tr>')+'</tbody></table>';
+    el("ptbl").innerHTML = '<div class="tscroll"><table><thead><tr>'+selTh+'<th>EAN (cod bare)</th><th>Nume</th><th>Client</th><th>Categorie</th><th class="right">Stoc</th><th class="right">Prag</th><th>UM</th><th>Status</th><th class="right">Acțiuni</th></tr></thead><tbody>'+(rows||'<tr><td colspan='+colspan+' class="muted center">Niciun produs</td></tr>')+'</tbody></table></div>';
     pselUpd();
   });
 };
