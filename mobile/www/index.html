@@ -1043,8 +1043,11 @@ window.screenPick=function(id){
     _pick={ id:id, order:d.order, lines:(d.lines||[]).map(function(l){ return {product_id:l.product_id, sku:l.sku, name:l.product_name, unit:l.unit, need:Number(l.quantity), done:0, packed:false}; }) };
     scanTarget=function(code){ pickScan(code); };
     var recip = d.order.source==="portal" ? ('<div class="muted" style="font-size:13px;margin-bottom:8px">Livrare: <b>'+esc(d.order.recipient_name||"—")+'</b>'+(d.order.recipient_address?(', '+esc(d.order.recipient_address)):'')+(d.order.recipient_city?(', '+esc(d.order.recipient_city)):'')+'</div>') : '';
+    var shipCard = (d.order.type==="outbound") ? ('<div class="card" style="margin-bottom:10px"><div style="font-weight:700;margin-bottom:6px">🏷️ Etichete expediție (colete)</div>'
+      +'<div style="display:flex;gap:8px"><input id="pk_ncolete" type="number" inputmode="numeric" min="1" value="1" style="flex:1" placeholder="Nr. colete"><button onclick="pickShipLabels()">Printează</button></div>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">Etichete numerotate 01/N … N/N → stația de imprimare.</div></div>') : '';
     shell("Picking "+esc(d.order.code),
-      recip
+      recip + shipCard
       +'<div class="scanbox"><input id="pk_scan" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Scanează produsul de cules"></div>'
       +'<button class="cam" onclick="openCam(function(c){pickScan(c)})">📷 Scanează cu camera</button>'
       +'<div id="pk_lines" style="margin-top:12px"></div>'
@@ -1054,6 +1057,14 @@ window.screenPick=function(id){
     pickRender(); wireScan("pk_scan", pickScan); pkLoadServices(id);
     pickStopHb(); _pickHb=setInterval(function(){ pickHeartbeat(id); }, 90000); // heartbeat lock
   }).catch(function(e){ toast(e.message,true); }); // ex. „Comanda este procesată de X"
+};
+/* Etichete de expediție per colet, numerotate (01/N … N/N) → stația de imprimare. */
+window.pickShipLabels=function(){
+  if(!_pick){ return; }
+  var n=Math.max(1,Math.min(200,Number((el("pk_ncolete")||{}).value)||1));
+  function pad(x){ x=String(x); return x.length<2?("0"+x):x; }
+  var ps=[]; for(var i=1;i<=n;i++){ (function(k){ ps.push(api("POST","/api/print/jobs",{type:"ship",ref_id:_pick.id,code:_pick.order.code,title:pad(k)+"/"+pad(n)})); })(i); }
+  Promise.all(ps).then(function(){ feedback(true); toast(n+" etichete trimise la imprimantă"); }).catch(function(e){ toast(e.message||"Eroare la printare",true); });
 };
 window.pkLoadServices=function(id){
   if(!el("pk_services")) return;
