@@ -4221,12 +4221,15 @@ window.orderProcess = function(id){
 function opkRender(){
   var o=_opk.order, inbound=_opk.inbound;
   var back='<button class="ghost sm" onclick="go(\\'orders\\')">← Comenzi</button>';
+  // Etichete de expediție per colet — la ieșire, disponibil oricând în picking.
+  var shipBtn=(!inbound && can("operator")) ? (' <button class="ghost sm" onclick="shipLabels('+o.id+',\\''+esc(o.code)+'\\')">🏷️ Etichete colet</button>') : '';
   var info='<div class="muted" style="margin-bottom:10px">'+(inbound?"Intrare / recepție":"Ieșire / picking")+(o.partner_name?(" · "+esc(o.partner_name)):"")+(o.client_name?(" · "+esc(o.client_name)):"")+'</div>';
   var lockWarn = o.lock_active ? ('<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-bottom:10px">🔒 În procesare de <b>'+esc(o.locked_name||"utilizator")+'</b>. <button class="danger sm" onclick="orderUnlock('+o.id+')">🔓 Eliberează (scoate utilizatorul)</button></div>') : '';
   if(o.status==="prepared"){
-    setMain(topbar("Procesează "+esc(o.code), back) + lockWarn
+    setMain(topbar("Procesează "+esc(o.code), back+shipBtn) + lockWarn
       + '<div class="card" style="padding:14px"><div class="card" style="background:rgba(34,197,94,.12);padding:10px;margin-bottom:10px"><b>Comandă pregătită — stoc rezervat</b><div class="muted" style="font-size:12.5px;margin-top:4px">Stocul NU a scăzut încă. Apasă „Marfa a plecat" doar când marfa iese fizic din depozit.</div></div>'
-      + '<button onclick="departOrder('+o.id+')">🚚 Marfa a plecat (scade stocul)</button></div>');
+      + '<button onclick="departOrder('+o.id+')">🚚 Marfa a plecat (scade stocul)</button>'
+      + (shipBtn?'<div class="row" style="margin-top:8px"><button class="ghost" onclick="shipLabels('+o.id+',\\''+esc(o.code)+'\\')" style="flex:1">🏷️ Etichete expediție (colete)</button></div>':'')+'</div>');
     return;
   }
   var blocked = inbound && _opk.newItems>0;
@@ -4260,7 +4263,7 @@ function opkRender(){
     footer='<div class="card" style="background:rgba(240,198,81,.14);color:var(--warn);padding:10px;margin-top:12px">Bifează „Pus în colet" la toate produsele ca să poți pregăti.</div>';
   }
   var fillBtn=(!blocked && _opk.lines.length) ? ('<div class="row" style="margin-bottom:10px"><button class="ghost sm" onclick="opkFillAll()">✓ Marchează tot '+(inbound?"recepționat":"cules și pus în colet")+'</button></div>') : '';
-  setMain(topbar("Procesează "+esc(o.code), back) + info + lockWarn + warn + fillBtn + rows
+  setMain(topbar("Procesează "+esc(o.code), back+shipBtn) + info + lockWarn + warn + fillBtn + rows
     + (_opk.lines.length?'':'<div class="muted center" style="padding:14px">Comanda nu are linii de produs.</div>')
     + '<div id="opk_footer">'+footer+'</div>');
   if(el("opk_loc")){
