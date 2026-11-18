@@ -2681,11 +2681,13 @@ window.userLoginQR = function(id){
 };
 window.userForm = function(id){
   var u = id ? cache.users.find(function(x){return x.id===id;}) : {role:"user_zebra",active:1};
+  // normalizează rolul vechi (operator/viewer) la cel nou, ca să fie pre-selectat corect
+  var curRole = (u.role==="operator")?"gestionar_sef":(u.role==="viewer")?"user_zebra":u.role;
   var roleSel='<div class="field"><label>Rol</label><select id="u_role">'
-    + ["admin","gestionar_sef","user_zebra"].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+roleLabel(r)+'</option>';}).join("")
+    + ["admin","gestionar_sef","user_zebra"].map(function(r){return '<option value="'+r+'"'+(curRole===r?' selected':'')+'>'+roleLabel(r)+'</option>';}).join("")
     + '</select></div>';
   modal((id?"Editează":"Adaugă")+" utilizator",
-    field("Nume","u_name",u.name||"","","text","Numele angajatului care folosește aplicația.") + field("Email","u_email",u.email||"",id?"disabled":"","email","Emailul cu care angajatul se conectează.") + roleSel + fhint("viewer = doar citește · operator = operează stocul · admin = tot.")
+    field("Nume","u_name",u.name||"","","text","Numele angajatului care folosește aplicația.") + field("Email","u_email",u.email||"",id?"disabled":"","email","Emailul cu care angajatul se conectează.") + roleSel + fhint("User Zebra = doar execuție (recepție/expediere/picking) · Gestionar șef = tot operațional + management (fără utilizatori/setări/backup) · Admin = tot.")
     + field(id?"Parolă nouă (opțional)":"Parolă","u_pass","","","password",id?"Completează doar dacă vrei să schimbi parola.":"Parola inițială a angajatului."),
     function(){
       var body={ name:el("u_name").value, email:el("u_email").value, role:el("u_role").value, password:el("u_pass").value||undefined };
