@@ -115,8 +115,46 @@ export async function ensureSchema(env) {
     try { await env.DB.prepare('ALTER TABLE orders ADD COLUMN ' + col).run(); } catch (e) {}
   }
 
-  // Migrare roluri: trecem la user_zebra (execuție) / gestionar_sef (management) / admin (sistem).
-  // operator → gestionar_sef, viewer → user_zebra; adminii rămân admin. Idempotent.
+  // ── Migrare roluri: trecem la user_zebra (execuție) / gestionar_sef (management) / admin.
+  // Tabela `users` a fost creată cu CHECK(role IN ('admin','operator','viewer')), care
+  // BLOCHEAZĂ rolurile noi (și blochează chiar și UPDATE-ul de mai jos). SQLite nu permite
+  // ALTER pe CHECK → reconstruim tabela fără CHECK rigid și mapăm rolurile în timpul copierii.
+  try {
+    // recuperare dacă o migrare anterioară a căzut între DROP și RENAME
+    try {
+      const u = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").first();
+      const reb = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users_rebuild'").first();
+      if (!u && reb) await env.DB.prepare('ALTER TABLE users_rebuild RENAME TO users').run();
+    } catch (e) {}
+    const row = await env.DB.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").first();
+    const ddl = (row && row.sql) || '';
+    const chk = ddl.match(/CHECK\s*\(\s*role\s+IN\s*\(([^)]*)\)/i);
+    if (chk && !/'user_zebra'/i.test(chk[1])) {
+      const info = await env.DB.prepare('PRAGMA table_info(users)').all();
+      const cols = info.results || [];
+      const names = cols.map((c) => '"' + c.name + '"').join(', ');
+      const defs = cols.map((c) => {
+        if (c.pk && /INT/i.test(c.type || '')) return '"' + c.name + '" INTEGER PRIMARY KEY';
+        let d = '"' + c.name + '" ' + (c.type || 'TEXT');
+        if (c.name === 'email') d += ' UNIQUE';
+        if (c.notnull) d += ' NOT NULL';
+        if (c.dflt_value != null) d += ' DEFAULT (' + c.dflt_value + ')';
+        return d;
+      }).join(', ');
+      // la copiere mapăm rolul vechi -> nou
+      const selNames = cols.map((c) => c.name === 'role'
+        ? "CASE role WHEN 'operator' THEN 'gestionar_sef' WHEN 'viewer' THEN 'user_zebra' ELSE role END"
+        : '"' + c.name + '"').join(', ');
+      await env.DB.prepare('PRAGMA foreign_keys=OFF').run();
+      await env.DB.prepare('DROP TABLE IF EXISTS users_rebuild').run();
+      await env.DB.prepare('CREATE TABLE users_rebuild (' + defs + ')').run();
+      await env.DB.prepare('INSERT INTO users_rebuild (' + names + ') SELECT ' + selNames + ' FROM users').run();
+      await env.DB.prepare('DROP TABLE users').run();
+      await env.DB.prepare('ALTER TABLE users_rebuild RENAME TO users').run();
+      try { await env.DB.prepare('PRAGMA foreign_keys=ON').run(); } catch (e) {}
+    }
+  } catch (e) {}
+  // migrare idempotentă a valorilor (acum CHECK-ul nu mai blochează)
   try { await env.DB.prepare("UPDATE users SET role='gestionar_sef' WHERE role='operator'").run(); } catch (e) {}
   try { await env.DB.prepare("UPDATE users SET role='user_zebra' WHERE role='viewer'").run(); } catch (e) {}
 
