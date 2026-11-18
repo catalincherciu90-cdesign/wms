@@ -1060,7 +1060,7 @@ var NAV = [
   ["stock","Stoc","user_zebra"],
   { label:"Gestiuni", items:[ ["products","Toate produsele","user_zebra"], ["products_clients","Produse clienți","gestionar_sef"], ["products_consumabile","Consumabile depozit","user_zebra"] ] },
   { label:"Depozit", items:[ ["warehouses","Gestiuni (depozite)","gestionar_sef"], ["locations","Locații","user_zebra"], ["pallets","Paleți","user_zebra"], ["boxes","Cutii (fizice)","user_zebra"] ] },
-  { label:"Operațiuni", items:[ ["receive","Recepție","user_zebra"], ["ship","Expediere","user_zebra"], ["transfer","Transfer","user_zebra"], ["labels","Etichete","user_zebra"], ["printstation","Imprimare","user_zebra"], ["labeleditor","Editor etichetă","admin"] ] },
+  { label:"Operațiuni", items:[ ["receive","Recepție","user_zebra"], ["ship","Expediere","user_zebra"], ["transfer","Transfer","user_zebra"], ["labels","Etichete","user_zebra"], ["printstation","Imprimare","user_zebra"], ["labeleditor","Editor etichetă","gestionar_sef"] ] },
   { label:"Comenzi", items:[ ["orders_supplier","Comenzi furnizor","gestionar_sef"], ["orders_client","Comenzi client","gestionar_sef"], ["orders_drafts","Ciorne","gestionar_sef"], ["returns_supplier","Retur furnizor","gestionar_sef"], ["returns_client","Retur client","gestionar_sef"], ["orders","Toate comenzile","user_zebra"] ] },
   ["cmr","CMR (transport)","gestionar_sef"],
   { label:"Clienți & parteneri", items:[ ["clients","Clienți","gestionar_sef"], ["partners","Parteneri","gestionar_sef"] ] },
@@ -2896,7 +2896,7 @@ VIEWS.printstation = function(){
     + '<p>Etichetele trimise de pe Zebra sau din WMS se printează prin <b>agentul local</b> instalat pe calculatorul cu imprimanta Zebra.</p>'
     + '<div id="st_status" style="margin:8px 0;font-weight:600">Verific agentul…</div>'
     + '<div class="row" style="margin-top:6px"><button onclick="stationTest()">🖨️ Test print</button></div>'
-    + (can("admin") ? ('<div class="card" style="margin-top:14px;border:1px solid var(--brand);padding:12px"><b>⚙️ Agent de imprimare (pe PC-ul cu imprimanta)</b>'
+    + (can("gestionar_sef") ? ('<div class="card" style="margin-top:14px;border:1px solid var(--brand);padding:12px"><b>⚙️ Agent de imprimare (pe PC-ul cu imprimanta)</b>'
       + '<div class="muted" style="font-size:12.5px;margin:4px 0 10px">Rulează un programel pe PC-ul cu imprimanta Zebra — trimite etichetele direct (ZPL), fără browser și fără nicio fereastră.</div>'
       + '<div class="field"><label>Numele imprimantei (exact ca în Windows)</label><input id="ag_printer" value="ZDesigner ZT411-300dpi">'+fhint("Îl vezi la Windows → Imprimante. Copiază-l exact.")+'</div>'
       + '<div class="field" style="max-width:220px"><label>Lățime etichetă (mm)</label><input id="ag_w" type="number" min="20" value="100">'+fhint("Lățimea rolei de etichete. Implicit 100 mm.")+'</div>'
@@ -2916,7 +2916,7 @@ VIEWS.printstation = function(){
   if(window._stTimer) clearInterval(window._stTimer);
   window._stTimer=setInterval(stationStatusTick, 5000);
   if(window._bstTimer){ clearInterval(window._bstTimer); window._bstTimer=null; } // oprit la (re)intrare
-  if(can("admin")) agentLoadToken();
+  if(can("gestionar_sef")) agentLoadToken();
 };
 window.startBrowserStation = function(){
   if(!el("ps_iframe")){ var f=document.createElement("iframe"); f.id="ps_iframe"; f.style.cssText="position:fixed;left:-9999px;top:0;width:520px;height:760px;border:0"; document.body.appendChild(f); }
