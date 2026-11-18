@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v153';
+const APP_VERSION = 'v154';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -295,6 +295,7 @@ export default {
 
     // Agent de imprimare local (.bat descărcabil) — imprimare directă ZPL în Zebra.
     if (path === '/print-agent.bat') { await ensureSchema(env); return print.agentBat(request, env); }
+    if (path === '/print-agent.vbs') { await ensureSchema(env); return print.agentVbs(request, env); }
 
     // Health check
     if (path === '/health') return json({ ok: true, service: 'wms', version: APP_VERSION, ts: new Date().toISOString() });

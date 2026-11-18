@@ -2901,8 +2901,10 @@ VIEWS.printstation = function(){
       + '<div class="field"><label>Numele imprimantei (exact ca în Windows)</label><input id="ag_printer" value="ZDesigner ZT411-300dpi">'+fhint("Îl vezi la Windows → Imprimante. Copiază-l exact.")+'</div>'
       + '<div class="field" style="max-width:220px"><label>Lățime etichetă (mm)</label><input id="ag_w" type="number" min="20" value="100">'+fhint("Lățimea rolei de etichete. Implicit 100 mm.")+'</div>'
       + '<div id="ag_token" class="muted" style="font-size:11.5px;margin:2px 0 8px">Token: …</div>'
-      + '<div class="row"><button onclick="agentDownload()">⬇️ Descarcă agentul (.bat)</button> <button class="ghost sm" onclick="agentRegen()">Regenerează token</button></div>'
-      + '<ol class="muted" style="font-size:12.5px;line-height:1.7;margin:8px 0 0 18px"><li>Descarcă fișierul și pune-l pe PC-ul cu imprimanta.</li><li>Dublu-click pe el. Dacă Windows avertizează: <b>More info → Run anyway</b>.</li><li>Rămâne o fereastră neagră deschisă = agentul merge. O lași deschisă (o poți minimiza).</li><li>Ca să pornească singur la deschiderea calculatorului: pune fișierul în folderul <code>shell:startup</code>.</li></ol></div>') : '')
+      + '<div class="row" style="flex-wrap:wrap;gap:8px"><button onclick="agentDownloadSilent()">⬇️ Descarcă print-server (fundal)</button> <button class="ghost sm" onclick="agentDownload()">Varianta cu fereastră (.bat)</button> <button class="ghost sm" onclick="agentRegen()">Regenerează token</button></div>'
+      + '<div style="margin-top:10px;font-weight:700;font-size:13px">🖥️ Print-server în fundal (recomandat):</div>'
+      + '<ol class="muted" style="font-size:12.5px;line-height:1.7;margin:4px 0 0 18px"><li>Apasă <b>„Descarcă print-server (fundal)"</b> și pune fișierul <code>print-server-wms.vbs</code> pe PC-ul cu imprimanta.</li><li>Ca să pornească <b>singur la fiecare deschidere a calculatorului</b>: apasă <b>Win+R</b>, scrie <code>shell:startup</code>, Enter, și pune fișierul <code>.vbs</code> în folderul care se deschide.</li><li>Dublu-click pe el o dată acum (sau repornești PC-ul) — rulează <b>în fundal, fără nicio fereastră</b>, non-stop, și se re-pornește singur dacă pică.</li><li>Ca să-l oprești: Task Manager → Details → închizi procesele <code>wscript.exe</code> / <code>powershell.exe</code>.</li></ol>'
+      + '<div class="muted" style="font-size:11.5px;margin-top:8px">Varianta „.bat" face același lucru dar lasă o fereastră neagră deschisă — bună doar pentru test.</div></div>') : '')
     + '<div class="card" style="margin-top:14px;padding:12px"><b>🖨️ Sau: printare prin browser (fără agent)</b>'
     + '<div class="muted" style="font-size:12.5px;margin:4px 0 8px">Ține pagina asta deschisă pe calculatorul cu imprimanta; etichetele din coadă se printează automat aici. <b>Folosește ori agentul, ori browserul — nu amândouă în același timp</b> (altfel se printează dublu).</div>'
     + '<div id="bst_status" class="muted" style="font-size:12.5px;margin-bottom:4px">Oprit.</div>'
@@ -3017,6 +3019,16 @@ window.agentDownload = function(){
   var u=API+"/print-agent.bat?token="+encodeURIComponent(_agentToken)+"&printer="+encodeURIComponent(printer)+"&w="+dots;
   window.location.href=u; // răspunsul e attachment -> se descarcă
   toast("Se descarcă agentul…");
+};
+// Print-server în fundal (launcher .vbs care rulează agentul ascuns, pornește singur).
+window.agentDownloadSilent = function(){
+  if(!_agentToken){ toast("Aștept token-ul…","bad"); return; }
+  var printer=el("ag_printer")?el("ag_printer").value.trim():"ZDesigner ZT411-300dpi";
+  var mm=el("ag_w")?Number(el("ag_w").value)||100:100;
+  var dots=Math.round(mm/25.4*300);
+  var u=API+"/print-agent.vbs?token="+encodeURIComponent(_agentToken)+"&printer="+encodeURIComponent(printer)+"&w="+dots;
+  window.location.href=u;
+  toast("Se descarcă print-server-ul…");
 };
 
 /* ================= Editor de etichetă (admin) ================= */

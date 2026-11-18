@@ -486,3 +486,27 @@ export async function agentBat(request, env) {
     'Cache-Control': 'no-store',
   } });
 }
+
+// Varianta „serviciu / fundal": un launcher VBS care rulează agentul ASCUNS (fără
+// fereastră), pornește singur la deschiderea Windows-ului (din shell:startup) și îl
+// re-pornește automat dacă pică. Practic un print-server local pe PC-ul cu imprimanta.
+export async function agentVbs(request, env) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token') || '';
+  const real = await getAgentToken(env, false);
+  if (!real || token !== real) return new Response('Token invalid', { status: 403 });
+  const printer = (url.searchParams.get('printer') || 'ZDesigner ZT411-300dpi').slice(0, 120);
+  const w = Number(url.searchParams.get('w')) || 1200;
+  const ps = buildAgentPs(url.origin, token, printer, w);
+  const b64 = toB64Utf16le(ps);
+  const vbs = 'Set s = CreateObject("WScript.Shell")\r\n'
+    + 'Do\r\n'
+    + '  s.Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ' + b64 + '", 0, True\r\n'
+    + '  WScript.Sleep 5000\r\n'
+    + 'Loop\r\n';
+  return new Response(vbs, { headers: {
+    'Content-Type': 'application/octet-stream',
+    'Content-Disposition': 'attachment; filename="print-server-wms.vbs"',
+    'Cache-Control': 'no-store',
+  } });
+}
