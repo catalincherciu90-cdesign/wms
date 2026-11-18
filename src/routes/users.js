@@ -3,6 +3,17 @@ import { json, error, readJson } from '../lib/http.js';
 import { hashPassword } from '../lib/auth.js';
 import { randomToken, QR_LOGIN_PREFIX } from './auth.js';
 
+// Normalizează rolul primit: acceptă cele 3 roluri noi ȘI mapează rolurile vechi
+// (operator → gestionar_sef, viewer → user_zebra) — ca schimbarea de rol să meargă
+// chiar și dintr-o interfață cache-uită care mai trimite denumirile vechi.
+function normRole(r) {
+  r = (r || '').toString();
+  if (r === 'operator') return 'gestionar_sef';
+  if (r === 'viewer') return 'user_zebra';
+  if (['admin', 'gestionar_sef', 'user_zebra'].includes(r)) return r;
+  return null;
+}
+
 export async function list(request, env) {
   const { results } = await env.DB.prepare(
     'SELECT id, email, name, role, active, created_at FROM users ORDER BY name'
@@ -13,7 +24,7 @@ export async function list(request, env) {
 export async function create(request, env) {
   const b = await readJson(request);
   if (!b?.email || !b?.name || !b?.password) return error('email, name și password obligatorii', 400);
-  const role = ['admin', 'gestionar_sef', 'user_zebra'].includes(b.role) ? b.role : 'user_zebra';
+  const role = normRole(b.role) || 'user_zebra';
   try {
     const hash = await hashPassword(b.password);
     const res = await env.DB.prepare(
@@ -33,7 +44,7 @@ export async function update(request, env, ctx, user, params) {
   const id = Number(params.id);
   const existing = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first();
   if (!existing) return error('Utilizator inexistent', 404);
-  const role = ['admin', 'gestionar_sef', 'user_zebra'].includes(b.role) ? b.role : existing.role;
+  const role = normRole(b.role) || existing.role;
   const name = b.name?.trim() || existing.name;
   const active = b.active === undefined ? existing.active : (b.active ? 1 : 0);
   await env.DB.prepare('UPDATE users SET name=?, role=?, active=? WHERE id=?').bind(name, role, active, id).run();
