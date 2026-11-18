@@ -2,6 +2,13 @@
 // calculatorul cu imprimanta) le ridică și le printează automat.
 import { json, error, readJson } from '../lib/http.js';
 
+async function getSetting(env, key, def) {
+  try {
+    const r = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
+    return r && r.value != null && String(r.value).trim() !== '' ? r.value : def;
+  } catch (e) { return def; }
+}
+
 // Adaugă un job de printare (ex: etichetă de palet/colet).
 export async function create(request, env, ctx, user) {
   const b = await readJson(request);
@@ -174,6 +181,34 @@ async function labelValues(env, job) {
       lot: b.lot || '', qty: b.quantity != null ? String(b.quantity) : '', date: DT,
       meta: (b.lot ? ('Lot: ' + b.lot + '   ') : '') + (b.quantity ? ('Buc/cutie: ' + b.quantity + '   ') : '') + DT };
   }
+  if (job.type === 'ship') {
+    // Etichetă de expediție: Expeditor (WSD) | Destinatar (din comandă) + nr. colet X/Y.
+    const o = await env.DB.prepare(
+      `SELECT o.*, pt.name AS partner_name, pt.address AS partner_addr, cl.name AS client_name, cl.address AS client_addr
+       FROM orders o LEFT JOIN partners pt ON pt.id = o.partner_id LEFT JOIN clients cl ON cl.id = o.client_id WHERE o.id = ?`
+    ).bind(job.ref_id).first() || {};
+    const senderName = await getSetting(env, 'ship_sender_name', 'WSD LOGISTICS S.R.L.');
+    const senderAddr = await getSetting(env, 'ship_sender_addr', await getSetting(env, 'contact_address', ''));
+    // destinatar: întâi datele de livrare (portal), apoi partenerul/clientul comenzii
+    let destName = '', destLines = [];
+    if (o.recipient_name) {
+      destName = o.recipient_name;
+      const cityLine = [o.recipient_city, o.recipient_county, o.recipient_postal].filter(Boolean).join(', ');
+      destLines = [o.recipient_address, cityLine, o.recipient_phone].filter(Boolean);
+    } else if (o.partner_name) {
+      destName = o.partner_name; destLines = [o.partner_addr].filter(Boolean);
+    } else if (o.client_name) {
+      destName = o.client_name; destLines = [o.client_addr].filter(Boolean);
+    } else { destName = job.title || ''; }
+    const dateStr = String(o.completed_at || o.created_at || '').slice(0, 10);
+    return {
+      sender_name: senderName, sender_addr: senderAddr,
+      dest_name: destName, dest_addr: destLines.join('\n'),
+      county: o.recipient_county || '',
+      order_code: o.code || job.code || '', date: dateStr,
+      box_no: job.title || '',
+    };
+  }
   // pallet / colet / ambalaje
   const pallet = await env.DB.prepare('SELECT pa.*, c.name AS client_name, l.code AS location_code FROM pallets pa LEFT JOIN clients c ON c.id = pa.client_id LEFT JOIN locations l ON l.id = pa.location_id WHERE pa.id = ?').bind(job.ref_id).first() || {};
   const { results: items } = await env.DB.prepare('SELECT pi.quantity, pr.name AS product_name FROM pallet_items pi JOIN products pr ON pr.id = pi.product_id WHERE pi.pallet_id = ? ORDER BY pr.name').bind(pallet.id || 0).all();
@@ -195,6 +230,36 @@ function code128Width(data, moduleW) {
   return modules * (moduleW || 3);
 }
 
+// Etichetă de expediție (Expeditor | Destinatar + nr. colet X/Y) — ZPL desenat
+// manual cu chenare, reproducând designul clasic de pe palet/colet.
+function shipZpl(vals, W, H) {
+  const E = (x) => zplEsc(x == null ? '' : String(x));
+  const ML = (x) => E(x).replace(/\n+/g, '\\&');
+  const midX = Math.round(W * 0.44);
+  const as = Math.round(H * 0.50);  // sub blocul de adrese
+  const ib = Math.round(H * 0.63);  // sub banda „Informații de livrare"
+  let s = '^XA^CI28^PW' + W + '^LL' + H;
+  s += '^FO0,0^GB' + W + ',' + H + ',3^FS';
+  s += '^FO0,60^GB' + W + ',3^FS';
+  s += '^FO' + midX + ',0^GB3,' + as + '^FS';
+  s += '^FO14,14^A0N,30,30^FDExpeditor^FS';
+  s += '^FO' + (midX + 14) + ',14^A0N,30,30^FDDestinatar^FS';
+  s += '^FO14,74^FB' + (midX - 28) + ',8,6,L,0^A0N,30,30^FD' + E(vals.sender_name) + '\\&' + ML(vals.sender_addr) + '^FS';
+  s += '^FO' + (midX + 14) + ',74^FB' + (W - midX - 28) + ',8,6,L,0^A0N,30,30^FD' + E(vals.dest_name) + '\\&' + ML(vals.dest_addr) + '^FS';
+  s += '^FO0,' + as + '^GB' + W + ',3^FS';
+  s += '^FO' + midX + ',' + as + '^GB3,' + (ib - as) + '^FS';
+  s += '^FO14,' + (as + 14) + '^A0N,26,26^FDInformatii de livrare^FS';
+  s += '^FO' + (midX + 14) + ',' + (as + 14) + '^FB' + (W - midX - 28) + ',2,4,L,0^A0N,30,30^FD' + ML(vals.county) + '^FS';
+  s += '^FO0,' + ib + '^GB' + W + ',3^FS';
+  s += '^FO' + midX + ',' + ib + '^GB3,' + (H - ib) + '^FS';
+  if (vals.order_code) s += '^BY3^FO30,' + (ib + 18) + '^BCN,120,N,N,N^FD' + E(vals.order_code) + '^FS';
+  s += '^FO14,' + (ib + 150) + '^A0N,40,40^FD' + E(vals.order_code) + '^FS';
+  s += '^FO14,' + (ib + 200) + '^A0N,28,28^FDData ' + E(vals.date) + '   SH^FS';
+  s += '^FO' + (midX + 10) + ',' + (ib + Math.round((H - ib) / 2) - 46) + '^FB' + (W - midX - 20) + ',1,0,C,0^A0N,90,90^FD' + E(vals.box_no) + '^FS';
+  s += '^XZ';
+  return s;
+}
+
 // Construiește ZPL dintr-un șablon, folosind dimensiunea fizică a etichetei (mm)
 // și alinierea pe verticală (sus / centru / distribuit), ca să iasă exact ca în preview.
 async function jobToZpl(env, job, wFallback) {
@@ -206,6 +271,12 @@ async function jobToZpl(env, job, wFallback) {
       + '^FO0,150^FB' + w0 + ',1,0,C,0^BY3^BCN,160,Y,N,N^FDTEST-OK^FS'
       + '^FO0,360^FB' + w0 + ',1,0,C,0^A0N,26,26^FD' + DT + '^FS'
       + '^XZ';
+  }
+  if (job.type === 'ship') {
+    const vals = await labelValues(env, job);
+    const wmm = Number(await getSetting(env, 'ship_label_w_mm', '100')) || 100;
+    const hmm = Number(await getSetting(env, 'ship_label_h_mm', '75')) || 75;
+    return shipZpl(vals, mmToDots(wmm), mmToDots(hmm));
   }
   const tpl = await getTemplate(env, job.type === 'inbound' || job.type === 'outbound' ? 'pallet' : job.type);
   const vals = await labelValues(env, job);

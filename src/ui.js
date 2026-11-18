@@ -3942,6 +3942,31 @@ window.cmrDelete = function(id){
   modal("Șterge CMR","<p>Sigur ștergi acest CMR?</p>",function(){ api("DELETE","/api/cmr/"+id).then(function(){ closeModal(); toast("CMR șters"); loadCmr(); }).catch(function(e){ toast(e.message,"bad"); }); });
   var sv=el("modalSave"); if(sv){ sv.textContent="Șterge"; sv.className="danger"; }
 };
+// Etichete de expediție: o etichetă termică per colet, numerotată (01/N … N/N).
+window.shipLabels = function(id, code){
+  var prev = '<div class="card" style="padding:0;margin-top:10px;overflow:hidden"><div style="display:grid;grid-template-columns:1fr 1.2fr;font-size:11px">'
+    + '<div style="padding:6px 8px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><b>Expeditor</b><div class="muted">WSD Logistics S.R.L.</div></div>'
+    + '<div style="padding:6px 8px;border-bottom:1px solid var(--border)"><b>Destinatar</b><div class="muted">din comandă</div></div>'
+    + '<div style="padding:6px 8px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><b>Informații de livrare</b></div>'
+    + '<div style="padding:6px 8px;border-bottom:1px solid var(--border)" class="muted">județ</div>'
+    + '<div style="padding:6px 8px;border-right:1px solid var(--border)"><div style="font-weight:700">'+esc(code||"")+'</div><div class="muted">Data …  ·  SH</div></div>'
+    + '<div style="padding:6px 8px;text-align:right;font-size:22px;font-weight:800">01/NN</div>'
+    + '</div></div>';
+  modal("Etichete expediție — "+esc(code||("#"+id)),
+    '<div class="muted" style="font-size:13px;margin-bottom:8px">Generează o etichetă termică <b>per colet</b>, numerotată (ex. 01/10 … 10/10). Expeditor: <b>WSD Logistics</b>. Destinatar: din comandă. Se trimit la stația de imprimare.</div>'
+    + '<div class="field"><label>Număr de colete</label><input id="shl_n" type="number" min="1" max="200" value="1">'+fhint("Câte colete are expediția — o etichetă pentru fiecare.")+'</div>'
+    + prev,
+    function(){
+      var n=Math.max(1,Math.min(200,Number(el("shl_n").value)||1));
+      var pad=function(x){ x=String(x); return x.length<2?("0"+x):x; };
+      var arr=[]; for(var i=1;i<=n;i++) arr.push(i);
+      var done=0,fail=0;
+      Promise.all(arr.map(function(i){
+        return api("POST","/api/print/jobs",{type:"ship",ref_id:id,code:code,title:pad(i)+"/"+pad(n)}).then(function(){done++;}).catch(function(){fail++;});
+      })).then(function(){ closeModal(); toast(done+" etichete trimise la imprimantă"+(fail?(" · "+fail+" eșuate"):"")); });
+    });
+  var sv=el("modalSave"); if(sv) sv.textContent="Trimite la imprimantă";
+};
 window.cmrFromOrder = function(orderId){
   api("GET","/api/orders/"+orderId).then(function(d){
     var o=d.order||{}, pk=0; (d.lines||[]).forEach(function(l){ pk+=Number(l.quantity)||0; });
@@ -4099,6 +4124,9 @@ window.orderDetail = function(id){
     }
     if(can("operator")){
       actions += '<div class="row" style="margin-top:8px"><button class="ghost" onclick="closeModal();cmrFromOrder('+o.id+')" style="flex:1">📄 Fă CMR din comandă</button></div>';
+    }
+    if(can("operator") && o.type==="outbound"){
+      actions += '<div class="row" style="margin-top:8px"><button class="ghost" onclick="shipLabels('+o.id+',\\''+o.code+'\\')" style="flex:1">🏷️ Etichete expediție (colete)</button></div>';
     }
     if(can("operator") && o.status==="prepared"){
       // Comandă de ieșire pregătită (stoc rezervat) — stocul scade doar la plecare.
