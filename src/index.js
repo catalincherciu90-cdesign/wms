@@ -1,5 +1,5 @@
 // WMS — Cloudflare Worker (entry point + router)
-const APP_VERSION = 'v152';
+const APP_VERSION = 'v153';
 import { json, error, corsHeaders } from './lib/http.js';
 import { authenticate, hasRole } from './lib/auth.js';
 import { renderUI } from './ui.js';
@@ -175,13 +175,13 @@ const routes = [
   ['GET', '/api/print/jobs', print.pending, 'viewer'],
   ['GET', '/api/print/status', print.status, 'viewer'],
   ['POST', '/api/print/test', print.test, 'operator'],
-  ['GET', '/api/print/agent-token', print.agentToken, 'admin'],
-  ['POST', '/api/print/agent-token/regen', print.agentTokenRegen, 'admin'],
+  ['GET', '/api/print/agent-token', print.agentToken, 'gestionar_sef'],
+  ['POST', '/api/print/agent-token/regen', print.agentTokenRegen, 'gestionar_sef'],
   ['GET', '/api/print/agent/next', print.agentNext, null],
   ['POST', '/api/print/agent/done', print.agentDone, null],
-  ['GET', '/api/print/label-template', print.labelTemplateGet, 'admin'],
-  ['PUT', '/api/print/label-template', print.labelTemplateSave, 'admin'],
-  ['POST', '/api/print/label-template/reset', print.labelTemplateReset, 'admin'],
+  ['GET', '/api/print/label-template', print.labelTemplateGet, 'gestionar_sef'],
+  ['PUT', '/api/print/label-template', print.labelTemplateSave, 'gestionar_sef'],
+  ['POST', '/api/print/label-template/reset', print.labelTemplateReset, 'gestionar_sef'],
   ['GET', '/api/print/jobs/:id/zpl', print.jobZpl, 'operator'],
   ['POST', '/api/print/jobs/:id/done', print.done, 'operator'],
   ['PUT', '/api/pallets/:id', pallets.update, 'operator'],
